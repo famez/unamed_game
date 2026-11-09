@@ -79,7 +79,7 @@ void drawBottle(const BoxSink& out, const Mat4& m, Vec3 o, float time, float see
         return;
     }
     float flicker = 0.75f + 0.25f * std::sin(time * 31.0f + seed) * std::sin(time * 13.0f + seed * 2.0f);
-    out.solid->flame(wick - Vec3{0, 0.04f, 0}, 0.16f, 0.32f, seed, 1.0f);
+    out.solid->fireColumn(wick - Vec3{0, 0.03f, 0}, 0.07f, 0.3f, seed, 1.0f);
     out.solid->light(wick, Vec3{1.0f, 0.5f, 0.15f} * (1.2f * flicker), 3.0f);
 }
 
@@ -237,12 +237,20 @@ void Game::draw(DebugDraw& dd, Renderer* solid, const DrawFlags& f, Vec3 cameraR
     // Enemigos: ropa roja, escudo metálico y barra de vida. Destellan al recibir un golpe.
     const Palette enemyPalette{rgba(200, 160, 130), rgba(180, 52, 48), rgba(64, 44, 44), rgba(36, 30, 30)};
     const Palette deadPalette{rgba(120, 100, 90), rgba(90, 50, 48), rgba(50, 40, 40), rgba(30, 26, 26)};
-    for (const Enemy& e : enemies_) {
+    for (size_t i = 0; i < enemies_.size(); ++i) {
+        const Enemy& e = enemies_[i];
+        // El enemigo bajo la mira lleva silueta (con shaders) o se pinta amarillo (debug).
+        bool targeted = hero_.aimHeld() && int(i) == aimEnemy_;
+        if (targeted && solid) solid->beginHighlight(rgba(255, 60, 30));
         float flash = e.alive() ? clampf((e.hitTimer - 0.25f) / 0.15f, 0, 1) * 0.8f : 0;
-        uint32_t debugCol = !e.alive() ? rgba(90, 60, 60) : e.hitTimer > 0.25f ? rgba(255, 255, 255) : rgba(220, 90, 90);
+        uint32_t debugCol = !e.alive()          ? rgba(90, 60, 60)
+                            : targeted          ? rgba(255, 230, 60)
+                            : e.hitTimer > 0.25f ? rgba(255, 255, 255)
+                                                 : rgba(220, 90, 90);
         drawActor(out, e.joints, f, debugCol, e.alive() ? enemyPalette : deadPalette, flash);
         uint32_t shieldCol = e.blockTimer > 0 ? rgba(255, 245, 190) : rgba(110, 140, 220);
         out.box(e.joints[Chest], kShieldCenter, kShieldHalf, shieldCol, Material::Metal, e.blockTimer > 0 ? 0.5f : 0);
+        if (targeted && solid) solid->endHighlight();
         if (e.alive()) {
             Vec3 head = translationOf(e.joints[Head]);
             drawHealthBar(dd, head + Vec3{0, 0.45f, 0}, cameraRight, e.health / e.maxHealth);
@@ -263,11 +271,11 @@ void Game::draw(DebugDraw& dd, Renderer* solid, const DrawFlags& f, Vec3 cameraR
         dd.point(p.pos, p.color);
         dd.line(p.pos, p.pos - p.vel * 0.03f, p.color);
     }
-    drawFire(dd, solid, cameraRight);
+    drawFire(dd, solid);
 }
 
 // Fuego de los cócteles. En modo debug: círculo del área y una línea por lengua.
-void Game::drawFire(DebugDraw& dd, Renderer* solid, Vec3 cameraRight) const {
+void Game::drawFire(DebugDraw& dd, Renderer* solid) const {
     const Vec3 fireColor{1.0f, 0.45f, 0.12f};
     for (const Fire& fire : fires_) {
         float s = fire.strength(), r = fire.radius();
@@ -278,12 +286,13 @@ void Game::drawFire(DebugDraw& dd, Renderer* solid, Vec3 cameraRight) const {
             continue;
         }
         if (s <= 0) continue;
-        // Las lenguas del borde son más bajas: el charco arde más fuerte en el centro.
-        for (const FireTongue& t : fire.tongues) {
-            if (t.dist > r) continue;
-            float edge = 1.0f - 0.45f * t.dist / fire.maxRadius;
-            solid->flame(t.pos, 0.55f + 0.5f * t.size, (0.7f + 1.0f * t.size) * edge * s, t.seed, s);
+        // Un único volumen por charco; sobre una plataforma se recorta a su cara de arriba.
+        Vec3 clipMin{-1e4f, -1e4f, -1e4f}, clipMax{1e4f, 1e4f, 1e4f};
+        if (fire.onPlatform) {
+            clipMin = {fire.supportMin.x, fire.pos.y, fire.supportMin.z};
+            clipMax = {fire.supportMax.x, 1e4f, fire.supportMax.z};
         }
+        solid->fireColumn(fire.pos, r, 2.2f * (0.4f + 0.6f * s), fire.seed, s, clipMin, clipMax);
         float flicker = 0.8f + 0.2f * std::sin(time_ * 23.0f + fire.seed) * std::sin(time_ * 7.3f + fire.seed * 3.0f);
         solid->light(fire.pos + Vec3{0, 0.8f, 0}, fireColor * (4.0f * s * flicker), 7.0f);
     }
@@ -294,7 +303,7 @@ void Game::drawFire(DebugDraw& dd, Renderer* solid, Vec3 cameraRight) const {
             dd.circleXZ(b.pos, 3.0f * grow, 24, rgba(255, 230, 120));
             continue;
         }
-        solid->flame(b.pos - Vec3{0, 0.4f, 0}, 3.0f * grow, 3.4f * grow, b.seed, 1.25f * fade);
+        solid->fireBall(b.pos + Vec3{0, 0.5f, 0}, 1.8f * grow, b.seed, 1.4f * fade);
         solid->light(b.pos + Vec3{0, 1.0f, 0}, fireColor * (7.0f * fade), 10.0f);
     }
     if (!solid) return;
@@ -306,18 +315,12 @@ void Game::drawFire(DebugDraw& dd, Renderer* solid, Vec3 cameraRight) const {
         solid->smoke(p.pos, 0.8f + p.age * 0.9f, p.seed, opacity);
     }
 
-    // Enemigos ardiendo: llamas sobre el cuerpo, adelantadas hacia la cámara para que el
-    // propio cuerpo no las tape, y una luz que los ilumina desde dentro.
-    Vec3 toCamera = cross(cameraRight, {0, 1, 0});
-    const int burningParts[] = {Pelvis, Chest, Head};
+    // Enemigos ardiendo: una columna de fuego que los envuelve y una luz desde dentro.
     for (size_t i = 0; i < enemies_.size(); ++i) {
         const Enemy& e = enemies_[i];
         if (e.burnTimer <= 0 || !e.alive()) continue;
         float k = std::min(1.0f, e.burnTimer);
-        for (int part : burningParts) {
-            Vec3 base = translationOf(e.joints[part]) - Vec3{0, 0.25f, 0} + toCamera * 0.22f;
-            solid->flame(base, 0.55f, 0.9f * k, float(part) * 7.0f + float(i) * 3.0f, k);
-        }
+        solid->fireColumn(e.body.pos, 0.5f, 2.1f * (0.5f + 0.5f * k), float(i) * 13.0f, k);
         solid->light(translationOf(e.joints[Chest]), fireColor * (2.0f * k), 4.0f);
     }
 }

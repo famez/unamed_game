@@ -68,11 +68,18 @@ luz de contorno en personajes, bisel en aristas, suelo con cuadrícula procedura
 en degradado, niebla y tonemapping ACES. Las balas, el láser, las chispas y las barras de
 vida siguen siendo líneas. En la HD 620: ~225 fps sin vsync (~4,4 ms por frame).
 
-Fuego: llamas procedurales en billboards verticales (ruido fractal animado que sube y
-deforma una silueta de lengua, rampa de color brasa→naranja→amarillo), bola de fuego en
-la explosión, humo (alfa premultiplicado, mismo draw call que las llamas), ascuas, hasta 8
-luces puntuales parpadeantes y suelo chamuscado con borde de ruido. Con tres fuegos
-delante de la cámara: ~130 fps sin vsync.
+Fuego volumétrico: cada fuego (charco, cuerpo ardiendo, explosión, mecha) es una caja que
+el fragment shader recorre con raymarching (22 pasos) evaluando ruido fractal 3D animado:
+la densidad forma lenguas que suben y la "temperatura" da el color (brasa → naranja →
+amarillo). Es 3D desde cualquier ángulo y, sobre una plataforma, se recorta a su cara de
+arriba. Además: humo (billboards con alfa premultiplicado), ascuas, hasta 8 luces
+puntuales parpadeantes y suelo chamuscado. Con tres fuegos delante de la cámara: ~93 fps
+sin vsync. Limitación: el volumen no lee la profundidad de la escena, así que lo que esté
+*dentro* del fuego puede quedar tapado por la parte de fuego que tiene detrás.
+
+Objetivo apuntado: al apuntar con la pistola, el enemigo bajo la mira lleva una silueta
+roja que late. Se hace con el stencil buffer: se dibuja marcando el stencil y luego se
+vuelve a dibujar inflado, con color plano, solo donde el stencil no está marcado.
 
 El modo debug (F12) es el render original en alambre, sin shaders de iluminación.
 
@@ -110,7 +117,8 @@ src/
   game_draw.cpp                  Dibujado del mundo 3D, armas, barras de vida y HUD
   text.h/.cpp                    Fuente vectorial mínima (A-Z, 0-9) para HUD y menús
   menu.h/.cpp                    Menú de pausa
-  renderer.h/.cpp                Render con shaders: instancing, sombras, cielo, niebla
+  renderer.h/.cpp                Render con shaders: instancing, sombras, cielo, niebla,
+                                 fuego volumétrico, humo, silueta por stencil
   main.cpp                       Bucle principal, cámara orbital, entrada
 ```
 

@@ -87,8 +87,9 @@ struct Particle {
     float gravity = 1.0f;  // negativo = asciende (ascuas)
 };
 
-// Charco de fuego de un cóctel molotov. Las "lenguas" son los puntos donde se dibujan
-// llamas; solo existen donde hay suelo debajo (no flotan al borde de una plataforma).
+// Charco de fuego de un cóctel molotov. Las "lenguas" son puntos con suelo debajo de donde
+// salen humo y ascuas (y lo que se ve en modo debug). Si arde sobre una plataforma,
+// `supportMin/Max` es su cara superior: el volumen de fuego se recorta a ella.
 struct FireTongue {
     Vec3 pos;
     float dist;  // distancia al centro: el fuego se extiende de dentro afuera
@@ -100,6 +101,8 @@ struct Fire {
     float maxRadius = 2.6f;
     float age = 0, duration = 7.0f;
     float seed = 0;
+    bool onPlatform = false;
+    Vec3 supportMin, supportMax;
     std::vector<FireTongue> tongues;
 
     float radius() const { return maxRadius * smoothstep01(age / 0.35f); }
@@ -143,7 +146,7 @@ public:
 
 private:
     void addEnemy(Vec3 pos, float yaw);
-    void drawFire(DebugDraw& dd, Renderer* solid, Vec3 cameraRight) const;
+    void drawFire(DebugDraw& dd, Renderer* solid) const;
     void useItem(Item item, float aimYaw, float aimPitch);
     void resolveImpact(Action a);
     void meleeHit(float range, float cosHalfArc, float damage, float knock, float lift);
@@ -175,6 +178,7 @@ private:
     float throwUp_ = 0;  // velocidad vertical del lanzamiento en curso (según la cámara)
     Vec3 aimPoint_;            // dónde impactaría una bala disparada con la mira
     bool aimOnEnemy_ = false;  // la mira está sobre un enemigo
+    int aimEnemy_ = -1;        // índice del enemigo bajo la mira (para resaltarlo)
     float time_ = 0;
     uint32_t rng_ = 12345;
 };

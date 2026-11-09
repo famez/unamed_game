@@ -227,7 +227,7 @@ int main() {
         rc.up = cross(rc.right, rc.forward);
 
         glViewport(0, 0, w, h);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
         if (!debugView) renderer.render(rc, game.hero().body.pos, w, h, game.time());
         glEnable(GL_DEPTH_TEST);
         dd.flush(rc.proj * rc.view, 6.0f);  // en modo normal: solo efectos (balas, láser...)

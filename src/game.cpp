@@ -134,7 +134,12 @@ void Game::update(float dt, const Controls& c) {
 
     // Apuntado con botón derecho (solo con la pistola).
     bool aiming = c.aim && hero_.item == Item::Pistol;
-    if (aiming) updateAimPoint(c.aimOrigin, c.aimDir);
+    if (aiming) {
+        updateAimPoint(c.aimOrigin, c.aimDir);
+    } else {
+        aimOnEnemy_ = false;
+        aimEnemy_ = -1;
+    }
     hero_.setAim(aiming, aimPoint_);
     if (c.use)
         useItem(hero_.item, c.aimYaw, c.aimPitch);
@@ -277,6 +282,13 @@ void Game::igniteAt(Vec3 point, Vec3 normal) {
     Fire f;
     f.pos = surface;
     f.seed = random01() * 100.0f;
+    for (const AABB& b : world_.solids)
+        if (std::fabs(b.max.y - surface.y) < 1e-3f && surface.x >= b.min.x && surface.x <= b.max.x &&
+            surface.z >= b.min.z && surface.z <= b.max.z) {
+            f.onPlatform = true;
+            f.supportMin = b.min;
+            f.supportMax = b.max;
+        }
     // Lenguas repartidas en espiral (ángulo áureo) y solo donde hay suelo a la misma altura.
     for (int i = 0; i < kFireTongues; ++i) {
         float r = f.maxRadius * std::sqrt((float(i) + 0.5f) / float(kFireTongues));
@@ -486,12 +498,14 @@ void Game::updateAimPoint(Vec3 origin, Vec3 dir) {
     RayHit best;
     best.t = 1;
     aimOnEnemy_ = false;
+    aimEnemy_ = -1;
     RayHit h;
     if (segmentVsWorld(origin, end, world_, h) && h.t < best.t) best = h;
-    for (const Enemy& e : enemies_)
-        if (e.alive() && segmentVsAABB(origin, end, e.hitBox(), h) && h.t < best.t) {
+    for (size_t i = 0; i < enemies_.size(); ++i)
+        if (enemies_[i].alive() && segmentVsAABB(origin, end, enemies_[i].hitBox(), h) && h.t < best.t) {
             best = h;
             aimOnEnemy_ = true;
+            aimEnemy_ = int(i);
         }
     aimPoint_ = origin + (end - origin) * best.t;
 }
