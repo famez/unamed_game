@@ -1,12 +1,14 @@
 # unamed_game
 
-Prototipo en C++17 + OpenGL 3.3 Core, sin motor y sin dependencias externas: personaje
-con esqueleto y animación procedural, combate cuerpo a cuerpo con combos y defensa, armas
-de fuego y arrojadizas, enemigos con escudo, fuego volumétrico y render con sombras.
+Prototipo en C++17 + OpenGL 3.3 Core, sin motor: personaje con esqueleto y animación
+procedural, combate cuerpo a cuerpo con combos y defensa, armas de fuego y arrojadizas,
+enemigos con escudo, ragdolls y cajas con Jolt Physics, fuego volumétrico y render con
+sombras. Única dependencia externa: Jolt Physics (submódulo de git).
 
 ## Compilar y ejecutar
 
 ```bash
+git submodule update --init      # Jolt Physics en third_party/ (solo la primera vez)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j4
 ./build/game
 
@@ -79,6 +81,12 @@ Al perder el foco (alt-tab) el ratón se suelta y se abre el menú de pausa.
   menos de 1,7 m levantan la **porra** (0,55 s de aviso) y golpean: 15 de daño y empujón.
   Golpearles durante la preparación les interrumpe.
 - **Vida del jugador** (barra abajo a la izquierda): a 0 caes y reapareces en el inicio.
+- **Ragdolls** (Jolt Physics): al morir, el esqueleto pasa a 11 cuerpos rígidos unidos por
+  articulaciones con límites anatómicos (cono + giro en hombros, caderas, cuello y
+  columna; bisagra en codos y rodillas), con el empujón del golpe que lo mató. Los
+  cadáveres se pueden empujar, disparar y lanzar con explosiones.
+- **Cajas** sueltas por el nivel: las mueven balas, golpes, explosiones y el propio
+  jugador al andar contra ellas (los personajes vivos son cápsulas cinemáticas en Jolt).
 
 ## Render
 
@@ -141,6 +149,7 @@ src/
   debug_draw.h/.cpp              Lote de líneas/puntos + shader mínimo pass-through
   skeleton.h/.cpp                19 articulaciones, jerarquía y cinemática directa
   physics.h/.cpp                 Cajas AABB, cuerpos con gravedad, rayos (segmento vs caja)
+  physics_jolt.h/.cpp            Jolt Physics tras una interfaz propia: ragdolls, cajas, rayos
   character.h/.cpp               Movimiento, salto, animación procedural y keyframes de acciones
   game.h/.cpp                    Nivel, enemigos, combate, proyectiles, partículas
   game_draw.cpp                  Dibujado del mundo 3D (cuerpos de elipsoides), armas, HUD
@@ -149,6 +158,8 @@ src/
   renderer.h/.cpp                Render con shaders: instancing, sombras, cielo, niebla,
                                  fuego volumétrico, humo, silueta por stencil
   main.cpp                       Bucle principal, cámara orbital, entrada
+third_party/
+  JoltPhysics/                   Submódulo: Jolt Physics 5.6.0 (licencia MIT)
 tests/
   logic_test.cpp                 Tests de la lógica sin ventana (combate, físicas, armas...)
 ```
@@ -170,8 +181,7 @@ vértice con varios huesos y pesos), que se hace en el vertex shader.
 
 ## Próximos pasos sugeridos
 
-1. Físicas con Jolt Physics: ragdolls al derribar enemigos y objetos dinámicos.
-2. Colisión de la cámara con el escenario (ahora puede atravesar plataformas).
-3. IA de enemigos que se muevan: patrullar, perseguir, cubrirse con el escudo.
-4. Malla real del personaje cargada desde fichero (glTF) con skinning por pesos en GPU.
-5. Clips de animación con keyframes e interpolación (cuaterniones + slerp) y blending.
+1. Colisión de la cámara con el escenario (ahora puede atravesar plataformas).
+2. IA de enemigos que se muevan: patrullar, perseguir, cubrirse con el escudo.
+3. Malla real del personaje cargada desde fichero (glTF) con skinning por pesos en GPU.
+4. Clips de animación con keyframes e interpolación (cuaterniones + slerp) y blending.

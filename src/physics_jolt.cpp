@@ -202,7 +202,9 @@ struct RigidWorld::Impl {
     }
 };
 
-RigidWorld::RigidWorld() : impl_(std::make_unique<Impl>()) { initJoltOnce(); }
+// Jolt se registra antes de crear Impl: su TempAllocator y su PhysicsSystem ya usan el
+// asignador de Jolt.
+RigidWorld::RigidWorld() : impl_((initJoltOnce(), std::make_unique<Impl>())) {}
 RigidWorld::~RigidWorld() = default;
 RigidWorld::RigidWorld(RigidWorld&&) noexcept = default;
 RigidWorld& RigidWorld::operator=(RigidWorld&&) noexcept = default;

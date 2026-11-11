@@ -6,6 +6,7 @@
 #include "character.h"
 #include "debug_draw.h"
 #include "physics.h"
+#include "physics_jolt.h"
 #include "renderer.h"
 #include "skeleton.h"
 #include "vmath.h"
@@ -61,6 +62,8 @@ struct Enemy {
     bool hitFromFront = false;
     float deadTimer = -1;  // >= 0: muerto (segundos desde la muerte)
     float burnTimer = 0;   // > 0: está ardiendo
+    int ragdoll = -1;      // muerto: ragdoll de Jolt que mueve su esqueleto
+    int proxy = -1;        // vivo: cápsula cinemática que empuja cajas y cadáveres
     float attackTime = -1; // >= 0: atacando con la porra (segundos desde que empezó)
     float attackCooldown = 0;
     float breathOffset = 0;
@@ -179,8 +182,13 @@ private:
     void spawnSparks(Vec3 pos, Vec3 dir, int count, uint32_t color, float speed);
     float random01();
 
+    void killHero(Vec3 velocity);
+    void respawnHero();
+
     World world_;
-    Character hero_;
+    RigidWorld rigid_;     // Jolt: ragdolls, cajas y cápsulas de los personajes
+    int heroProxy_ = -1;
+    int heroRagdoll_ = -1;    Character hero_;
     std::vector<Enemy> enemies_;
     std::vector<Projectile> projectiles_;
     std::vector<Particle> particles_;

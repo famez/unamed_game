@@ -221,5 +221,37 @@ int main(){
   { // Inventario: 8 casillas
     Game g=fresh(); Controls c; c.selectSlot=7; g.update(dt,c);
     CHECK(g.hero_.item==Item::Hammer && g.ammo(Item::Shotgun)==16 && g.ammo(Item::Hammer)==-1, "tecla 8 = martillo; municion por objeto"); }
+  { // Ragdolls (Jolt): al morir, el esqueleto pasa a cuerpos rígidos con articulaciones limitadas
+    Game g=fresh(); Enemy& e=g.enemies_[3]; e.health=10; g.hero_.body.pos=e.body.pos+Vec3{0,0,1.1f}; g.hero_.item=Item::Sword; run(g,0.05f);
+    size_t before=g.rigid_.dynamicBodyCount();
+    Controls c; c.aimYaw=kPi; c.use=true; g.update(dt,c); c.use=false; run(g,0.5f,c);
+    CHECK(!e.alive() && e.ragdoll>=0 && g.rigid_.dynamicBodyCount()==before+11, "al morir se crea un ragdoll de 11 cuerpos (%zu -> %zu)", before, g.rigid_.dynamicBodyCount());
+    run(g,2.5f);
+    Vec3 pelvis=translationOf(e.joints[Pelvis]), head=translationOf(e.joints[Head]);
+    CHECK(pelvis.y<0.35f && head.y<0.45f, "cae al suelo: pelvis a %.2f m, cabeza a %.2f m", pelvis.y, head.y);
+    CHECK(pelvis.z < -4.3f, "sale despedido hacia donde iba el golpe (z %.2f, estaba en -4)", pelvis.z);
+    // Ángulo de flexión hijo/padre en torno al eje X del padre (convención de la animación).
+    auto bend=[&](Joint parent, Joint child){ const float* a=e.joints[parent].m; const float* b=e.joints[child].m;
+      Vec3 y{b[4],b[5],b[6]}; return std::atan2(dot(y,Vec3{a[8],a[9],a[10]}), dot(y,Vec3{a[4],a[5],a[6]})); };
+    float kl=bend(HipL,KneeL), kr=bend(HipR,KneeR), el=bend(ShoulderL,ElbowL), er=bend(ShoulderR,ElbowR);
+    CHECK(kl>-0.2f && kr>-0.2f && el<0.2f && er<0.2f, "rodillas y codos no se doblan al reves (rodillas %.2f %.2f, codos %.2f %.2f)", kl, kr, el, er);
+    float spread=length(translationOf(e.joints[WristL])-translationOf(e.joints[Pelvis]));
+    CHECK(spread<1.0f, "las articulaciones siguen unidas (muneca a %.2f m de la pelvis)", spread);
+    run(g,1.5f);
+    CHECK(e.alive() && e.ragdoll<0 && g.rigid_.dynamicBodyCount()==before, "al reaparecer se elimina el ragdoll");
+    Game h=fresh(); h.heroHealth_=10; h.hero_.body.pos={0,0,4.8f}; Controls d; d.aimYaw=0; run(h,1.0f,d);
+    CHECK(h.heroRagdoll_>=0 && translationOf(h.hero_.joints[Head]).y<0.6f, "el jugador derribado tambien cae como ragdoll (cabeza a %.2f m)", translationOf(h.hero_.joints[Head]).y);
+    run(h,3.0f); CHECK(h.heroRagdoll_<0 && translationOf(h.hero_.joints[Head]).y>1.5f, "y al reaparecer vuelve a estar de pie"); }
+  { // Cajas (Jolt): reposan en el suelo y las mueven balas, explosiones y el propio jugador
+    Game g=fresh(); g.enemies_.clear(); run(g,0.5f); Vec3 c0=translationOf(g.rigid_.crateTransform(3));
+    CHECK(std::fabs(c0.y-0.35f)<0.02f && std::fabs(c0.z-2.5f)<0.02f, "la caja reposa en el suelo (y %.2f)", c0.y);
+    g.projectiles_.push_back({ProjectileKind::Bullet, {2.5f,0.4f,0.5f}, {0,0,45}, 1.0f}); run(g,0.6f);
+    Vec3 c1=translationOf(g.rigid_.crateTransform(3));
+    CHECK(g.projectiles_.empty() && c1.z-c0.z>0.05f, "un disparo la desplaza %.2f m", c1.z-c0.z);
+    Vec3 s0=translationOf(g.rigid_.crateTransform(2)); g.explodeGrenade({-3.4f,0.3f,-0.7f}); run(g,1.0f);
+    Vec3 s1=translationOf(g.rigid_.crateTransform(2));
+    CHECK(length(s1-s0)>1.0f, "una granada al lado tira la pila de cajas (la de arriba se mueve %.1f m)", length(s1-s0));
+    Game h=fresh(); h.enemies_.clear(); h.hero_.body.pos={2.5f,0,1.0f}; Controls c; c.move={0,0,1}; run(h,1.2f,c);
+    CHECK(translationOf(h.rigid_.crateTransform(3)).z>3.0f, "andando contra ella la empuja (z %.2f)", translationOf(h.rigid_.crateTransform(3)).z); }
   std::printf("\n%s (%d fallos)\n", fails?"HAY FALLOS":"TODO OK", fails); return fails;
 }

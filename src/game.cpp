@@ -41,6 +41,9 @@ constexpr float kEnemyWindup = 0.55f, kEnemyAttackEnd = 0.9f, kEnemyCooldown = 1
 constexpr float kEnemyDamage = 15.0f, kEnemyKnock = 6.0f;
 constexpr float kHeroBlockFactor = 0.2f, kHeroRespawnTime = 2.5f;
 
+// Física de cuerpos rígidos (Jolt): impulsos de las balas (N·s) y masa de las cajas (kg).
+constexpr float kBulletImpulse = 60.0f, kPelletImpulse = 20.0f, kCrateMass = 25.0f;
+
 // Cóctel molotov.
 constexpr float kBlastRadius = 3.0f, kBlastDamage = 25.0f, kBlastKnock = 5.0f, kBlastLift = 3.0f;
 constexpr float kBurnDps = 20.0f;        // daño por segundo mientras arde
@@ -157,6 +160,16 @@ void Game::init() {
     addEnemy({-5, 0, 9}, kPi * 0.5f);         // mirando a +X
     addEnemy({10.5f, 2.0f, 4}, -kPi * 0.5f);  // en la plataforma alta, mirando la escalera
     addEnemy({4, 0, -4}, kPi);                // de espaldas al jugador
+
+    // Física de cuerpos rígidos: el nivel como estático, cajas sueltas y una cápsula
+    // cinemática por personaje para que empujen lo que se mueve.
+    rigid_.build(world_);
+    const Vec3 crate{0.35f, 0.35f, 0.35f};
+    for (Vec3 c : {Vec3{-3.0f, 0.35f, -1.5f}, Vec3{-3.75f, 0.35f, -1.5f}, Vec3{-3.4f, 1.06f, -1.5f},
+                   Vec3{2.5f, 0.35f, 2.5f}, Vec3{6.5f, 0.35f, -6.0f}})
+        rigid_.addCrate(c, crate, kCrateMass);
+    heroProxy_ = rigid_.addProxy(hero_.body.radius, hero_.body.height);
+    for (Enemy& e : enemies_) e.proxy = rigid_.addProxy(e.body.radius, e.body.height);
 }
 
 int* Game::ammoRef(Item item) {
@@ -174,7 +187,28 @@ int Game::ammo(Item item) const {
     return a ? *a : -1;
 }
 
+// Muerte del jugador: su esqueleto pasa a un ragdoll con la velocidad que llevaba.
+void Game::killHero(Vec3 velocity) {
+    heroDeadTimer_ = 0;
+    heroRagdoll_ = rigid_.createRagdoll(hero_.joints, velocity);
+    rigid_.setProxyEnabled(heroProxy_, false);
+}
+
+void Game::respawnHero() {
+    Item item = hero_.item;
+    hero_.reset();
+    hero_.item = item;
+    heroHealth_ = 100;
+    heroDeadTimer_ = -1;
+    rigid_.destroyRagdoll(heroRagdoll_);
+    heroRagdoll_ = -1;
+    rigid_.setProxyEnabled(heroProxy_, true);
+}
+
 void Game::resetHero() {
+    rigid_.destroyRagdoll(heroRagdoll_);
+    heroRagdoll_ = -1;
+    rigid_.setProxyEnabled(heroProxy_, true);
     hero_.reset();
     shells_ = 16;
     grenades_ = 4;
@@ -195,13 +229,7 @@ void Game::update(float dt, const Controls& cIn) {
         hero_.downTimer = heroDeadTimer_;
         c = Controls{};
         c.aimYaw = hero_.yaw;
-        if (heroDeadTimer_ > kHeroRespawnTime) {
-            Item item = hero_.item;
-            hero_.reset();
-            hero_.item = item;
-            heroHealth_ = 100;
-            heroDeadTimer_ = -1;
-        }
+        if (heroDeadTimer_ > kHeroRespawnTime) respawnHero();
     }
 
     if (c.selectSlot >= 0 && c.selectSlot < int(Item::Count)) hero_.item = Item(c.selectSlot);
@@ -238,6 +266,7 @@ void Game::update(float dt, const Controls& cIn) {
     }
 
     hero_.update(dt, c.move, c.run, c.jump, c.aimYaw, world_);
+    if (heroRagdoll_ >= 0) rigid_.ragdollJoints(heroRagdoll_, hero_.joints);  // derribado
     Action impact = hero_.takeImpact();
     if (impact != Action::None) resolveImpact(impact);
 
@@ -256,6 +285,8 @@ void Game::update(float dt, const Controls& cIn) {
     updateProjectiles(dt);
     updateFires(dt);
     updateParticles(dt);
+    rigid_.moveProxy(heroProxy_, hero_.body.pos, dt);
+    rigid_.step(dt);
 }
 
 void Game::useItem(Item item, float aimYaw, float aimPitch) {
@@ -340,6 +371,7 @@ void Game::resolveImpact(Action a) {
                 damageEnemy(e, 6.0f);
             }
             spawnSparks(ground, {0, 1, 0}, 20, rgba(190, 170, 140), 4.0f);  // polvo
+            rigid_.explosion(ground, kShockwaveRadius, 3.0f, 4.0f);
             break;
         }
         case Action::Throw: {
@@ -381,6 +413,9 @@ void Game::meleeHit(float range, float cosHalfArc, float damage, float knock, fl
         hitEnemy(e, dir, translationOf(e.joints[Chest]), damage, knock, lift);
     }
     blockFactor_ = kBlockFactor;
+    // Lo suelto (cajas, cadáveres) delante del golpe también sale despedido.
+    rigid_.push(origin + fwd * (range * 0.6f) + Vec3{0, 0.6f, 0}, range * 0.7f,
+                fwd * (knock * 0.6f) + Vec3{0, lift * 0.5f, 0});
 }
 
 // `dir`: dirección horizontal en la que viaja el golpe (del atacante hacia el enemigo).
@@ -411,6 +446,9 @@ void Game::damageEnemy(Enemy& e, float damage) {
         e.deadTimer = 0;
         e.burnTimer = 0;
         ++kills_;
+        // Cae como un ragdoll, con el empujón del golpe que lo ha matado.
+        e.ragdoll = rigid_.createRagdoll(e.joints, e.body.vel);
+        rigid_.setProxyEnabled(e.proxy, false);
     }
 }
 
@@ -430,7 +468,7 @@ void Game::hurtHero(Vec3 dir, float damage, float knock) {
     }
     hero_.push(dir * knock + Vec3{0, knock * 0.25f, 0});
     heroHealth_ = std::max(0.0f, heroHealth_ - damage);
-    if (heroHealth_ <= 0) heroDeadTimer_ = 0;
+    if (heroHealth_ <= 0) killHero(hero_.body.vel + dir * knock + Vec3{0, knock * 0.25f, 0});
 }
 
 Item Game::handItem() const {
@@ -477,6 +515,7 @@ void Game::igniteAt(Vec3 point, Vec3 normal) {
     }
     if (fires_.size() >= kMaxFires) fires_.erase(fires_.begin());
     fires_.push_back(f);
+    rigid_.explosion(point, kBlastRadius, 6.0f, 4.0f);
     blasts_.push_back({point, 0, random01() * 100.0f});
     if (scorches_.size() >= kMaxScorches) scorches_.erase(scorches_.begin());
     scorches_.push_back({surface, f.maxRadius * 1.1f, 0});
@@ -502,6 +541,7 @@ void Game::igniteAt(Vec3 point, Vec3 normal) {
 // Explosión de granada: bola de fuego, humo y daño de área con caída por distancia. El
 // escudo cubre algo si mira hacia la explosión. El jugador también sufre si está cerca.
 void Game::explodeGrenade(Vec3 point) {
+    rigid_.explosion(point, kGrenadeRadius * 1.2f, 11.0f, 6.0f);
     blasts_.push_back({point, 0, random01() * 100.0f});
     RayHit h;
     Vec3 ground{point.x, 0, point.z};
@@ -593,6 +633,9 @@ void Game::updateEnemy(Enemy& e, float dt) {
             e.health = e.maxHealth;
             e.deadTimer = -1;
             e.hitTimer = e.blockTimer = e.burnTimer = 0;
+            rigid_.destroyRagdoll(e.ragdoll);
+            e.ragdoll = -1;
+            rigid_.setProxyEnabled(e.proxy, true);
         }
     }
 
@@ -639,6 +682,10 @@ void Game::updateEnemy(Enemy& e, float dt) {
     e.blockTimer = std::max(0.0f, e.blockTimer - dt);
     animateEnemy(e, time_);
     computeWorldMatrices(e.pose, e.modelMatrix(), e.joints);
+    if (e.ragdoll >= 0)
+        rigid_.ragdollJoints(e.ragdoll, e.joints);
+    else
+        rigid_.moveProxy(e.proxy, e.body.pos, dt);
 }
 
 void Game::updateProjectiles(float dt) {
@@ -684,6 +731,28 @@ void Game::updateProjectiles(float dt) {
             }
         RayHit wallHit;
         bool hitWorld = segmentVsWorld(p.pos, next, world_, wallHit);
+
+        // Cajas y cadáveres (Jolt), si están antes que el enemigo o la pared.
+        float dynT;
+        Vec3 dynNormal;
+        if (rigid_.raycast(p.pos, next, dynT, dynNormal) && (!target || dynT < enemyHit.t) &&
+            (!hitWorld || dynT < wallHit.t)) {
+            Vec3 point = p.pos + (next - p.pos) * dynT;
+            if (bullet) {
+                rigid_.impulseAlong(p.pos, next, p.kind == ProjectileKind::Pellet ? kPelletImpulse : kBulletImpulse);
+                spawnSparks(point, dynNormal, 5, rgba(200, 180, 140), 2.0f);
+                p.dead = true;
+            } else if (molotov) {
+                igniteAt(point, dynNormal);
+                p.dead = true;
+            } else {  // piedra o granada: rebota y empuja un poco
+                rigid_.impulseAlong(p.pos, next, length(p.vel) * 0.3f);
+                p.vel = (p.vel - dynNormal * (1.35f * dot(p.vel, dynNormal))) * 0.6f;
+                p.pos = point + dynNormal * 0.02f;
+                if (length(p.vel) < 4.0f) p.armed = false;
+            }
+            continue;
+        }
 
         if (target && (!hitWorld || enemyHit.t < wallHit.t)) {
             Vec3 point = p.pos + (next - p.pos) * enemyHit.t;

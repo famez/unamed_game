@@ -310,6 +310,16 @@ void Game::draw(DebugDraw& dd, Renderer* solid, const DrawFlags& f, Vec3 cameraR
         }
     }
 
+    // Cajas sueltas (Jolt): madera, giran y vuelcan.
+    for (size_t i = 0; i < rigid_.crateCount(); ++i) {
+        Mat4 m = rigid_.crateTransform(i);
+        Vec3 h = rigid_.crateHalf(i);
+        out.box(m, {}, h, rgba(156, 112, 64), Material::Stone);
+        if (solid)  // listones oscuros en dos caras
+            for (float side : {-1.0f, 1.0f})
+                solid->box(m, {0, 0, side * (h.z + 0.004f)}, {h.x * 0.9f, 0.04f, 0.004f}, rgba(96, 66, 36), Material::Cloth);
+    }
+
     // Jugador.
     const Palette heroPalette{rgba(232, 190, 150), rgba(46, 160, 150), rgba(46, 60, 100), rgba(40, 34, 32),
                               rgba(70, 45, 30)};
