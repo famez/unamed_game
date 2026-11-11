@@ -9,8 +9,19 @@ struct HitParams {
     float damage, knock, lift;
 };
 constexpr HitParams kPunch{8, 3.5f, 1.0f};
+constexpr HitParams kUppercut{15, 5.0f, 4.5f};  // tercer golpe del combo de puños
 constexpr HitParams kSlash{25, 6.0f, 2.5f};
+constexpr HitParams kSweep{20, 5.0f, 1.5f};     // barrido: arco muy ancho
+constexpr HitParams kThrust{35, 9.0f, 1.5f};    // estocada: alcance largo y estrecho
+constexpr float kLunge = 4.0f;                  // impulso hacia delante del golpe final
 constexpr HitParams kBullet{12, 2.5f, 0.5f};
+constexpr HitParams kPellet{7, 1.6f, 0.3f};     // escopeta: 8 por disparo
+constexpr HitParams kSmash{40, 11.0f, 7.0f};    // martillo: lanza por los aires
+constexpr int kPellets = 8;
+constexpr float kPelletSpread = 0.075f;         // radianes (cono de ~8,5 grados)
+constexpr float kPelletLife = 0.4f;             // alcance de ~18 m
+constexpr float kSmashBlockFactor = 0.6f;       // el escudo apenas para un martillazo
+constexpr float kShockwaveRadius = 2.6f;        // onda del martillazo contra el suelo
 constexpr HitParams kRock{15, 4.5f, 2.0f};
 
 constexpr float kBulletSpeed = 45.0f;
@@ -18,14 +29,27 @@ constexpr float kBulletSpeed = 45.0f;
 // distancia); mirando hacia arriba se lanza más alto y más lejos.
 constexpr float kThrowSpeed = 13.0f, kThrowUp = 1.5f;
 constexpr float kDefaultCameraPitch = 0.35f, kThrowUpPerRadian = 8.0f, kMaxThrowUp = 9.0f;
+// Apuntando: sale en la dirección de la mira algo elevada (la parábola cae hacia la cruz).
+constexpr float kAimedThrowLift = 0.12f;
+constexpr float kThrowAimStartU = 0.4f;  // el brazo ya está atrás: se suelta antes
 constexpr float kBlockFactor = 0.2f;    // daño que pasa a través del escudo
 constexpr float kRespawnTime = 4.0f;
+
+// Ataque de los enemigos (quietos, pero golpean con la porra a quien tengan delante).
+constexpr float kEnemyReach = 1.7f, kEnemyArcCos = 0.5f;
+constexpr float kEnemyWindup = 0.55f, kEnemyAttackEnd = 0.9f, kEnemyCooldown = 1.0f;
+constexpr float kEnemyDamage = 15.0f, kEnemyKnock = 6.0f;
+constexpr float kHeroBlockFactor = 0.2f, kHeroRespawnTime = 2.5f;
 
 // Cóctel molotov.
 constexpr float kBlastRadius = 3.0f, kBlastDamage = 25.0f, kBlastKnock = 5.0f, kBlastLift = 3.0f;
 constexpr float kBurnDps = 20.0f;        // daño por segundo mientras arde
 constexpr float kBurnAfterFire = 2.5f;   // sigue ardiendo este tiempo al salir del fuego
 constexpr int kFireTongues = 22;
+
+// Granada: rebota y explota al acabarse la mecha. Daña también al jugador.
+constexpr float kGrenadeFuse = 2.0f;
+constexpr float kGrenadeRadius = 4.0f, kGrenadeDamage = 55.0f, kGrenadeKnock = 9.0f, kGrenadeLift = 5.5f;
 constexpr size_t kMaxFires = 6, kMaxScorches = 8;
 
 void animateEnemy(Enemy& e, float time) {
@@ -41,6 +65,17 @@ void animateEnemy(Enemy& e, float time) {
     r[ElbowR].x = -0.25f;
     r[HipL].z = 0.06f;
     r[HipR].z = -0.06f;
+
+    // Ataque con la porra: la levanta (aviso para el jugador) y la baja de golpe.
+    if (e.attackTime >= 0) {
+        float t = e.attackTime;
+        float raise = t < kEnemyWindup ? smoothstep01(t / kEnemyWindup) : 0.0f;
+        float strike = t < kEnemyWindup ? 0.0f : 1.0f - smoothstep01((t - kEnemyWindup - 0.12f) / 0.23f);
+        r[ShoulderR].x = lerpAngle(lerpAngle(r[ShoulderR].x, -2.9f, raise), -0.9f, strike);
+        r[ElbowR].x = lerpAngle(lerpAngle(r[ElbowR].x, -0.8f, raise), -0.1f, strike);
+        r[Chest].y += -0.35f * raise + 0.4f * strike;
+        r[Spine].x += -0.1f * raise + 0.25f * strike;
+    }
 
     // Tambaleo: se dobla en la dirección del empujón y se le doblan las rodillas.
     float s = e.hitTimer / 0.4f;
@@ -64,6 +99,9 @@ const char* itemName(Item item) {
         case Item::Pistol: return "Pistola";
         case Item::Rocks: return "Piedras";
         case Item::Molotov: return "Molotov";
+        case Item::Shotgun: return "Escopeta";
+        case Item::Grenade: return "Granada";
+        case Item::Hammer: return "Martillo";
         default: return "?";
     }
 }
@@ -121,32 +159,85 @@ void Game::init() {
     addEnemy({4, 0, -4}, kPi);                // de espaldas al jugador
 }
 
+int* Game::ammoRef(Item item) {
+    switch (item) {
+        case Item::Rocks: return &rocks_;
+        case Item::Molotov: return &molotovs_;
+        case Item::Shotgun: return &shells_;
+        case Item::Grenade: return &grenades_;
+        default: return nullptr;
+    }
+}
+
+int Game::ammo(Item item) const {
+    int* a = const_cast<Game*>(this)->ammoRef(item);
+    return a ? *a : -1;
+}
+
 void Game::resetHero() {
     hero_.reset();
+    shells_ = 16;
+    grenades_ = 4;
+    heroHealth_ = 100;
+    heroDeadTimer_ = -1;
     rocks_ = 10;
     molotovs_ = 5;
 }
 
-void Game::update(float dt, const Controls& c) {
+void Game::update(float dt, const Controls& cIn) {
     time_ += dt;
+    heroHitTimer_ = std::max(0.0f, heroHitTimer_ - dt);
+    heroBlockTimer_ = std::max(0.0f, heroBlockTimer_ - dt);
+    // Derribado: no obedece y al rato reaparece en el inicio con la vida llena.
+    Controls c = cIn;
+    if (heroDeadTimer_ >= 0) {
+        heroDeadTimer_ += dt;
+        hero_.downTimer = heroDeadTimer_;
+        c = Controls{};
+        c.aimYaw = hero_.yaw;
+        if (heroDeadTimer_ > kHeroRespawnTime) {
+            Item item = hero_.item;
+            hero_.reset();
+            hero_.item = item;
+            heroHealth_ = 100;
+            heroDeadTimer_ = -1;
+        }
+    }
 
     if (c.selectSlot >= 0 && c.selectSlot < int(Item::Count)) hero_.item = Item(c.selectSlot);
 
-    // Apuntado con botón derecho (solo con la pistola).
-    bool aiming = c.aim && hero_.item == Item::Pistol;
+    // Apuntado con botón derecho: con la pistola, mira y silueta; con piedras o
+    // molotov, se ve la trayectoria y el clic izquierdo lanza siguiendo esa parábola.
+    Item held = hero_.item;
+    bool aiming = c.aim && (held == Item::Pistol || held == Item::Shotgun);
+    throwAiming_ = c.aim && (held == Item::Rocks || held == Item::Molotov || held == Item::Grenade) && ammo(held) > 0;
     if (aiming) {
         updateAimPoint(c.aimOrigin, c.aimDir);
     } else {
         aimOnEnemy_ = false;
         aimEnemy_ = -1;
     }
-    hero_.setAim(aiming, aimPoint_);
-    if (c.use)
+    throwArc_.clear();
+    if (throwAiming_) {
+        throwVel_ = aimedThrowVelocity(c.aimDir);
+        predictThrowArc(throwOrigin(), throwVel_);
+    }
+    Vec3 throwTarget = throwArc_.empty() ? hero_.body.pos + c.aimDir * 10.0f : throwArc_.back();
+    hero_.setAim(aiming ? AimMode::Gun : throwAiming_ ? AimMode::Throw : AimMode::None,
+                 aiming ? aimPoint_ : throwTarget);
+    hero_.setBlock(c.aim && hero_.item == Item::Sword);
+    if (c.use && throwAiming_) {
+        if (hero_.startAction(Action::Throw, std::atan2(c.aimDir.x, c.aimDir.z), kThrowAimStartU)) {
+            throwItem_ = hero_.item;
+            aimedThrow_ = true;
+        }
+    } else if (c.use) {
         useItem(hero_.item, c.aimYaw, c.aimPitch);
-    else if (c.throwRock)
+    } else if (c.throwRock) {
         useItem(Item::Rocks, c.aimYaw, c.aimPitch);
+    }
 
-    hero_.update(dt, c.move, c.run, c.jump, world_);
+    hero_.update(dt, c.move, c.run, c.jump, c.aimYaw, world_);
     Action impact = hero_.takeImpact();
     if (impact != Action::None) resolveImpact(impact);
 
@@ -170,24 +261,40 @@ void Game::update(float dt, const Controls& c) {
 void Game::useItem(Item item, float aimYaw, float aimPitch) {
     Action a = Action::None;
     switch (item) {
-        case Item::Fists: a = Action::Punch; break;
-        case Item::Sword: a = Action::Slash; break;
+        case Item::Fists:
+        case Item::Sword:
+        case Item::Hammer:
+            if (!hero_.blocking()) hero_.attack(item, aimYaw);
+            return;
         case Item::Pistol: a = Action::Shoot; break;
-        case Item::Rocks: a = rocks_ > 0 ? Action::Throw : Action::None; break;
-        case Item::Molotov: a = molotovs_ > 0 ? Action::Throw : Action::None; break;
+        case Item::Shotgun: a = shells_ > 0 ? Action::ShootHeavy : Action::None; break;
+        case Item::Rocks:
+        case Item::Molotov:
+        case Item::Grenade: a = ammo(item) > 0 ? Action::Throw : Action::None; break;
         default: break;
     }
     if (hero_.startAction(a, aimYaw) && a == Action::Throw) {
         throwUp_ = clampf(kThrowUp + (kDefaultCameraPitch - aimPitch) * kThrowUpPerRadian, 0, kMaxThrowUp);
         throwItem_ = item;
+        aimedThrow_ = false;
     }
 }
 
 void Game::resolveImpact(Action a) {
     Vec3 fwd = hero_.forward();
     switch (a) {
-        case Action::Punch: meleeHit(1.0f, 0.6f, kPunch.damage, kPunch.knock, kPunch.lift); break;
+        case Action::Punch:
+        case Action::Punch2: meleeHit(1.0f, 0.6f, kPunch.damage, kPunch.knock, kPunch.lift); break;
+        case Action::Punch3:
+            hero_.push(fwd * kLunge);
+            meleeHit(1.2f, 0.5f, kUppercut.damage, kUppercut.knock, kUppercut.lift);
+            break;
         case Action::Slash: meleeHit(1.8f, 0.3f, kSlash.damage, kSlash.knock, kSlash.lift); break;
+        case Action::Slash2: meleeHit(1.9f, -0.2f, kSweep.damage, kSweep.knock, kSweep.lift); break;
+        case Action::Slash3:
+            hero_.push(fwd * kLunge);
+            meleeHit(2.4f, 0.75f, kThrust.damage, kThrust.knock, kThrust.lift);
+            break;
         case Action::Shoot: {
             // Del cañón al punto al que apunta el brazo: el de la mira o, desde la
             // cadera, uno lejano al frente.
@@ -197,14 +304,62 @@ void Game::resolveImpact(Action a) {
             spawnSparks(muzzle, fwd, 4, rgba(255, 220, 120), 2.0f);  // fogonazo
             break;
         }
+        case Action::ShootHeavy: {
+            if (shells_ <= 0) break;
+            --shells_;
+            // Perdigones repartidos en un cono alrededor de la dirección de la mira.
+            Vec3 muzzle = transformPoint(hero_.joints[WristR], kShotgunMuzzle);
+            Vec3 dir = normalize(hero_.aimTarget() - muzzle);
+            Vec3 side = normalize(cross(dir, {0, 1, 0})), up = cross(side, dir);
+            for (int i = 0; i < kPellets; ++i) {
+                float ang = random01() * 2.0f * kPi, r = kPelletSpread * std::sqrt(random01());
+                Vec3 d = normalize(dir + side * (std::cos(ang) * r) + up * (std::sin(ang) * r));
+                projectiles_.push_back({ProjectileKind::Pellet, muzzle, d * kBulletSpeed, kPelletLife});
+            }
+            spawnSparks(muzzle, dir, 12, rgba(255, 210, 110), 3.0f);
+            hero_.push(-fwd * 2.5f);  // retroceso
+            break;
+        }
+        case Action::Smash: {
+            // Martillazo: golpe frontal enorme (el escudo apenas lo para) y onda contra el
+            // suelo alrededor.
+            blockFactor_ = kSmashBlockFactor;
+            meleeHit(2.0f, 0.2f, kSmash.damage, kSmash.knock, kSmash.lift);
+            Vec3 ground = hero_.body.pos + fwd * 1.3f;
+            for (Enemy& e : enemies_) {
+                if (!e.alive() || e.hitTimer > 0.3f) continue;  // los del golpe ya lo llevan
+                Vec3 d = e.body.pos - ground;
+                if (std::fabs(d.y) > 0.6f) continue;
+                d.y = 0;
+                float dist = length(d);
+                if (dist > kShockwaveRadius) continue;
+                Vec3 dirOut = dist > 1e-3f ? d * (1.0f / dist) : fwd;
+                e.body.vel += dirOut * 3.0f + Vec3{0, 3.5f, 0};
+                e.hitTimer = 0.4f;
+                e.hitFromFront = dot(dirOut, e.forward()) < 0;
+                damageEnemy(e, 6.0f);
+            }
+            spawnSparks(ground, {0, 1, 0}, 20, rgba(190, 170, 140), 4.0f);  // polvo
+            break;
+        }
         case Action::Throw: {
-            bool molotov = throwItem_ == Item::Molotov;
-            int& ammo = molotov ? molotovs_ : rocks_;
-            if (ammo <= 0) break;
-            --ammo;
-            Vec3 hand = transformPoint(hero_.joints[WristR], kRockInHand);
-            Vec3 vel = fwd * kThrowSpeed + Vec3{0, throwUp_, 0} + Vec3{hero_.body.vel.x, 0, hero_.body.vel.z};
-            projectiles_.push_back({molotov ? ProjectileKind::Molotov : ProjectileKind::Rock, hand, vel});
+            int* ammoLeft = ammoRef(throwItem_);
+            if (!ammoLeft || *ammoLeft <= 0) break;
+            --*ammoLeft;
+            ProjectileKind kind = throwItem_ == Item::Molotov   ? ProjectileKind::Molotov
+                                  : throwItem_ == Item::Grenade ? ProjectileKind::Grenade
+                                                                : ProjectileKind::Rock;
+            Vec3 origin = throwOrigin(), vel = throwVel_;
+            if (!aimedThrow_) {  // sin apuntar: desde la mano, con la elevación de la cámara
+                origin = transformPoint(hero_.joints[WristR], kRockInHand);
+                vel = fwd * kThrowSpeed + Vec3{0, throwUp_, 0} + Vec3{hero_.body.vel.x, 0, hero_.body.vel.z};
+            }
+            Projectile p{kind, origin, vel};
+            if (kind == ProjectileKind::Grenade) {
+                p.life = kGrenadeFuse;
+                p.armed = false;  // no hace daño al chocar: rebota
+            }
+            projectiles_.push_back(p);
             break;
         }
         default: break;
@@ -225,6 +380,7 @@ void Game::meleeHit(float range, float cosHalfArc, float damage, float knock, fl
         if (dot(dir, fwd) < cosHalfArc) continue;
         hitEnemy(e, dir, translationOf(e.joints[Chest]), damage, knock, lift);
     }
+    blockFactor_ = kBlockFactor;
 }
 
 // `dir`: dirección horizontal en la que viaja el golpe (del atacante hacia el enemigo).
@@ -232,9 +388,9 @@ void Game::hitEnemy(Enemy& e, Vec3 dir, Vec3 point, float damage, float knock, f
     float facing = dot(dir, e.forward());
     bool blocked = facing < -0.35f;  // viene de frente: lo para el escudo
     if (blocked) {
-        damage *= kBlockFactor;
-        knock *= 0.5f;
-        lift *= 0.5f;
+        damage *= blockFactor_;
+        knock *= blockFactor_ > kBlockFactor ? 0.8f : 0.5f;
+        lift *= blockFactor_ > kBlockFactor ? 0.8f : 0.5f;
         e.blockTimer = 0.25f;
         spawnSparks(transformPoint(e.joints[Chest], kShieldCenter), -dir, 14, rgba(255, 230, 120), 4.0f);
     } else {
@@ -258,10 +414,30 @@ void Game::damageEnemy(Enemy& e, float damage) {
     }
 }
 
+void Game::hurtHero(Vec3 dir, float damage, float knock) {
+    if (heroDeadTimer_ >= 0) return;
+    Vec3 chest = translationOf(hero_.joints[Chest]);
+    if (hero_.rolling()) return;  // la voltereta lo esquiva
+    // Bloqueo: solo si el golpe viene de delante (el empujón va hacia la espalda).
+    if (hero_.blocking() && dot(dir, hero_.forward()) < -0.3f) {
+        damage *= kHeroBlockFactor;
+        knock *= 0.25f;
+        heroBlockTimer_ = 0.25f;
+        spawnSparks(chest + hero_.forward() * 0.35f, -dir, 16, rgba(255, 230, 140), 4.0f);
+    } else {
+        heroHitTimer_ = 0.35f;
+        spawnSparks(chest, dir, 10, rgba(255, 60, 60), 3.0f);
+    }
+    hero_.push(dir * knock + Vec3{0, knock * 0.25f, 0});
+    heroHealth_ = std::max(0.0f, heroHealth_ - damage);
+    if (heroHealth_ <= 0) heroDeadTimer_ = 0;
+}
+
 Item Game::handItem() const {
     if (hero_.action() == Action::Throw) return hero_.actionImpactDone() ? Item::Count : throwItem_;
-    if (hero_.item == Item::Rocks && rocks_ == 0) return Item::Count;
-    if (hero_.item == Item::Molotov && molotovs_ == 0) return Item::Count;
+    if ((hero_.item == Item::Rocks || hero_.item == Item::Molotov || hero_.item == Item::Grenade) &&
+        ammo(hero_.item) == 0)
+        return Item::Count;
     return hero_.item;
 }
 
@@ -321,6 +497,47 @@ void Game::igniteAt(Vec3 point, Vec3 normal) {
     }
     spawnSparks(point, {0, 1, 0}, 24, rgba(255, 170, 60), 6.0f);
     spawnSparks(point, normal, 12, rgba(140, 210, 160), 4.0f);  // cristales
+}
+
+// Explosión de granada: bola de fuego, humo y daño de área con caída por distancia. El
+// escudo cubre algo si mira hacia la explosión. El jugador también sufre si está cerca.
+void Game::explodeGrenade(Vec3 point) {
+    blasts_.push_back({point, 0, random01() * 100.0f});
+    RayHit h;
+    Vec3 ground{point.x, 0, point.z};
+    if (segmentVsWorld(point + Vec3{0, 0.2f, 0}, point - Vec3{0, 3, 0}, world_, h))
+        ground = point + Vec3{0, 0.2f, 0} + Vec3{0, -3.2f, 0} * h.t;
+    if (scorches_.size() >= kMaxScorches) scorches_.erase(scorches_.begin());
+    scorches_.push_back({ground, 1.6f, 0});
+    for (int i = 0; i < 6; ++i)
+        smoke_.push_back({point + Vec3{(random01() - 0.5f), 0.3f, (random01() - 0.5f)},
+                          {(random01() - 0.5f) * 1.5f, 1.0f + random01(), (random01() - 0.5f) * 1.5f}, 0,
+                          1.8f + random01(), random01() * 100.0f});
+    for (Enemy& e : enemies_) {
+        if (!e.alive()) continue;
+        Vec3 center = e.body.pos + Vec3{0, 0.9f, 0};
+        float d = length(center - point);
+        if (d > kGrenadeRadius) continue;
+        float falloff = 1.0f - 0.7f * d / kGrenadeRadius;
+        Vec3 dir = normalize(Vec3{center.x - point.x, 0, center.z - point.z});
+        if (length(dir) < 0.5f) dir = -e.forward();
+        bool covered = dot(dir, e.forward()) < -0.35f;
+        float dmg = kGrenadeDamage * falloff * (covered ? 0.6f : 1.0f);
+        e.body.vel += dir * (kGrenadeKnock * falloff) + Vec3{0, kGrenadeLift * falloff, 0};
+        e.hitTimer = 0.4f;
+        e.hitFromFront = covered;
+        damageEnemy(e, dmg);
+    }
+    Vec3 heroCenter = hero_.body.pos + Vec3{0, 0.9f, 0};
+    float dh = length(heroCenter - point);
+    if (dh < kGrenadeRadius) {
+        float falloff = 1.0f - 0.7f * dh / kGrenadeRadius;
+        Vec3 dir = normalize(Vec3{heroCenter.x - point.x, 0, heroCenter.z - point.z});
+        if (length(dir) < 0.5f) dir = -hero_.forward();
+        hurtHero(dir, kGrenadeDamage * 0.6f * falloff, kGrenadeKnock * falloff);
+    }
+    spawnSparks(point, {0, 1, 0}, 30, rgba(255, 190, 90), 7.0f);
+    spawnSparks(point, {0, 1, 0}, 14, rgba(90, 90, 90), 5.0f);  // metralla
 }
 
 void Game::updateFires(float dt) {
@@ -393,6 +610,31 @@ void Game::updateEnemy(Enemy& e, float dt) {
             particles_.push_back({p, {0, 1.5f + random01(), 0}, 0.6f + random01() * 0.5f, rgba(255, 150, 50), -0.08f});
         }
     }
+    // Ataque: si el jugador está delante y a su alcance, levanta la porra y golpea. Un
+    // golpe recibido durante la preparación lo interrumpe.
+    e.attackCooldown = std::max(0.0f, e.attackCooldown - dt);
+    Vec3 toHero = hero_.body.pos - e.body.pos;
+    float heightDiff = toHero.y;
+    toHero.y = 0;
+    float heroDist = length(toHero);
+    Vec3 heroDir = heroDist > 1e-4f ? toHero * (1.0f / heroDist) : e.forward();
+    bool inReach = heroDeadTimer_ < 0 && std::fabs(heightDiff) < 1.0f && heroDist < kEnemyReach &&
+                   dot(heroDir, e.forward()) > kEnemyArcCos;
+    if (!e.alive() || (e.hitTimer > 0.2f && e.attackTime < kEnemyWindup)) {
+        e.attackTime = -1;
+    } else if (e.attackTime >= 0) {
+        float before = e.attackTime;
+        e.attackTime += dt;
+        if (before < kEnemyWindup && e.attackTime >= kEnemyWindup && inReach)
+            hurtHero(heroDir, kEnemyDamage, kEnemyKnock);
+        if (e.attackTime >= kEnemyAttackEnd) {
+            e.attackTime = -1;
+            e.attackCooldown = kEnemyCooldown;
+        }
+    } else if (inReach && e.attackCooldown <= 0 && e.hitTimer <= 0) {
+        e.attackTime = 0;
+    }
+
     e.hitTimer = std::max(0.0f, e.hitTimer - dt);
     e.blockTimer = std::max(0.0f, e.blockTimer - dt);
     animateEnemy(e, time_);
@@ -401,17 +643,24 @@ void Game::updateEnemy(Enemy& e, float dt) {
 
 void Game::updateProjectiles(float dt) {
     for (Projectile& p : projectiles_) {
+        bool grenade = p.kind == ProjectileKind::Grenade;
+        if (grenade && (p.life -= dt) <= 0) {
+            explodeGrenade(p.pos + Vec3{0, 0.08f, 0});
+            p.dead = true;
+            continue;
+        }
         if (p.resting) {
             // Piedra en el suelo: se recoge al pasar por encima.
             Vec3 d = hero_.body.pos - p.pos;
-            if (rocks_ < kMaxRocks && std::fabs(d.y) < 1.5f && d.x * d.x + d.z * d.z < 0.8f * 0.8f) {
+            if (!grenade && rocks_ < kMaxRocks && std::fabs(d.y) < 1.5f && d.x * d.x + d.z * d.z < 0.8f * 0.8f) {
                 ++rocks_;
                 p.dead = true;
             }
             continue;
         }
-        bool bullet = p.kind == ProjectileKind::Bullet;
+        bool bullet = p.kind == ProjectileKind::Bullet || p.kind == ProjectileKind::Pellet;
         bool molotov = p.kind == ProjectileKind::Molotov;
+        if (grenade) p.spin += 8.0f * dt;
         if (molotov) p.spin += 12.0f * dt;
         if (bullet && (p.life -= dt) <= 0) {
             p.dead = true;
@@ -425,7 +674,7 @@ void Game::updateProjectiles(float dt) {
         Enemy* target = nullptr;
         RayHit enemyHit;
         enemyHit.t = 2;
-        if (p.armed)
+        if (p.armed || grenade)
             for (Enemy& e : enemies_) {
                 RayHit h;
                 if (e.alive() && segmentVsAABB(p.pos, next, e.hitBox(), h) && h.t < enemyHit.t) {
@@ -444,7 +693,12 @@ void Game::updateProjectiles(float dt) {
                 p.dead = true;
                 continue;
             }
-            const HitParams& hp = bullet ? kBullet : kRock;
+            if (grenade) {  // choca contra el enemigo sin hacerle daño y cae a sus pies
+                p.pos = point - dir * 0.05f;
+                p.vel = Vec3{-p.vel.x * 0.08f, 0.5f, -p.vel.z * 0.08f};
+                continue;
+            }
+            const HitParams& hp = p.kind == ProjectileKind::Pellet ? kPellet : bullet ? kBullet : kRock;
             hitEnemy(*target, dir, point, hp.damage, hp.knock, hp.lift);
             if (bullet) {
                 p.dead = true;
@@ -508,6 +762,48 @@ void Game::updateAimPoint(Vec3 origin, Vec3 dir) {
             aimEnemy_ = int(i);
         }
     aimPoint_ = origin + (end - origin) * best.t;
+}
+
+// Punto de salida de un lanzamiento apuntado: sobre el hombro derecho, algo adelantado
+// (donde la mano suelta el objeto). La previsión y el lanzamiento real usan el mismo.
+Vec3 Game::throwOrigin() const {
+    return translationOf(hero_.joints[ShoulderR]) + Vec3{0, 0.35f, 0} + hero_.forward() * 0.25f;
+}
+
+Vec3 Game::aimedThrowVelocity(Vec3 aimDir) const {
+    Vec3 dir = normalize(aimDir + Vec3{0, kAimedThrowLift, 0});
+    return dir * kThrowSpeed + Vec3{hero_.body.vel.x, 0, hero_.body.vel.z};
+}
+
+// Simula la parábola con exactamente la misma integración que updateProjectiles() (pasos
+// de 1/60 s), así la línea dibujada es la trayectoria real hasta el primer impacto.
+void Game::predictThrowArc(Vec3 origin, Vec3 vel) {
+    const float dt = 1.0f / 60.0f;
+    Vec3 p = origin;
+    throwArc_.push_back(p);
+    throwArcHits_ = throwArcOnEnemy_ = false;
+    for (int i = 0; i < 240; ++i) {  // 4 s como mucho
+        vel.y -= kGravity * dt;
+        Vec3 next = p + vel * dt;
+        RayHit best;
+        best.t = 2;
+        bool onEnemy = false;
+        RayHit h;
+        if (segmentVsWorld(p, next, world_, h)) best = h;
+        for (const Enemy& e : enemies_)
+            if (e.alive() && segmentVsAABB(p, next, e.hitBox(), h) && h.t < best.t) {
+                best = h;
+                onEnemy = true;
+            }
+        if (best.t <= 1) {
+            throwArc_.push_back(p + (next - p) * best.t);
+            throwArcHits_ = true;
+            throwArcOnEnemy_ = onEnemy;
+            return;
+        }
+        p = next;
+        throwArc_.push_back(p);
+    }
 }
 
 void Game::spawnSparks(Vec3 pos, Vec3 dir, int count, uint32_t color, float speed) {

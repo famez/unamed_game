@@ -31,12 +31,13 @@ struct OrbitCamera {
 };
 
 // Cámara real del frame: la orbital o, al apuntar (aim 0..1), acercada sobre el hombro
-// derecho para dejar al personaje a la izquierda y la mira libre en el centro.
-OrbitCamera aimedCamera(const OrbitCamera& cam, float aim) {
+// derecho para dejar al personaje a la izquierda y la mira libre en el centro. Para lanzar
+// (`wide`) se acerca menos: interesa ver la parábola entera.
+OrbitCamera aimedCamera(const OrbitCamera& cam, float aim, bool wide) {
     float a = smoothstep01(aim);
     OrbitCamera v = cam;
-    v.distance = lerpf(cam.distance, 1.5f, a);
-    v.target = cam.target + Vec3{0, 0.5f * a, 0} + cam.rightFlat() * (0.55f * a);
+    v.distance = lerpf(cam.distance, wide ? 3.2f : 1.5f, a);
+    v.target = cam.target + Vec3{0, (wide ? 0.4f : 0.5f) * a, 0} + cam.rightFlat() * ((wide ? 0.8f : 0.55f) * a);
     return v;
 }
 
@@ -74,6 +75,7 @@ int main() {
     OrbitCamera cam;
     cam.target = game.hero().body.pos + Vec3{0, 1.0f, 0};
     float aimBlend = 0;
+    bool aimWide = false;  // el último apuntado fue para lanzar
     DrawFlags flags;
     bool debugView = false;  // alambre sin shaders (F12 / º)
     PauseMenu menu;
@@ -143,16 +145,21 @@ int main() {
             if (input.wasPressed(Key::F4)) flags.grid = !flags.grid;
         }
 
-        bool aimHeld = false;
+        bool aimHeld = false;    // apuntado que acerca la cámara (pistola, lanzamientos)
+        bool rightHeld = false;  // botón derecho (con la espada: defensa)
         if (playing) {
             if (input.wasPressed(Key::R)) game.resetHero();
             pending.jump |= input.wasPressed(Key::Space);
             pending.use |= input.mouseLeftPressed || input.wasPressed(Key::F);
             pending.throwRock |= input.wasPressed(Key::G);
-            const Key slotKeys[] = {Key::N1, Key::N2, Key::N3, Key::N4, Key::N5};
-            for (int i = 0; i < 5; ++i)
+            const Key slotKeys[] = {Key::N1, Key::N2, Key::N3, Key::N4, Key::N5, Key::N6, Key::N7, Key::N8};
+            for (int i = 0; i < 8; ++i)
                 if (input.wasPressed(slotKeys[i])) pending.slot = i;
-            aimHeld = captured && input.mouseRight && game.hero().item == Item::Pistol;
+            Item item = game.hero().item;
+            rightHeld = captured && input.mouseRight;
+            bool gun = item == Item::Pistol || item == Item::Shotgun;
+            aimHeld = rightHeld && (gun || item == Item::Rocks || item == Item::Molotov || item == Item::Grenade);
+            if (aimHeld) aimWide = !gun;
         }
 
         // Cámara: ratón capturado, flechas o Q/E para orbitar; rueda para zoom.
@@ -173,7 +180,7 @@ int main() {
         aimBlend = moveTowards(aimBlend, aimHeld ? 1.0f : 0.0f, 7.0f * fd);
 
         // Simulación a paso fijo.
-        OrbitCamera view = aimedCamera(cam, aimBlend);
+        OrbitCamera view = aimedCamera(cam, aimBlend, aimWide);
         accumulator += frameDt;
         int steps = 0;
         while (accumulator >= kFixedDt && steps < kMaxStepsPerFrame) {
@@ -190,7 +197,7 @@ int main() {
                 c.selectSlot = pending.slot;
                 c.aimYaw = cam.yaw;
                 c.aimPitch = cam.pitch;
-                c.aim = aimHeld;
+                c.aim = rightHeld;
                 c.aimOrigin = view.eye();
                 c.aimDir = normalize(view.target - view.eye());
                 game.update(float(kFixedDt), c);
@@ -205,7 +212,7 @@ int main() {
         // Más rígida que antes: a 8 m/s un seguimiento blando deja al personaje atrás.
         Vec3 desired = game.hero().body.pos + Vec3{0, 1.0f, 0};
         cam.target += (desired - cam.target) * (1.0f - std::exp(-14.0f * fd));
-        view = aimedCamera(cam, aimBlend);
+        view = aimedCamera(cam, aimBlend, aimWide);
 
         // Render. Primero generamos la geometría en CPU y medimos ese tiempo: la primera
         // llamada GL del frame (glClear) puede bloquear esperando al vsync y falsearía la cifra.
@@ -220,7 +227,7 @@ int main() {
         rc.fovY = 60.0f * kPi / 180.0f;
         rc.aspect = float(w) / float(h > 0 ? h : 1);
         rc.view = view.view();
-        rc.proj = perspective(rc.fovY, rc.aspect, 0.05f, 200.0f);
+        rc.proj = perspective(rc.fovY, rc.aspect, rc.zNear, rc.zFar);
         rc.position = view.eye();
         rc.forward = normalize(view.target - rc.position);
         rc.right = normalize(cross(rc.forward, {0, 1, 0}));

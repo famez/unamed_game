@@ -16,14 +16,19 @@ option(GAME_NATIVE "Optimizar para la CPU de esta máquina (-march=native)" ON)
 find_package(OpenGL REQUIRED COMPONENTS OpenGL GLX)
 find_package(X11 REQUIRED)
 
-add_executable(game
-    src/main.cpp
-    src/platform_x11.cpp
-    src/debug_draw.cpp
+# Lógica pura (sin GL ni X11): la comparten el juego y los tests.
+set(LOGIC_SOURCES
     src/skeleton.cpp
     src/character.cpp
     src/physics.cpp
     src/game.cpp
+)
+
+add_executable(game
+    ${LOGIC_SOURCES}
+    src/main.cpp
+    src/platform_x11.cpp
+    src/debug_draw.cpp
     src/game_draw.cpp
     src/text.cpp
     src/menu.cpp
@@ -41,3 +46,14 @@ target_link_options(game PRIVATE $<$<CONFIG:Debug>:-fsanitize=undefined>)
 target_compile_definitions(game PRIVATE
     $<$<CONFIG:Debug>:GAME_DEBUG_GL=1 _GLIBCXX_ASSERTIONS>
 )
+
+# Tests de lógica: sin ventana, con AddressSanitizer + UBSan.
+option(GAME_TESTS "Compilar los tests de lógica" ON)
+if(GAME_TESTS)
+    enable_testing()
+    add_executable(logic_test tests/logic_test.cpp ${LOGIC_SOURCES})
+    target_include_directories(logic_test PRIVATE src)
+    target_compile_options(logic_test PRIVATE -Wall -Wextra -g -fsanitize=address,undefined -fno-omit-frame-pointer)
+    target_link_options(logic_test PRIVATE -fsanitize=address,undefined)
+    add_test(NAME logic COMMAND logic_test)
+endif()

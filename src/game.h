@@ -16,6 +16,7 @@
 
 // Geometría de los objetos, en espacio local de la muñeca derecha (la mano apunta a -Y).
 constexpr Vec3 kPistolMuzzle{0, -0.22f, 0.035f};
+constexpr Vec3 kShotgunMuzzle{0, -0.66f, 0.045f};
 constexpr Vec3 kRockInHand{0, -0.09f, 0.02f};
 // Escudo de los enemigos, en espacio local del pecho.
 constexpr Vec3 kShieldCenter{0.06f, 0.06f, 0.30f};
@@ -23,6 +24,8 @@ constexpr Vec3 kShieldHalf{0.26f, 0.34f, 0.025f};
 
 constexpr int kMaxRocks = 20;
 constexpr int kMaxMolotovs = 10;
+constexpr int kMaxShells = 32;
+constexpr int kMaxGrenades = 8;
 
 struct DrawFlags {
     bool bones = true;
@@ -58,6 +61,8 @@ struct Enemy {
     bool hitFromFront = false;
     float deadTimer = -1;  // >= 0: muerto (segundos desde la muerte)
     float burnTimer = 0;   // > 0: está ardiendo
+    float attackTime = -1; // >= 0: atacando con la porra (segundos desde que empezó)
+    float attackCooldown = 0;
     float breathOffset = 0;
     Pose pose;
     Mat4 joints[JointCount] = {};
@@ -68,12 +73,12 @@ struct Enemy {
     Mat4 modelMatrix() const;
 };
 
-enum class ProjectileKind { Bullet, Rock, Molotov };
+enum class ProjectileKind { Bullet, Rock, Molotov, Pellet, Grenade };
 
 struct Projectile {
     ProjectileKind kind;
     Vec3 pos, vel;
-    float life = 0;       // balas: segundos que les quedan
+    float life = 0;       // balas: segundos que les quedan; granada: mecha
     bool armed = true;    // hace daño (las piedras dejan de hacerlo al frenarse)
     bool resting = false; // piedra parada en el suelo: se puede recoger
     bool dead = false;
@@ -141,8 +146,11 @@ public:
     const Character& hero() const { return hero_; }
     int rocks() const { return rocks_; }
     int molotovs() const { return molotovs_; }
+    // Munición de un objeto (-1 si no gasta).
+    int ammo(Item item) const;
     float time() const { return time_; }
     int kills() const { return kills_; }
+    float heroHealth() const { return heroHealth_; }
 
 private:
     void addEnemy(Vec3 pos, float yaw);
@@ -156,9 +164,18 @@ private:
     void updateParticles(float dt);
     void updateFires(float dt);
     void igniteAt(Vec3 point, Vec3 normal);
+    void explodeGrenade(Vec3 point);
+    int* ammoRef(Item item);
     void damageEnemy(Enemy& e, float damage);
+    // Golpe de un enemigo al jugador: `dir` es hacia donde empuja. Lo esquiva rodando y lo
+    // para casi del todo bloqueando de frente con la espada.
+    void hurtHero(Vec3 dir, float damage, float knock);
     Item handItem() const;  // lo que se ve en la mano (Count = nada)
     void updateAimPoint(Vec3 origin, Vec3 dir);
+    // Lanzamiento apuntado: de dónde sale, con qué velocidad y por dónde irá.
+    Vec3 throwOrigin() const;
+    Vec3 aimedThrowVelocity(Vec3 aimDir) const;
+    void predictThrowArc(Vec3 origin, Vec3 vel);
     void spawnSparks(Vec3 pos, Vec3 dir, int count, uint32_t color, float speed);
     float random01();
 
@@ -169,16 +186,29 @@ private:
     std::vector<Particle> particles_;
     int rocks_ = 10;
     int molotovs_ = 5;
+    int shells_ = 16;
+    int grenades_ = 4;
     Item throwItem_ = Item::Rocks;  // qué se está lanzando (piedra o cóctel)
     std::vector<Fire> fires_;
     std::vector<SmokePuff> smoke_;
     std::vector<Blast> blasts_;
     std::vector<ScorchMark> scorches_;
     int kills_ = 0;
+    float blockFactor_ = 0.2f;  // daño que pasa por el escudo en el golpe en curso
+    float heroHealth_ = 100;
+    float heroHitTimer_ = 0;      // destello y tambaleo al recibir un golpe
+    float heroBlockTimer_ = 0;    // destello de la espada al parar un golpe
+    float heroDeadTimer_ = -1;    // >= 0: derribado, reaparece al rato
     float throwUp_ = 0;  // velocidad vertical del lanzamiento en curso (según la cámara)
     Vec3 aimPoint_;            // dónde impactaría una bala disparada con la mira
     bool aimOnEnemy_ = false;  // la mira está sobre un enemigo
     int aimEnemy_ = -1;        // índice del enemigo bajo la mira (para resaltarlo)
+    bool throwAiming_ = false;       // botón derecho con piedras o molotov
+    bool aimedThrow_ = false;        // el lanzamiento en curso se apuntó
+    Vec3 throwVel_;                  // velocidad del lanzamiento apuntado
+    std::vector<Vec3> throwArc_;     // trayectoria prevista (para dibujarla)
+    bool throwArcHits_ = false;      // la trayectoria acaba en algo (no se pierde)
+    bool throwArcOnEnemy_ = false;
     float time_ = 0;
     uint32_t rng_ = 12345;
 };

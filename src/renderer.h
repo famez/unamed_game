@@ -8,6 +8,7 @@
 //   - suelo con cuadrícula procedural antialiasada, cielo en degradado, niebla
 //   - tonemapping ACES y corrección gamma
 //   - fuego volumétrico: cajas recorridas por raymarching con ruido fractal 3D animado
+//     (textura 3D precalculada; humo y fuego se dibujan a media resolución)
 //   - humo en billboards (alfa premultiplicado), luces puntuales y suelo chamuscado
 //   - silueta resaltada (stencil buffer) para el objetivo apuntado
 // Coste: unos 8 draw calls por frame sea cual sea el número de objetos.
@@ -29,6 +30,7 @@ struct RenderCamera {
     Mat4 view, proj;
     Vec3 position, forward, right, up;
     float fovY = 1.0f, aspect = 1.0f;
+    float zNear = 0.05f, zFar = 200.0f;
 };
 
 class Renderer {
@@ -39,6 +41,8 @@ public:
     // Caja con semiejes `half` centrada en `center`, en el espacio de `transform`.
     // `flash` (0..1) la blanquea (impactos).
     void box(const Mat4& transform, Vec3 center, Vec3 half, uint32_t color, Material m, float flash = 0);
+    // Elipsoide con semiejes (radios) `radii`: para cuerpos redondeados.
+    void ellipsoid(const Mat4& transform, Vec3 center, Vec3 radii, uint32_t color, Material m, float flash = 0);
 
     // Fuego volumétrico en columna: base en `base`, radio y altura. `clipMin/clipMax`
     // recortan el volumen (p. ej. a la cara superior de una plataforma).
@@ -63,13 +67,22 @@ public:
     // `shadowCenter`: centro del área con sombras (normalmente el jugador).
     void render(const RenderCamera& cam, Vec3 shadowCenter, int width, int height, float time);
 
-    size_t instanceCount() const { return instances_.size(); }
+    size_t instanceCount() const { return boxes_.items.size() + spheres_.items.size(); }
 
 private:
     struct Instance {
         float model[16];
         uint32_t color;
-        float material, flash, pad;
+        float material, flash, shape;  // shape: 0 = caja, 1 = elipsoide
+    };
+    // Instancias de una malla (cubo o esfera) con su propio buffer y VAO: sin
+    // glDrawArraysInstancedBaseInstance (GL 4.2), cada lote necesita su buffer.
+    struct Batch {
+        std::vector<Instance> items;
+        GLuint vao = 0, vbo = 0;
+        size_t capacity = 0;
+        GLint first = 0;
+        GLsizei vertexCount = 0;
     };
 
     struct FxInstance {  // humo
@@ -87,21 +100,26 @@ private:
         float radius;
     };
 
-    std::vector<Instance> instances_;
+    Batch boxes_, spheres_, highlightBoxes_, highlightSpheres_;
     std::vector<FxInstance> smoke_;
     std::vector<VolumeInstance> volumes_;
-    std::vector<Instance> highlighted_;
     bool highlighting_ = false;
     uint32_t highlightColor_ = 0;
     std::vector<PointLight> lights_;
     std::vector<float> scorches_;  // x, y, z, radio, intensidad por mancha
-    GLuint cubeVbo_ = 0, instanceVbo_ = 0, vao_ = 0, emptyVao_ = 0;
+    GLuint cubeVbo_ = 0, emptyVao_ = 0;  // cubeVbo_: cubo (36 vértices) seguido de la esfera
     GLuint meshProgram_ = 0, shadowProgram_ = 0, skyProgram_ = 0, fxProgram_ = 0;
     GLuint fxVao_ = 0, fxVbo_ = 0;
     GLuint volumeProgram_ = 0, volumeVao_ = 0, volumeVbo_ = 0;
-    GLuint highlightVao_ = 0, highlightVbo_ = 0;
-    void setupMeshVao(GLuint vao, GLuint instanceVbo);
-    void drawVolumes(const std::vector<VolumeInstance>& list, bool cameraInside);
+    void setupBatch(Batch& b, GLint first, GLsizei vertexCount);
+    void uploadBatch(Batch& b);
+    void drawBatch(const Batch& b);
+    void addInstance(const Mat4& model, uint32_t color, Material m, float flash, bool sphere);
+    void ensureFxTargets(int width, int height);
+    void releaseFxTargets();
+    bool fxScreenRect(const RenderCamera& cam, int width, int height, int& x0, int& y0, int& x1, int& y1) const;
+    GLuint compositeProgram_ = 0, noiseTex_ = 0;
+    GLuint depthFbo_ = 0, depthTex_ = 0, fxFbo_ = 0, fxTex_ = 0;
+    int fullWidth_ = 0, fullHeight_ = 0, fxWidth_ = 0, fxHeight_ = 0;
     GLuint shadowFbo_ = 0, shadowTex_ = 0;
-    size_t instanceCapacity_ = 0;
 };

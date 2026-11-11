@@ -8,7 +8,7 @@ enum class Key {
     W, A, S, D, Q, E,
     Shift, Space, Escape, Enter,
     Left, Right, Up, Down,
-    N1, N2, N3, N4, N5,
+    N1, N2, N3, N4, N5, N6, N7, N8,
     F1, F2, F3, F4,
     DebugView,  // F12 o la tecla º (a la izquierda del 1 en teclado español)
     F, G, P, R,

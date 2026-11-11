@@ -22,29 +22,77 @@ struct BoxSink {
 };
 
 struct Palette {
-    uint32_t skin, shirt, pants, shoes;
+    uint32_t skin, shirt, pants, shoes, hair;
 };
 
-uint32_t partColor(int joint, const Palette& p) {
-    switch (joint) {
-        case Head: case Neck: case WristL: case WristR: return p.skin;
-        case Pelvis: case HipL: case HipR: case KneeL: case KneeR: return p.pants;
-        case AnkleL: case AnkleR: return p.shoes;
-        default: return p.shirt;
+// Cuerpo con shaders: elipsoides solapados por articulación (estilo maniquí). Las cajas
+// de kSkeleton siguen siendo la forma del modo debug.
+enum class Part { Skin, Shirt, Pants, Shoes, Hair, Eyes };
+struct BodyShape {
+    Joint joint;
+    Vec3 center, radii;
+    Part part;
+};
+// clang-format off
+const BodyShape kBodyShapes[] = {
+    // tronco
+    {Pelvis,    {0, -0.01f, 0},       {0.155f, 0.10f, 0.11f},   Part::Pants},
+    {Spine,     {0, 0.07f, 0.005f},   {0.158f, 0.135f, 0.107f}, Part::Shirt},
+    {Chest,     {0, 0.10f, 0.01f},    {0.185f, 0.15f, 0.115f},  Part::Shirt},
+    {Chest,     {0, 0.20f, -0.01f},   {0.20f, 0.065f, 0.095f},  Part::Shirt},   // hombros/trapecio
+    {Neck,      {0, 0.05f, 0},        {0.05f, 0.075f, 0.05f},   Part::Skin},
+    // cabeza: cráneo, mandíbula, pelo, nariz y ojos
+    {Head,      {0, 0.12f, 0.005f},   {0.093f, 0.115f, 0.105f}, Part::Skin},
+    {Head,      {0, 0.05f, 0.03f},    {0.068f, 0.06f, 0.07f},   Part::Skin},
+    {Head,      {0, 0.165f, -0.012f}, {0.099f, 0.085f, 0.108f}, Part::Hair},
+    {Head,      {0, 0.10f, 0.105f},   {0.014f, 0.024f, 0.02f},  Part::Skin},
+    {Head,      {0.036f, 0.13f, 0.088f},  {0.013f, 0.013f, 0.01f}, Part::Eyes},
+    {Head,      {-0.036f, 0.13f, 0.088f}, {0.013f, 0.013f, 0.01f}, Part::Eyes},
+    // brazos: deltoides, brazo, codo, antebrazo, mano
+    {ShoulderL, {0, -0.02f, 0},       {0.07f, 0.075f, 0.07f},   Part::Shirt},
+    {ShoulderL, {0, -0.15f, 0},       {0.055f, 0.15f, 0.055f},  Part::Shirt},
+    {ElbowL,    {0, -0.13f, 0},       {0.045f, 0.145f, 0.047f}, Part::Skin},
+    {WristL,    {0, -0.065f, 0.005f}, {0.032f, 0.07f, 0.045f},  Part::Skin},
+    {ShoulderR, {0, -0.02f, 0},       {0.07f, 0.075f, 0.07f},   Part::Shirt},
+    {ShoulderR, {0, -0.15f, 0},       {0.055f, 0.15f, 0.055f},  Part::Shirt},
+    {ElbowR,    {0, -0.13f, 0},       {0.045f, 0.145f, 0.047f}, Part::Skin},
+    {WristR,    {0, -0.065f, 0.005f}, {0.032f, 0.07f, 0.045f},  Part::Skin},
+    // piernas: muslo, rodilla, gemelo, pie
+    {HipL,      {0, -0.20f, 0.005f},  {0.085f, 0.25f, 0.088f},  Part::Pants},
+    {KneeL,     {0, -0.01f, 0.01f},   {0.06f, 0.06f, 0.06f},    Part::Pants},
+    {KneeL,     {0, -0.20f, -0.01f},  {0.062f, 0.22f, 0.066f},  Part::Pants},
+    {AnkleL,    {0, -0.025f, 0.055f}, {0.05f, 0.04f, 0.12f},    Part::Shoes},
+    {HipR,      {0, -0.20f, 0.005f},  {0.085f, 0.25f, 0.088f},  Part::Pants},
+    {KneeR,     {0, -0.01f, 0.01f},   {0.06f, 0.06f, 0.06f},    Part::Pants},
+    {KneeR,     {0, -0.20f, -0.01f},  {0.062f, 0.22f, 0.066f},  Part::Pants},
+    {AnkleR,    {0, -0.025f, 0.055f}, {0.05f, 0.04f, 0.12f},    Part::Shoes},
+};
+// clang-format on
+
+uint32_t shapeColor(Part part, const Palette& p) {
+    switch (part) {
+        case Part::Skin: return p.skin;
+        case Part::Shirt: return p.shirt;
+        case Part::Pants: return p.pants;
+        case Part::Shoes: return p.shoes;
+        case Part::Hair: return p.hair;
+        default: return rgba(25, 22, 22);
     }
 }
 
-// Con shaders: cajas sólidas con colores de ropa. En debug: huesos, articulaciones y
-// cajas en alambre de un solo color.
+// Con shaders: cuerpo de elipsoides con colores de ropa. En debug: huesos,
+// articulaciones y cajas en alambre de un solo color.
 void drawActor(const BoxSink& out, const Mat4* joints, const DrawFlags& f, uint32_t debugColor,
                const Palette& palette, float flash) {
+    if (out.solid) {
+        for (const BodyShape& b : kBodyShapes)
+            out.solid->ellipsoid(joints[b.joint], b.center, b.radii, shapeColor(b.part, palette), Material::Cloth,
+                                 flash);
+        return;
+    }
     for (int i = 0; i < JointCount; ++i) {
         const JointDef& j = kSkeleton[i];
         bool hasBox = j.boxHalf.x > 0 || j.boxHalf.y > 0 || j.boxHalf.z > 0;
-        if (out.solid) {
-            if (hasBox) out.box(joints[i], j.boxCenter, j.boxHalf, partColor(i, palette), Material::Cloth, flash);
-            continue;
-        }
         Vec3 p = translationOf(joints[i]);
         if (f.bones && j.parent >= 0) {
             // Convención clásica de herramientas 3D: izquierda azul, derecha roja.
@@ -97,6 +145,23 @@ void drawHeldItem(const BoxSink& out, const Character& hero, Item hand, float ti
             out.box(w, {0, -0.08f, 0.07f}, {0.09f, 0.015f, 0.015f}, rgba(200, 180, 90), Material::Metal);  // guarda
             out.box(w, {0, -0.08f, 0.52f}, {0.025f, 0.006f, 0.44f}, rgba(220, 230, 240), Material::Metal); // hoja
             break;
+        case Item::Hammer:
+            // Mango largo y cabeza de hierro, perpendiculares al antebrazo como la espada.
+            out.box(w, {0, -0.08f, 0.26f}, {0.02f, 0.02f, 0.34f}, rgba(120, 80, 45), Material::Cloth);
+            out.box(w, {0, -0.08f, 0.62f}, {0.075f, 0.07f, 0.11f}, rgba(90, 92, 100), Material::Metal);
+            break;
+        case Item::Grenade:
+            out.box(w, kRockInHand, {0.045f, 0.055f, 0.045f}, rgba(70, 90, 55), Material::Metal);
+            out.box(w, kRockInHand + Vec3{0, 0, 0.06f}, {0.015f, 0.015f, 0.02f}, rgba(160, 160, 160), Material::Metal);
+            break;
+        case Item::Shotgun: {
+            // Cañón largo a lo largo del brazo (la mano apunta a -Y), guardamanos y culata.
+            out.box(w, {0, -0.40f, 0.045f}, {0.022f, 0.27f, 0.022f}, rgba(60, 60, 66), Material::Metal);
+            out.box(w, {0, -0.32f, 0.008f}, {0.025f, 0.10f, 0.02f}, rgba(120, 78, 45), Material::Cloth);
+            out.box(w, {0, 0.02f, 0.03f}, {0.022f, 0.13f, 0.035f}, rgba(120, 78, 45), Material::Cloth);
+            if (hero.aimHeld()) out.lines.point(hero.aimTarget(), rgba(255, 60, 60));
+            break;
+        }
         case Item::Pistol: {
             out.box(w, {0, -0.13f, 0.035f}, {0.018f, 0.09f, 0.025f}, rgba(160, 160, 170), Material::Metal);  // cañón
             out.box(w, {0, -0.07f, -0.02f}, {0.015f, 0.025f, 0.05f}, rgba(70, 70, 80), Material::Metal);     // culata
@@ -182,6 +247,27 @@ void hudIcon(DebugDraw& hud, Item item, float x, float y, float s, uint32_t c) {
             L(0.50f, 0.20f, 0.55f, 0.08f); L(0.55f, 0.08f, 0.58f, 0.22f);
             L(0.58f, 0.22f, 0.50f, 0.28f);
             break;
+        case Item::Shotgun:
+            L(0.12f, 0.36f, 0.88f, 0.36f); L(0.88f, 0.36f, 0.88f, 0.44f);  // cañón
+            L(0.88f, 0.44f, 0.36f, 0.44f);
+            L(0.50f, 0.44f, 0.64f, 0.44f); L(0.50f, 0.50f, 0.66f, 0.50f);  // guardamanos
+            L(0.36f, 0.36f, 0.12f, 0.46f); L(0.36f, 0.44f, 0.20f, 0.66f);  // culata
+            L(0.12f, 0.46f, 0.12f, 0.60f); L(0.12f, 0.60f, 0.20f, 0.66f);
+            break;
+        case Item::Grenade:
+            L(0.34f, 0.40f, 0.66f, 0.40f); L(0.66f, 0.40f, 0.70f, 0.60f);  // cuerpo
+            L(0.70f, 0.60f, 0.60f, 0.80f); L(0.60f, 0.80f, 0.40f, 0.80f);
+            L(0.40f, 0.80f, 0.30f, 0.60f); L(0.30f, 0.60f, 0.34f, 0.40f);
+            L(0.44f, 0.40f, 0.44f, 0.30f); L(0.56f, 0.40f, 0.56f, 0.30f);  // espoleta
+            L(0.44f, 0.30f, 0.56f, 0.30f); L(0.56f, 0.32f, 0.72f, 0.42f);  // palanca
+            L(0.36f, 0.54f, 0.64f, 0.54f); L(0.33f, 0.67f, 0.67f, 0.67f);  // estrías
+            break;
+        case Item::Hammer:
+            L(0.48f, 0.34f, 0.48f, 0.84f); L(0.56f, 0.34f, 0.56f, 0.84f);  // mango
+            L(0.48f, 0.84f, 0.56f, 0.84f);
+            L(0.24f, 0.18f, 0.80f, 0.18f); L(0.80f, 0.18f, 0.80f, 0.34f);  // cabeza
+            L(0.80f, 0.34f, 0.24f, 0.34f); L(0.24f, 0.34f, 0.24f, 0.18f);
+            break;
         case Item::Rocks: {
             float px = 0.5f + 0.2f, py = 0.52f;
             for (int i = 1; i <= 8; ++i) {
@@ -225,9 +311,14 @@ void Game::draw(DebugDraw& dd, Renderer* solid, const DrawFlags& f, Vec3 cameraR
     }
 
     // Jugador.
-    const Palette heroPalette{rgba(232, 190, 150), rgba(46, 160, 150), rgba(46, 60, 100), rgba(40, 34, 32)};
-    drawActor(out, hero_.joints, f, rgba(80, 200, 190), heroPalette, 0);
+    const Palette heroPalette{rgba(232, 190, 150), rgba(46, 160, 150), rgba(46, 60, 100), rgba(40, 34, 32),
+                              rgba(70, 45, 30)};
+    float heroFlash = clampf((heroHitTimer_ - 0.2f) / 0.15f, 0, 1) * 0.8f;
+    drawActor(out, hero_.joints, f, heroHitTimer_ > 0.2f ? rgba(255, 255, 255) : rgba(80, 200, 190), heroPalette,
+              heroFlash);
     drawHeldItem(out, hero_, handItem(), time_);
+    if (heroBlockTimer_ > 0 && solid)  // destello de la espada al parar un golpe
+        solid->light(translationOf(hero_.joints[WristR]), Vec3{1.0f, 0.9f, 0.6f} * (heroBlockTimer_ * 8.0f), 2.5f);
     if (!solid) {
         Vec3 base = hero_.body.pos + Vec3{0, 0.005f, 0};
         dd.circleXZ(base, 0.35f, 24, rgba(120, 120, 120));
@@ -235,8 +326,10 @@ void Game::draw(DebugDraw& dd, Renderer* solid, const DrawFlags& f, Vec3 cameraR
     }
 
     // Enemigos: ropa roja, escudo metálico y barra de vida. Destellan al recibir un golpe.
-    const Palette enemyPalette{rgba(200, 160, 130), rgba(180, 52, 48), rgba(64, 44, 44), rgba(36, 30, 30)};
-    const Palette deadPalette{rgba(120, 100, 90), rgba(90, 50, 48), rgba(50, 40, 40), rgba(30, 26, 26)};
+    const Palette enemyPalette{rgba(200, 160, 130), rgba(180, 52, 48), rgba(64, 44, 44), rgba(36, 30, 30),
+                               rgba(30, 28, 28)};
+    const Palette deadPalette{rgba(120, 100, 90), rgba(90, 50, 48), rgba(50, 40, 40), rgba(30, 26, 26),
+                              rgba(30, 28, 28)};
     for (size_t i = 0; i < enemies_.size(); ++i) {
         const Enemy& e = enemies_[i];
         // El enemigo bajo la mira lleva silueta (con shaders) o se pinta amarillo (debug).
@@ -248,6 +341,8 @@ void Game::draw(DebugDraw& dd, Renderer* solid, const DrawFlags& f, Vec3 cameraR
                             : e.hitTimer > 0.25f ? rgba(255, 255, 255)
                                                  : rgba(220, 90, 90);
         drawActor(out, e.joints, f, debugCol, e.alive() ? enemyPalette : deadPalette, flash);
+        // Porra en la mano derecha (sale de la muñeca como la espada del jugador).
+        out.box(e.joints[WristR], {0, -0.08f, 0.22f}, {0.035f, 0.035f, 0.24f}, rgba(110, 72, 40), Material::Cloth);
         uint32_t shieldCol = e.blockTimer > 0 ? rgba(255, 245, 190) : rgba(110, 140, 220);
         out.box(e.joints[Chest], kShieldCenter, kShieldHalf, shieldCol, Material::Metal, e.blockTimer > 0 ? 0.5f : 0);
         if (targeted && solid) solid->endHighlight();
@@ -259,13 +354,43 @@ void Game::draw(DebugDraw& dd, Renderer* solid, const DrawFlags& f, Vec3 cameraR
 
     // Proyectiles y partículas (las balas y chispas son líneas en los dos modos).
     for (const Projectile& p : projectiles_) {
-        if (p.kind == ProjectileKind::Bullet)
+        if (p.kind == ProjectileKind::Bullet || p.kind == ProjectileKind::Pellet)
             dd.line(p.pos - p.vel * 0.02f, p.pos, rgba(255, 240, 150));
+        else if (p.kind == ProjectileKind::Grenade) {
+            Mat4 m = translate(p.pos) * rotateX(p.spin) * rotateZ(p.spin * 0.7f);
+            out.box(m, {}, {0.045f, 0.055f, 0.045f}, rgba(70, 90, 55), Material::Metal);
+            // Piloto que parpadea cada vez más deprisa al acabarse la mecha.
+            float rate = 4.0f + (2.0f - p.life) * 10.0f;
+            if (std::sin(time_ * rate) > 0.3f) {
+                dd.point(p.pos + Vec3{0, 0.07f, 0}, rgba(255, 40, 40));
+                if (solid) solid->light(p.pos + Vec3{0, 0.2f, 0}, Vec3{1.0f, 0.1f, 0.05f} * 1.5f, 2.0f);
+            }
+        }
         else if (p.kind == ProjectileKind::Molotov)
             drawBottle(out, translate(p.pos) * rotateX(p.spin) * rotateY(p.spin * 0.6f), {}, time_, 5.0f);
         else
             out.box(id, p.pos, {0.06f, 0.06f, 0.06f}, p.armed ? rgba(230, 220, 200) : rgba(150, 140, 130),
                     Material::Stone);
+    }
+    // Trayectoria del lanzamiento apuntado: línea discontinua que avanza hacia el destino
+    // y círculo donde caerá (del tamaño del charco de fuego si es un molotov).
+    if (throwArc_.size() > 1) {
+        // La granada rebota: el círculo marca solo el primer bote.
+        bool molotov = hero_.item == Item::Molotov, grenade = hero_.item == Item::Grenade;
+        uint32_t col = throwArcOnEnemy_ ? rgba(255, 70, 70)
+                       : molotov        ? rgba(255, 170, 60)
+                       : grenade        ? rgba(150, 230, 120)
+                                        : rgba(235, 235, 235);
+        int scroll = int(time_ * 24.0f);
+        for (size_t i = 0; i + 1 < throwArc_.size(); ++i) {
+            if (((int(i) - scroll) / 3) % 2 == 0) dd.line(throwArc_[i], throwArc_[i + 1], col);
+            if ((int(i) - scroll) % 3 == 0 && i > 2) dd.point(throwArc_[i], col);  // puntos gruesos
+        }
+        if (throwArcHits_) {
+            Vec3 end = throwArc_.back() + Vec3{0, 0.03f, 0};
+            dd.circleXZ(end, molotov ? Fire{}.maxRadius : 0.3f, 32, col);
+            dd.circleXZ(end, 0.12f, 12, col);
+        }
     }
     for (const Particle& p : particles_) {
         dd.point(p.pos, p.color);
@@ -326,6 +451,22 @@ void Game::drawFire(DebugDraw& dd, Renderer* solid) const {
 }
 
 void Game::drawHud(DebugDraw& hud, int width, int height) const {
+    // Vida del jugador: barra abajo a la izquierda (varias líneas para darle grosor).
+    {
+        const float x = 24, y = float(height) - 44, w = 220;
+        float frac = heroHealth_ / 100.0f;
+        uint32_t fill = heroHitTimer_ > 0.2f ? rgba(255, 255, 255) : rgba(uint8_t(255 * (1 - frac)), uint8_t(200 * frac), 70);
+        hudRect(hud, x - 3, y - 3, x + w + 3, y + 17, rgba(110, 110, 120));
+        for (int i = 0; i < 15; ++i) {
+            if (frac > 0) hudLine(hud, x, y + float(i), x + w * frac, y + float(i), fill);
+            if (frac < 1) hudLine(hud, x + w * frac, y + float(i), x + w, y + float(i), rgba(60, 25, 25));
+        }
+        if (heroDeadTimer_ >= 0) {
+            const char* msg = "DERRIBADO";
+            drawText(hud, (float(width) - textWidth(msg, 6)) * 0.5f, float(height) * 0.4f, 6, msg, rgba(255, 80, 70));
+        }
+    }
+
     // Inventario: una casilla por objeto, centrado abajo. 1-4 seleccionan.
     const float size = 56, gap = 10;
     const int slots = int(Item::Count);
@@ -334,7 +475,7 @@ void Game::drawHud(DebugDraw& hud, int width, int height) const {
     for (int i = 0; i < slots; ++i) {
         float x = x0 + float(i) * (size + gap);
         bool selected = int(hero_.item) == i;
-        int ammo = Item(i) == Item::Rocks ? rocks_ : Item(i) == Item::Molotov ? molotovs_ : -1;
+        int ammo = this->ammo(Item(i));
         bool empty = ammo == 0;
         uint32_t frame = selected ? rgba(255, 220, 80) : rgba(110, 110, 120);
         hudRect(hud, x, y0, x + size, y0 + size, frame);

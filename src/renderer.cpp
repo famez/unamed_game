@@ -47,7 +47,7 @@ layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec3 aNormal;
 layout(location = 2) in mat4 aModel;  // ocupa las posiciones 2..5
 layout(location = 6) in vec4 aColor;
-layout(location = 7) in vec3 aParams; // x = material, y = destello
+layout(location = 7) in vec3 aParams; // x = material, y = destello, z = forma (1 = elipsoide)
 uniform mat4 uViewProj;
 uniform mat4 uLightViewProj;
 uniform float uInflate;  // > 0: pasada de silueta, la caja crece estos metros por lado
@@ -57,7 +57,7 @@ out vec3 vLocal;
 out vec3 vSize;
 out vec4 vColor;
 out vec4 vLightPos;
-flat out vec2 vParams;
+flat out vec3 vParams;
 void main() {
     vec3 size = vec3(length(aModel[0].xyz), length(aModel[1].xyz), length(aModel[2].xyz));
     vec3 local = uInflate > 0.0 ? aPos * (size + 2.0 * uInflate) / size : aPos;
@@ -68,7 +68,7 @@ void main() {
     vLocal = aPos;
     vSize = size;
     vColor = aColor;
-    vParams = aParams.xy;
+    vParams = aParams;
     vLightPos = uLightViewProj * world;
     gl_Position = uViewProj * world;
 }
@@ -81,7 +81,7 @@ in vec3 vLocal;
 in vec3 vSize;
 in vec4 vColor;
 in vec4 vLightPos;
-flat in vec2 vParams;
+flat in vec3 vParams;
 uniform vec3 uSunDir;
 uniform vec3 uCameraPos;
 uniform sampler2DShadow uShadowMap;
@@ -144,7 +144,7 @@ void main() {
     // Bisel: oscurece cerca de las aristas. En una cara, una de las tres distancias al
     // borde es ~0 (la del eje de la cara); la arista más cercana es la mediana.
     float edge = 1.0;
-    if (material != 3) {
+    if (material != 3 && vParams.z < 0.5) {  // los elipsoides no tienen aristas
         vec3 d = (0.5 - abs(vLocal)) * vSize;
         float mid = d.x + d.y + d.z - min(d.x, min(d.y, d.z)) - max(d.x, max(d.y, d.z));
         float width = material == 1 ? 0.06 : 0.012;
@@ -162,7 +162,8 @@ void main() {
     vec3 fillDir = normalize(vec3(-uSunDir.x, 0.3, -uSunDir.z));
     ambient += kFillColor * max(dot(n, fillDir), 0.0);
     float specPower = material == 2 ? 80.0 : 20.0;
-    float specAmount = material == 2 ? 1.2 : (material == 3 ? 0.04 : 0.15);
+    // La tela de los cuerpos redondeados (normales suaves) brilla menos que la de las cajas.
+    float specAmount = material == 2 ? 1.2 : (material == 3 ? 0.04 : (vParams.z > 0.5 ? 0.05 : 0.15));
     vec3 H = normalize(uSunDir + V);
     float spec = pow(max(dot(n, H), 0.0), specPower) * specAmount * step(0.0, dot(n, uSunDir));
 
@@ -251,12 +252,24 @@ in vec2 vUv;
 flat in vec2 vParams;
 in float vFog;
 uniform float uTime;
+uniform sampler2D uSceneDepth;
+uniform vec2 uFxSize;    // tamaño del buffer de efectos (media resolución)
+uniform vec2 uNearFar;
 out vec4 fragColor;
+float linearDepth(float d) {
+    float z = d * 2.0 - 1.0;
+    return 2.0 * uNearFar.x * uNearFar.y / (uNearFar.y + uNearFar.x - z * (uNearFar.y - uNearFar.x));
+}
 void main() {
+    // El buffer de efectos no tiene profundidad: se compara a mano con la de la escena y
+    // se desvanece cerca de la superficie (partículas suaves, sin cortes contra el suelo).
+    float scene = linearDepth(texture(uSceneDepth, gl_FragCoord.xy / uFxSize).r);
+    float soft = clamp((scene - linearDepth(gl_FragCoord.z)) / 0.4, 0.0, 1.0);
+    if (soft <= 0.0) discard;
     // Mancha redonda con borde de ruido que se desplaza lentamente.
     float seed = vParams.x;
     float n = fbm(vUv * 1.8 + vec2(seed * 3.1, seed * 1.7 - uTime * 0.35));
-    float a = (1.0 - smoothstep(0.25, 1.0, length(vUv) + (n - 0.5) * 0.7)) * vParams.y * (1.0 - vFog);
+    float a = (1.0 - smoothstep(0.25, 1.0, length(vUv) + (n - 0.5) * 0.7)) * vParams.y * (1.0 - vFog) * soft;
     vec3 col = vec3(0.10, 0.09, 0.09) + n * 0.08;
     fragColor = vec4(col * a, a);  // alfa premultiplicado
 }
@@ -284,29 +297,16 @@ void main() {
 const char* kVolumeFs = R"(
 in vec3 vWorld;
 flat in vec4 vBoxMin, vBoxMax, vShape, vShape2;
-uniform vec3 uCamPos;
+uniform vec3 uCamPos, uCamForward;
 uniform float uTime;
+uniform sampler3D uNoise;  // fbm de 3 octavas precalculado, periódico cada 16 unidades
+uniform sampler2D uSceneDepth;
+uniform vec2 uFxSize;
+uniform vec2 uNearFar;
 out vec4 fragColor;
 
-// Ruido de valor 3D (hash barato sin senos) y fbm de 3 octavas.
-float hash3(vec3 p) {
-    p = fract(p * 0.3183099 + 0.1);
-    p *= 17.0;
-    return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
-}
-float noise3(vec3 x) {
-    vec3 i = floor(x), f = fract(x);
-    f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(mix(hash3(i), hash3(i + vec3(1, 0, 0)), f.x),
-                   mix(hash3(i + vec3(0, 1, 0)), hash3(i + vec3(1, 1, 0)), f.x), f.y),
-               mix(mix(hash3(i + vec3(0, 0, 1)), hash3(i + vec3(1, 0, 1)), f.x),
-                   mix(hash3(i + vec3(0, 1, 1)), hash3(i + vec3(1, 1, 1)), f.x), f.y), f.z);
-}
-float fbm3(vec3 p) {
-    float v = 0.0, a = 0.5;
-    for (int i = 0; i < 3; ++i) { v += a * noise3(p); p = p * 2.02 + vec3(3.1, 1.7, 5.3); a *= 0.5; }
-    return v;
-}
+// Una lectura con filtrado trilineal sustituye a 3 octavas x 8 hashes calculados.
+float fbm3(vec3 p) { return texture(uNoise, p * (1.0 / 16.0)).r; }
 
 // Densidad (x) y temperatura (y) del fuego en un punto del mundo.
 vec2 fireAt(vec3 w) {
@@ -320,8 +320,7 @@ vec2 fireAt(vec3 w) {
         float d = length(p.xz) / R;
         if (h < 0.0 || h > 1.0 || d > 1.0) return vec2(0.0);
         vec3 q = vec3(p.x / R * 3.2, h * 1.5 - uTime * 1.9, p.z / R * 3.2) + seed;
-        // fbm de 3 octavas da ~0,44 ± 0,12: se normaliza a 0..1 con más contraste.
-        float n = clamp((fbm3(q) / 0.875 - 0.5) * 1.9 + 0.5, 0.0, 1.0);
+        float n = clamp((fbm3(q) - 0.5) * 1.9 + 0.5, 0.0, 1.0);  // más contraste
         float dens = clamp((n - 0.28 - h * 0.75 - d * d * 0.25) * 4.0, 0.0, 1.0);
         dens *= smoothstep(0.0, 0.06, h) * (1.0 - smoothstep(0.85, 1.0, d));
         return vec2(dens, clamp(dens * (1.0 - h * 0.8) * 0.9, 0.0, 1.0));
@@ -329,7 +328,7 @@ vec2 fireAt(vec3 w) {
     // Esfera (explosión): bola turbulenta que sube.
     float d = length(p) / R;
     if (d > 1.0) return vec2(0.0);
-    float n = fbm3(p / R * 2.0 + vec3(0.0, -uTime * 1.6, 0.0) + seed);
+    float n = fbm3(p / R * 2.0 + vec3(0.0, -uTime * 1.6, 0.0) + seed) * 0.875;
     float dens = clamp((n * 1.3 - d * 1.1 + 0.3) * 4.0, 0.0, 1.0);
     return vec2(dens, clamp(dens * (1.25 - d * 0.6), 0.0, 1.0));
 }
@@ -340,6 +339,11 @@ vec3 fireRamp(float t) {  // brasa → naranja → amarillo → núcleo casi bla
     return mix(c, vec3(1.0, 0.95, 0.75), smoothstep(0.93, 1.0, t));
 }
 
+float linearDepth(float d) {
+    float z = d * 2.0 - 1.0;
+    return 2.0 * uNearFar.x * uNearFar.y / (uNearFar.y + uNearFar.x - z * (uNearFar.y - uNearFar.x));
+}
+
 void main() {
     vec3 ro = uCamPos, rd = normalize(vWorld - uCamPos);
     // Entrada y salida del rayo en la caja (método de los slabs).
@@ -348,16 +352,43 @@ void main() {
     vec3 tMin = min(t0, t1), tMax = max(t0, t1);
     float tNear = max(max(max(tMin.x, tMin.y), tMin.z), 0.0);
     float tFar = min(min(tMax.x, tMax.y), tMax.z);
+
+    // Saltar el espacio vacío: la forma real (cilindro o esfera) es más estrecha que la
+    // caja, así que el rayo se recorta también a ella.
+    vec3 o = ro - vShape.xyz;
+    float R = vShape.w;
+    if (vShape2.y < 0.5) {
+        float qa = dot(rd.xz, rd.xz), qb = dot(o.xz, rd.xz), qc = dot(o.xz, o.xz) - R * R;
+        if (qa > 1e-6) {
+            float disc = qb * qb - qa * qc;
+            if (disc <= 0.0) discard;
+            float sq = sqrt(disc);
+            tNear = max(tNear, (-qb - sq) / qa);
+            tFar = min(tFar, (-qb + sq) / qa);
+        } else if (qc > 0.0) discard;
+    } else {
+        float qb = dot(o, rd), qc = dot(o, o) - R * R, disc = qb * qb - qc;
+        if (disc <= 0.0) discard;
+        float sq = sqrt(disc);
+        tNear = max(tNear, -qb - sq);
+        tFar = min(tFar, -qb + sq);
+    }
+    // Lo que tapa la escena (suelo, personajes) corta el rayo.
+    float scene = linearDepth(texture(uSceneDepth, gl_FragCoord.xy / uFxSize).r);
+    tFar = min(tFar, scene / max(dot(rd, uCamForward), 1e-3));
     if (tFar <= tNear) discard;
 
-    const int kSteps = 22;
-    float dt = (tFar - tNear) / float(kSteps);
-    // Desfase aleatorio por píxel: cambia el bandeado de los pasos por un grano fino.
-    float t = tNear + dt * hash3(vec3(gl_FragCoord.xy, fract(uTime) * 61.0));
-    float k = dt / vShape.w * 2.2;  // densidad óptica relativa al tamaño del fuego
+    // Pasos proporcionales al tramo recorrido: un rayo que roza el borde da pocos pasos.
+    int steps = clamp(int(ceil((tFar - tNear) / (R * 0.12))), 4, 22);
+    float dt = (tFar - tNear) / float(steps);
+    // Desfase por píxel (ruido de gradiente intercalado, que reparte el grano de forma
+    // más uniforme que un hash): cambia el bandeado de los pasos por un grano fino.
+    vec2 px = gl_FragCoord.xy + fract(uTime * 7.0) * vec2(47.0, 17.0);
+    float t = tNear + dt * fract(52.9829189 * fract(dot(px, vec2(0.06711056, 0.00583715))));
+    float k = dt / R * 2.2;  // densidad óptica relativa al tamaño del fuego
     vec3 color = vec3(0.0);
     float alpha = 0.0;
-    for (int i = 0; i < kSteps; ++i) {
+    for (int i = 0; i < steps; ++i) {
         vec2 s = fireAt(ro + rd * t);
         if (s.x > 0.001) {
             float a = s.x * k;
@@ -374,6 +405,70 @@ void main() {
     fragColor = vec4(color, alpha);  // alfa premultiplicado: el fuego suma luz
 }
 )";
+
+// Composición: el buffer de efectos (media resolución) se escala con filtrado bilineal
+// sobre la imagen final.
+const char* kCompositeVs = R"(
+out vec2 vUv;
+void main() {
+    vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+    vUv = p;
+    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}
+)";
+
+const char* kCompositeFs = R"(
+in vec2 vUv;
+uniform sampler2D uFx;
+out vec4 fragColor;
+void main() { fragColor = texture(uFx, vUv); }
+)";
+
+// Ruido de valor 3D periódico (para que la textura se repita sin costuras).
+float latticeHash(int x, int y, int z, int period) {
+    uint32_t h = uint32_t(x & (period - 1)) * 73856093u ^ uint32_t(y & (period - 1)) * 19349663u ^
+                 uint32_t(z & (period - 1)) * 83492791u;
+    h ^= h >> 13;
+    h *= 0x5bd1e995u;
+    h ^= h >> 15;
+    return float(h & 0xFFFFu) / 65535.0f;
+}
+
+// fbm de 3 octavas en una textura de kNoiseSize³ que cubre 16 celdas de la primera octava.
+constexpr int kNoiseSize = 128;
+std::vector<uint16_t> makeNoiseVolume() {
+    const int n = kNoiseSize;
+    std::vector<float> acc(size_t(n) * n * n, 0.0f);
+    float amp = 0.5f;
+    for (int period = 16; period <= 64; period *= 2, amp *= 0.5f) {
+        const int cell = n / period;  // texels por celda
+        std::vector<float> lattice(size_t(period) * period * period);
+        for (int z = 0; z < period; ++z)
+            for (int y = 0; y < period; ++y)
+                for (int x = 0; x < period; ++x)
+                    lattice[(size_t(z) * period + y) * period + x] = latticeHash(x, y, z, period);
+        auto L = [&](int x, int y, int z) {
+            x &= period - 1; y &= period - 1; z &= period - 1;
+            return lattice[(size_t(z) * period + y) * period + x];
+        };
+        for (int z = 0; z < n; ++z)
+            for (int y = 0; y < n; ++y)
+                for (int x = 0; x < n; ++x) {
+                    int ix = x / cell, iy = y / cell, iz = z / cell;
+                    auto fade = [&](int v) { float f = float(v % cell) / float(cell); return f * f * (3 - 2 * f); };
+                    float fx = fade(x), fy = fade(y), fz = fade(z);
+                    float v = lerpf(lerpf(lerpf(L(ix, iy, iz), L(ix + 1, iy, iz), fx),
+                                          lerpf(L(ix, iy + 1, iz), L(ix + 1, iy + 1, iz), fx), fy),
+                                    lerpf(lerpf(L(ix, iy, iz + 1), L(ix + 1, iy, iz + 1), fx),
+                                          lerpf(L(ix, iy + 1, iz + 1), L(ix + 1, iy + 1, iz + 1), fx), fy),
+                                    fz);
+                    acc[(size_t(z) * n + y) * n + x] += amp * v;
+                }
+    }
+    std::vector<uint16_t> out(acc.size());
+    for (size_t i = 0; i < acc.size(); ++i) out[i] = uint16_t(clampf(acc[i] / 0.875f, 0, 1) * 65535.0f + 0.5f);
+    return out;
+}
 
 GLuint compile(GLenum type, const std::string& src) {
     GLuint s = glCreateShader(type);
@@ -440,7 +535,20 @@ bool Renderer::init() {
     skyProgram_ = link(kSkyVs, kSkyFs, true);
     fxProgram_ = link(kSmokeVs, kSmokeFs, true);
     volumeProgram_ = link(kVolumeVs, kVolumeFs, true);
-    if (!meshProgram_ || !shadowProgram_ || !skyProgram_ || !fxProgram_ || !volumeProgram_) return false;
+    compositeProgram_ = link(kCompositeVs, kCompositeFs, false);
+    if (!meshProgram_ || !shadowProgram_ || !skyProgram_ || !fxProgram_ || !volumeProgram_ || !compositeProgram_)
+        return false;
+
+    // Textura 3D de ruido (R16, 4 MB), generada una vez al arrancar.
+    std::vector<uint16_t> noise = makeNoiseVolume();
+    glGenTextures(1, &noiseTex_);
+    glBindTexture(GL_TEXTURE_3D, noiseTex_);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_R16, kNoiseSize, kNoiseSize, kNoiseSize, 0, GL_RED, GL_UNSIGNED_SHORT,
+                 noise.data());
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    for (GLenum wrap : {GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_TEXTURE_WRAP_R})
+        glTexParameteri(GL_TEXTURE_3D, wrap, GL_REPEAT);
 
     // Cubo unidad (-0.5..0.5) con normales por cara. Para cada cara, u × v = normal, así
     // los triángulos quedan en sentido antihorario vistos desde fuera (para el culling).
@@ -457,16 +565,34 @@ bool Renderer::init() {
             verts.push_back({{p.x, p.y, p.z}, {f[0].x, f[0].y, f[0].z}});
         }
 
-    glGenVertexArrays(1, &vao_);
-    glGenVertexArrays(1, &highlightVao_);
+    // Esfera de radio 0,5 (mismo tamaño que el cubo unidad: la escala de la instancia da
+    // directamente los ejes del elipsoide). 12 meridianos x 8 paralelos = 168 triángulos,
+    // con normales suaves (la del punto de la esfera).
+    const GLint sphereFirst = GLint(verts.size());
+    const int kSlices = 12, kStacks = 8;
+    auto spherePoint = [&](int stack, int slice) {
+        float theta = kPi * float(stack) / float(kStacks), phi = 2.0f * kPi * float(slice) / float(kSlices);
+        Vec3 n{std::sin(theta) * std::cos(phi), std::cos(theta), std::sin(theta) * std::sin(phi)};
+        return CubeVertex{{n.x * 0.5f, n.y * 0.5f, n.z * 0.5f}, {n.x, n.y, n.z}};
+    };
+    for (int st = 0; st < kStacks; ++st)
+        for (int sl = 0; sl < kSlices; ++sl) {
+            CubeVertex a = spherePoint(st, sl), b = spherePoint(st + 1, sl);
+            CubeVertex c = spherePoint(st + 1, sl + 1), d = spherePoint(st, sl + 1);
+            // Antihorario visto desde fuera; en los polos uno de los triángulos degenera.
+            if (st > 0) verts.insert(verts.end(), {a, d, c});
+            if (st < kStacks - 1) verts.insert(verts.end(), {a, c, b});
+        }
+    const GLsizei sphereCount = GLsizei(verts.size()) - sphereFirst;
+
     glGenVertexArrays(1, &emptyVao_);
     glGenBuffers(1, &cubeVbo_);
-    glGenBuffers(1, &instanceVbo_);
-    glGenBuffers(1, &highlightVbo_);
     glBindBuffer(GL_ARRAY_BUFFER, cubeVbo_);
     glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(CubeVertex), verts.data(), GL_STATIC_DRAW);
-    setupMeshVao(vao_, instanceVbo_);
-    setupMeshVao(highlightVao_, highlightVbo_);
+    setupBatch(boxes_, 0, 36);
+    setupBatch(highlightBoxes_, 0, 36);
+    setupBatch(spheres_, sphereFirst, sphereCount);
+    setupBatch(highlightSpheres_, sphereFirst, sphereCount);
 
     glGenVertexArrays(1, &fxVao_);
     glGenBuffers(1, &fxVbo_);
@@ -519,7 +645,8 @@ bool Renderer::init() {
         std::fprintf(stderr, "El framebuffer de sombras no está completo\n");
         return false;
     }
-    instances_.reserve(512);
+    boxes_.items.reserve(512);
+    spheres_.items.reserve(512);
     return true;
 }
 
@@ -527,8 +654,10 @@ void Renderer::shutdown() {
     glDeleteFramebuffers(1, &shadowFbo_);
     glDeleteTextures(1, &shadowTex_);
     glDeleteBuffers(1, &cubeVbo_);
-    glDeleteBuffers(1, &instanceVbo_);
-    glDeleteVertexArrays(1, &vao_);
+    for (Batch* b : {&boxes_, &spheres_, &highlightBoxes_, &highlightSpheres_}) {
+        glDeleteBuffers(1, &b->vbo);
+        glDeleteVertexArrays(1, &b->vao);
+    }
     glDeleteVertexArrays(1, &emptyVao_);
     glDeleteProgram(meshProgram_);
     glDeleteProgram(shadowProgram_);
@@ -539,19 +668,109 @@ void Renderer::shutdown() {
     glDeleteProgram(volumeProgram_);
     glDeleteBuffers(1, &volumeVbo_);
     glDeleteVertexArrays(1, &volumeVao_);
-    glDeleteBuffers(1, &highlightVbo_);
-    glDeleteVertexArrays(1, &highlightVao_);
+    glDeleteProgram(compositeProgram_);
+    glDeleteTextures(1, &noiseTex_);
+    releaseFxTargets();
 }
 
-void Renderer::setupMeshVao(GLuint vao, GLuint instanceVbo) {
-    glBindVertexArray(vao);
+// Proyecta las cajas de humo y fuego y devuelve el rectángulo de píxeles que ocupan.
+// Falso si no se ve ninguna. Si alguna cruza el plano de la cámara, toda la pantalla.
+bool Renderer::fxScreenRect(const RenderCamera& cam, int width, int height, int& x0, int& y0, int& x1,
+                            int& y1) const {
+    Mat4 vp = cam.proj * cam.view;
+    float minX = 1e9f, minY = 1e9f, maxX = -1e9f, maxY = -1e9f;
+    bool full = false;
+    auto addBox = [&](Vec3 lo, Vec3 hi) {
+        for (int i = 0; i < 8 && !full; ++i) {
+            Vec3 p{i & 1 ? hi.x : lo.x, i & 2 ? hi.y : lo.y, i & 4 ? hi.z : lo.z};
+            float cx = vp.m[0] * p.x + vp.m[4] * p.y + vp.m[8] * p.z + vp.m[12];
+            float cy = vp.m[1] * p.x + vp.m[5] * p.y + vp.m[9] * p.z + vp.m[13];
+            float cw = vp.m[3] * p.x + vp.m[7] * p.y + vp.m[11] * p.z + vp.m[15];
+            if (cw < cam.zNear) { full = true; break; }
+            minX = std::min(minX, cx / cw); maxX = std::max(maxX, cx / cw);
+            minY = std::min(minY, cy / cw); maxY = std::max(maxY, cy / cw);
+        }
+    };
+    for (const VolumeInstance& v : volumes_)
+        addBox({v.boxMin[0], v.boxMin[1], v.boxMin[2]}, {v.boxMax[0], v.boxMax[1], v.boxMax[2]});
+    for (const FxInstance& f : smoke_) {
+        float r = f.size * 0.5f;
+        addBox(Vec3{f.pos[0] - r, f.pos[1] - r, f.pos[2] - r}, Vec3{f.pos[0] + r, f.pos[1] + r, f.pos[2] + r});
+    }
+    if (full) { minX = minY = -1; maxX = maxY = 1; }
+    minX = std::max(minX, -1.0f); minY = std::max(minY, -1.0f);
+    maxX = std::min(maxX, 1.0f); maxY = std::min(maxY, 1.0f);
+    if (minX >= maxX || minY >= maxY) return false;
+    // A píxeles, redondeando a pares (el buffer de efectos tiene la mitad) y con margen.
+    x0 = std::max(0, (int(std::floor((minX * 0.5f + 0.5f) * float(width))) - 2) & ~1);
+    y0 = std::max(0, (int(std::floor((minY * 0.5f + 0.5f) * float(height))) - 2) & ~1);
+    x1 = std::min(width, int(std::ceil((maxX * 0.5f + 0.5f) * float(width))) + 2);
+    y1 = std::min(height, int(std::ceil((maxY * 0.5f + 0.5f) * float(height))) + 2);
+    return x1 > x0 && y1 > y0;
+}
+
+void Renderer::releaseFxTargets() {
+    glDeleteFramebuffers(1, &depthFbo_);
+    glDeleteTextures(1, &depthTex_);
+    glDeleteFramebuffers(1, &fxFbo_);
+    glDeleteTextures(1, &fxTex_);
+    depthFbo_ = depthTex_ = fxFbo_ = fxTex_ = 0;
+    fxWidth_ = fxHeight_ = 0;
+}
+
+// Copia de la profundidad de la escena (resolución completa, sin MSAA) y buffer de color
+// a media resolución para los efectos. Se recrean si cambia el tamaño de la ventana.
+void Renderer::ensureFxTargets(int width, int height) {
+    if (width == fullWidth_ && height == fullHeight_ && fxFbo_) return;
+    releaseFxTargets();
+    fullWidth_ = width;
+    fullHeight_ = height;
+    fxWidth_ = std::max(1, (width + 1) / 2);
+    fxHeight_ = std::max(1, (height + 1) / 2);
+
+    glGenTextures(1, &depthTex_);
+    glBindTexture(GL_TEXTURE_2D, depthTex_);
+    // Mismo formato que el framebuffer de la ventana: lo exige glBlitFramebuffer.
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, width, height, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8,
+                 nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glGenFramebuffers(1, &depthFbo_);
+    glBindFramebuffer(GL_FRAMEBUFFER, depthFbo_);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, depthTex_, 0);
+    glDrawBuffer(GL_NONE);
+    glReadBuffer(GL_NONE);
+
+    glGenTextures(1, &fxTex_);
+    glBindTexture(GL_TEXTURE_2D, fxTex_);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, fxWidth_, fxHeight_, 0, GL_RGBA, GL_HALF_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glGenFramebuffers(1, &fxFbo_);
+    glBindFramebuffer(GL_FRAMEBUFFER, fxFbo_);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fxTex_, 0);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        std::fprintf(stderr, "El framebuffer de efectos no está completo\n");
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void Renderer::setupBatch(Batch& b, GLint first, GLsizei vertexCount) {
+    b.first = first;
+    b.vertexCount = vertexCount;
+    glGenVertexArrays(1, &b.vao);
+    glGenBuffers(1, &b.vbo);
+    glBindVertexArray(b.vao);
     glBindBuffer(GL_ARRAY_BUFFER, cubeVbo_);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(CubeVertex), (void*)offsetof(CubeVertex, p));
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(CubeVertex), (void*)offsetof(CubeVertex, n));
     // Atributos por instancia (divisor 1): matriz (4 columnas), color y parámetros.
-    glBindBuffer(GL_ARRAY_BUFFER, instanceVbo);
+    glBindBuffer(GL_ARRAY_BUFFER, b.vbo);
     for (int i = 0; i < 4; ++i) {
         glEnableVertexAttribArray(2 + i);
         glVertexAttribPointer(2 + i, 4, GL_FLOAT, GL_FALSE, sizeof(Instance),
@@ -565,6 +784,22 @@ void Renderer::setupMeshVao(GLuint vao, GLuint instanceVbo) {
     glVertexAttribPointer(7, 3, GL_FLOAT, GL_FALSE, sizeof(Instance), (void*)offsetof(Instance, material));
     glVertexAttribDivisor(7, 1);
     glBindVertexArray(0);
+}
+
+// Sube las instancias del frame. El buffer crece al doble cuando se queda corto y se
+// "huérfana" cada frame (glBufferData con nullptr) para no esperar a la GPU.
+void Renderer::uploadBatch(Batch& b) {
+    if (b.items.empty()) return;
+    glBindBuffer(GL_ARRAY_BUFFER, b.vbo);
+    if (b.items.size() > b.capacity) b.capacity = b.items.size() * 2;
+    glBufferData(GL_ARRAY_BUFFER, GLsizeiptr(b.capacity * sizeof(Instance)), nullptr, GL_STREAM_DRAW);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, GLsizeiptr(b.items.size() * sizeof(Instance)), b.items.data());
+}
+
+void Renderer::drawBatch(const Batch& b) {
+    if (b.items.empty()) return;
+    glBindVertexArray(b.vao);
+    glDrawArraysInstanced(GL_TRIANGLES, b.first, b.vertexCount, GLsizei(b.items.size()));
 }
 
 void Renderer::fireColumn(Vec3 base, float radius, float height, float seed, float intensity, Vec3 clipMin,
@@ -613,15 +848,23 @@ void Renderer::scorch(Vec3 pos, float radius, float strength) {
     scorches_.insert(scorches_.end(), {pos.x, pos.y, pos.z, radius, strength});
 }
 
-void Renderer::box(const Mat4& transform, Vec3 center, Vec3 half, uint32_t color, Material m, float flash) {
-    Mat4 model = transform * translate(center) * scale(half * 2.0f);
+void Renderer::addInstance(const Mat4& model, uint32_t color, Material m, float flash, bool sphere) {
     Instance inst;
     for (int i = 0; i < 16; ++i) inst.model[i] = model.m[i];
     inst.color = color;
     inst.material = float(int(m));
     inst.flash = flash;
-    inst.pad = 0;
-    (highlighting_ ? highlighted_ : instances_).push_back(inst);
+    inst.shape = sphere ? 1.0f : 0.0f;
+    Batch& b = sphere ? (highlighting_ ? highlightSpheres_ : spheres_) : (highlighting_ ? highlightBoxes_ : boxes_);
+    b.items.push_back(inst);
+}
+
+void Renderer::box(const Mat4& transform, Vec3 center, Vec3 half, uint32_t color, Material m, float flash) {
+    addInstance(transform * translate(center) * scale(half * 2.0f), color, m, flash, false);
+}
+
+void Renderer::ellipsoid(const Mat4& transform, Vec3 center, Vec3 radii, uint32_t color, Material m, float flash) {
+    addInstance(transform * translate(center) * scale(radii * 2.0f), color, m, flash, true);
 }
 
 void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int height, float time) {
@@ -637,16 +880,12 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
     Mat4 lightViewProj = lightProj * lightView;
 
     // Las instancias se suben una vez y sirven para las dos pasadas.
-    glBindBuffer(GL_ARRAY_BUFFER, instanceVbo_);
-    if (instances_.size() > instanceCapacity_) instanceCapacity_ = instances_.size() * 2;
-    glBufferData(GL_ARRAY_BUFFER, instanceCapacity_ * sizeof(Instance), nullptr, GL_STREAM_DRAW);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, instances_.size() * sizeof(Instance), instances_.data());
-    GLsizei count = GLsizei(instances_.size());
-    GLsizei highlightCount = GLsizei(highlighted_.size());
-    if (highlightCount > 0) {
-        glBindBuffer(GL_ARRAY_BUFFER, highlightVbo_);
-        glBufferData(GL_ARRAY_BUFFER, highlighted_.size() * sizeof(Instance), highlighted_.data(), GL_STREAM_DRAW);
-    }
+    for (Batch* b : {&boxes_, &spheres_, &highlightBoxes_, &highlightSpheres_}) uploadBatch(*b);
+    bool highlight = !highlightBoxes_.items.empty() || !highlightSpheres_.items.empty();
+    auto drawHighlighted = [&] {
+        drawBatch(highlightBoxes_);
+        drawBatch(highlightSpheres_);
+    };
 
     // 1) Sombras: profundidad desde el sol. Se dibujan las caras traseras y con offset
     //    de polígono para evitar el "acné" (auto-sombreado por falta de precisión).
@@ -660,12 +899,9 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
     glPolygonOffset(1.5f, 3.0f);
     glUseProgram(shadowProgram_);
     setMat4(shadowProgram_, "uLightViewProj", lightViewProj);
-    glBindVertexArray(vao_);
-    glDrawArraysInstanced(GL_TRIANGLES, 0, 36, count);
-    if (highlightCount > 0) {
-        glBindVertexArray(highlightVao_);
-        glDrawArraysInstanced(GL_TRIANGLES, 0, 36, highlightCount);
-    }
+    drawBatch(boxes_);
+    drawBatch(spheres_);
+    drawHighlighted();
     glDisable(GL_POLYGON_OFFSET_FILL);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, width, height);
@@ -726,20 +962,19 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
     }
     glUniform1f(glGetUniformLocation(meshProgram_, "uInflate"), 0.0f);
     glUniform4f(glGetUniformLocation(meshProgram_, "uOutlineColor"), 0, 0, 0, 0);
-    glBindVertexArray(vao_);
-    glDrawArraysInstanced(GL_TRIANGLES, 0, 36, count);
+    drawBatch(boxes_);
+    drawBatch(spheres_);
 
     // 4) Objetivo resaltado con el stencil buffer:
     //    a) se dibuja normal, escribiendo 1 en el stencil donde queda visible;
     //    b) se vuelve a dibujar inflado, con color plano, solo donde el stencil NO es 1:
     //       lo único que sobrevive es un borde alrededor de la silueta completa.
-    if (highlightCount > 0) {
+    if (highlight) {
         glEnable(GL_STENCIL_TEST);
         glStencilMask(0xFF);
         glStencilFunc(GL_ALWAYS, 1, 0xFF);
         glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
-        glBindVertexArray(highlightVao_);
-        glDrawArraysInstanced(GL_TRIANGLES, 0, 36, highlightCount);
+        drawHighlighted();
 
         glStencilFunc(GL_NOTEQUAL, 1, 0xFF);
         glStencilMask(0x00);
@@ -750,7 +985,7 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
         glUniform1f(glGetUniformLocation(meshProgram_, "uInflate"), 0.03f + 0.015f * pulse);
         glUniform4f(glGetUniformLocation(meshProgram_, "uOutlineColor"), lerpf(r, 1.0f, 0.35f * pulse),
                     lerpf(g, 1.0f, 0.35f * pulse), lerpf(b, 1.0f, 0.35f * pulse), 1.0f);
-        glDrawArraysInstanced(GL_TRIANGLES, 0, 36, highlightCount);
+        drawHighlighted();
         glUniform1f(glGetUniformLocation(meshProgram_, "uInflate"), 0.0f);
         glUniform4f(glGetUniformLocation(meshProgram_, "uOutlineColor"), 0, 0, 0, 0);
         glDepthMask(GL_TRUE);
@@ -759,60 +994,91 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
     }
     glDisable(GL_CULL_FACE);
 
-    // 5) Efectos con alfa premultiplicado (se prueba la profundidad pero no se escribe):
-    //    primero el humo (oscurece) y después el fuego volumétrico (suma luz).
-    glDepthMask(GL_FALSE);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-    if (!smoke_.empty()) {
-        glBindBuffer(GL_ARRAY_BUFFER, fxVbo_);
-        glBufferData(GL_ARRAY_BUFFER, smoke_.size() * sizeof(FxInstance), smoke_.data(), GL_STREAM_DRAW);
-        glUseProgram(fxProgram_);
-        setMat4(fxProgram_, "uViewProj", cam.proj * cam.view);
-        setVec3(fxProgram_, "uCamRight", cam.right);
-        setVec3(fxProgram_, "uCamUp", cam.up);
-        setVec3(fxProgram_, "uCamPos", cam.position);
-        glUniform1f(glGetUniformLocation(fxProgram_, "uTime"), time);
-        glBindVertexArray(fxVao_);
-        glDrawArraysInstanced(GL_TRIANGLES, 0, 6, GLsizei(smoke_.size()));
-    }
-    if (!volumes_.empty()) {
-        // Si la cámara está dentro de un volumen no se verían sus caras delanteras: esos
-        // se dibujan por las traseras.
-        std::vector<VolumeInstance> outside, inside;
-        for (const VolumeInstance& v : volumes_) {
-            const float m = 0.1f;
-            bool in = cam.position.x > v.boxMin[0] - m && cam.position.x < v.boxMax[0] + m &&
-                      cam.position.y > v.boxMin[1] - m && cam.position.y < v.boxMax[1] + m &&
-                      cam.position.z > v.boxMin[2] - m && cam.position.z < v.boxMax[2] + m;
-            (in ? inside : outside).push_back(v);
+    // 5) Efectos con alfa premultiplicado: primero el humo (oscurece) y después el fuego
+    //    volumétrico (suma luz). Son caros por píxel y blandos, así que se dibujan a media
+    //    resolución (4 veces menos píxeles) en un buffer aparte que luego se compone encima.
+    //    Ese buffer no tiene profundidad propia: los shaders leen la de la escena.
+    int sx0, sy0, sx1, sy1;  // rectángulo de pantalla que cubren los efectos
+    if ((!smoke_.empty() || !volumes_.empty()) && fxScreenRect(cam, width, height, sx0, sy0, sx1, sy1)) {
+        ensureFxTargets(width, height);
+        // Todo el trabajo se limita a ese rectángulo: una mecha encendida no cuesta como
+        // un incendio a pantalla completa. El del buffer pequeño lleva 2 texels de margen
+        // para que el filtrado bilineal de la composición no lea restos de otro frame.
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(sx0, sy0, sx1 - sx0, sy1 - sy0);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, depthFbo_);
+        glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+        glBindFramebuffer(GL_FRAMEBUFFER, fxFbo_);
+        glViewport(0, 0, fxWidth_, fxHeight_);
+        int fx0 = std::max(sx0 / 2 - 2, 0), fy0 = std::max(sy0 / 2 - 2, 0);
+        glScissor(fx0, fy0, std::min(sx1 / 2 + 3, fxWidth_) - fx0, std::min(sy1 / 2 + 3, fxHeight_) - fy0);
+        const float transparent[4] = {0, 0, 0, 0};
+        glClearBufferfv(GL_COLOR, 0, transparent);  // sin tocar el color de borrado global
+        glDisable(GL_DEPTH_TEST);
+        glDepthMask(GL_FALSE);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, depthTex_);
+        auto fxUniforms = [&](GLuint prog) {
+            glUniform1i(glGetUniformLocation(prog, "uSceneDepth"), 1);
+            glUniform2f(glGetUniformLocation(prog, "uFxSize"), float(fxWidth_), float(fxHeight_));
+            glUniform2f(glGetUniformLocation(prog, "uNearFar"), cam.zNear, cam.zFar);
+            glUniform1f(glGetUniformLocation(prog, "uTime"), time);
+            setVec3(prog, "uCamPos", cam.position);
+        };
+        if (!smoke_.empty()) {
+            glBindBuffer(GL_ARRAY_BUFFER, fxVbo_);
+            glBufferData(GL_ARRAY_BUFFER, smoke_.size() * sizeof(FxInstance), smoke_.data(), GL_STREAM_DRAW);
+            glUseProgram(fxProgram_);
+            fxUniforms(fxProgram_);
+            setMat4(fxProgram_, "uViewProj", cam.proj * cam.view);
+            setVec3(fxProgram_, "uCamRight", cam.right);
+            setVec3(fxProgram_, "uCamUp", cam.up);
+            glBindVertexArray(fxVao_);
+            glDrawArraysInstanced(GL_TRIANGLES, 0, 6, GLsizei(smoke_.size()));
         }
-        glUseProgram(volumeProgram_);
-        setMat4(volumeProgram_, "uViewProj", cam.proj * cam.view);
-        setVec3(volumeProgram_, "uCamPos", cam.position);
-        glUniform1f(glGetUniformLocation(volumeProgram_, "uTime"), time);
-        glEnable(GL_CULL_FACE);
-        drawVolumes(outside, false);
-        drawVolumes(inside, true);
-        glDisable(GL_CULL_FACE);
+        if (!volumes_.empty()) {
+            // Se dibujan las caras traseras de cada caja: así se cubre bien tanto si la
+            // cámara está fuera como dentro del volumen (el shader calcula la entrada).
+            glUseProgram(volumeProgram_);
+            fxUniforms(volumeProgram_);
+            setMat4(volumeProgram_, "uViewProj", cam.proj * cam.view);
+            setVec3(volumeProgram_, "uCamForward", cam.forward);
+            glActiveTexture(GL_TEXTURE2);
+            glBindTexture(GL_TEXTURE_3D, noiseTex_);
+            glUniform1i(glGetUniformLocation(volumeProgram_, "uNoise"), 2);
+            glEnable(GL_CULL_FACE);
+            glCullFace(GL_FRONT);
+            glBindBuffer(GL_ARRAY_BUFFER, volumeVbo_);
+            glBufferData(GL_ARRAY_BUFFER, volumes_.size() * sizeof(VolumeInstance), volumes_.data(), GL_STREAM_DRAW);
+            glBindVertexArray(volumeVao_);
+            glDrawArraysInstanced(GL_TRIANGLES, 0, 36, GLsizei(volumes_.size()));
+            glCullFace(GL_BACK);
+            glDisable(GL_CULL_FACE);
+        }
+        glActiveTexture(GL_TEXTURE0);
+
+        // Composición sobre la imagen de la ventana.
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0, width, height);
+        glScissor(sx0, sy0, sx1 - sx0, sy1 - sy0);
+        glUseProgram(compositeProgram_);
+        glBindTexture(GL_TEXTURE_2D, fxTex_);
+        glUniform1i(glGetUniformLocation(compositeProgram_, "uFx"), 0);
+        glBindVertexArray(emptyVao_);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glDisable(GL_SCISSOR_TEST);
+        glDisable(GL_BLEND);
+        glDepthMask(GL_TRUE);
+        glEnable(GL_DEPTH_TEST);
     }
-    glDisable(GL_BLEND);
-    glDepthMask(GL_TRUE);
 
     glBindVertexArray(0);
-    instances_.clear();
-    highlighted_.clear();
+    for (Batch* b : {&boxes_, &spheres_, &highlightBoxes_, &highlightSpheres_}) b->items.clear();
     smoke_.clear();
     volumes_.clear();
     lights_.clear();
     scorches_.clear();
-}
-
-void Renderer::drawVolumes(const std::vector<VolumeInstance>& list, bool cameraInside) {
-    if (list.empty()) return;
-    glCullFace(cameraInside ? GL_FRONT : GL_BACK);
-    glBindBuffer(GL_ARRAY_BUFFER, volumeVbo_);
-    glBufferData(GL_ARRAY_BUFFER, list.size() * sizeof(VolumeInstance), list.data(), GL_STREAM_DRAW);
-    glBindVertexArray(volumeVao_);
-    glDrawArraysInstanced(GL_TRIANGLES, 0, 36, GLsizei(list.size()));
 }
