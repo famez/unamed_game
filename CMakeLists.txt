@@ -16,11 +16,23 @@ option(GAME_NATIVE "Optimizar para la CPU de esta máquina (-march=native)" ON)
 find_package(OpenGL REQUIRED COMPONENTS OpenGL GLX)
 find_package(X11 REQUIRED)
 
+# Jolt Physics (cuerpos rígidos y ragdolls), como submódulo de git:
+#   git submodule update --init
+# Solo la biblioteca: sin tests, ejemplos, visor, perfilador ni render de depuración.
+foreach(opt TARGET_UNIT_TESTS TARGET_HELLO_WORLD TARGET_PERFORMANCE_TEST TARGET_SAMPLES TARGET_VIEWER
+        ENABLE_ALL_WARNINGS INTERPROCEDURAL_OPTIMIZATION GENERATE_DEBUG_SYMBOLS ENABLE_INSTALL
+        DEBUG_RENDERER_IN_DEBUG_AND_RELEASE PROFILER_IN_DEBUG_AND_RELEASE FLOATING_POINT_EXCEPTIONS_ENABLED
+        JPH_USE_VK JPH_USE_DX12 JPH_USE_MTL)
+    set(${opt} OFF CACHE BOOL "" FORCE)
+endforeach()
+add_subdirectory(third_party/JoltPhysics/Build EXCLUDE_FROM_ALL SYSTEM)  # SYSTEM: sin avisos de sus cabeceras
+
 # Lógica pura (sin GL ni X11): la comparten el juego y los tests.
 set(LOGIC_SOURCES
     src/skeleton.cpp
     src/character.cpp
     src/physics.cpp
+    src/physics_jolt.cpp
     src/game.cpp
 )
 
@@ -35,11 +47,11 @@ add_executable(game
     src/renderer.cpp
 )
 
-target_link_libraries(game PRIVATE OpenGL::OpenGL OpenGL::GLX X11::X11 X11::Xi)
+target_link_libraries(game PRIVATE Jolt OpenGL::OpenGL OpenGL::GLX X11::X11 X11::Xi)
 
 target_compile_options(game PRIVATE
     -Wall -Wextra -Wpedantic -Wshadow
-    $<$<CONFIG:Debug>:-fsanitize=undefined -fno-omit-frame-pointer>
+    $<$<CONFIG:Debug>:-fsanitize=undefined -fno-sanitize=vptr -fno-omit-frame-pointer>
     $<$<BOOL:${GAME_NATIVE}>:-march=native>
 )
 target_link_options(game PRIVATE $<$<CONFIG:Debug>:-fsanitize=undefined>)
@@ -53,7 +65,10 @@ if(GAME_TESTS)
     enable_testing()
     add_executable(logic_test tests/logic_test.cpp ${LOGIC_SOURCES})
     target_include_directories(logic_test PRIVATE src)
-    target_compile_options(logic_test PRIVATE -Wall -Wextra -g -fsanitize=address,undefined -fno-omit-frame-pointer)
+    target_link_libraries(logic_test PRIVATE Jolt)
+    # vptr: Jolt se compila sin RTTI y UBSan no podría comprobar sus tipos dinámicos.
+    target_compile_options(logic_test PRIVATE -Wall -Wextra -g -fsanitize=address,undefined -fno-sanitize=vptr
+                           -fno-omit-frame-pointer)
     target_link_options(logic_test PRIVATE -fsanitize=address,undefined)
     add_test(NAME logic COMMAND logic_test)
 endif()
