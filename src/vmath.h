@@ -19,12 +19,15 @@ inline Vec3 operator*(Vec3 a, float s) { return {a.x * s, a.y * s, a.z * s}; }
 inline Vec3 operator*(float s, Vec3 a) { return a * s; }
 inline Vec3 operator-(Vec3 a) { return {-a.x, -a.y, -a.z}; }
 inline Vec3& operator+=(Vec3& a, Vec3 b) { a = a + b; return a; }
+inline Vec3& operator-=(Vec3& a, Vec3 b) { a = a - b; return a; }
+inline Vec3& operator*=(Vec3& a, float s) { a = a * s; return a; }
 
 inline float dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
 inline Vec3 cross(Vec3 a, Vec3 b) {
     return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
 }
 inline float length(Vec3 a) { return std::sqrt(dot(a, a)); }
+inline Vec3 flat(Vec3 a) { return {a.x, 0, a.z}; }  // proyección en el plano XZ
 inline Vec3 normalize(Vec3 a) {
     float len = length(a);
     return len > 1e-6f ? a * (1.0f / len) : Vec3{};
@@ -73,6 +76,14 @@ inline Vec3 transformPoint(const Mat4& a, Vec3 p) {
 }
 
 inline Vec3 translationOf(const Mat4& a) { return {a.m[12], a.m[13], a.m[14]}; }
+
+inline Mat4 scale(Vec3 s) {
+    Mat4 r = Mat4::identity();
+    r.m[0] = s.x;
+    r.m[5] = s.y;
+    r.m[10] = s.z;
+    return r;
+}
 
 inline Mat4 translate(Vec3 t) {
     Mat4 r = Mat4::identity();

@@ -23,7 +23,10 @@ enum class Material : int {
     Cloth = 0,  // personajes: difuso + contorno
     Stone = 1,  // plataformas: bisel ancho en las aristas
     Metal = 2,  // armas, escudo: especular fuerte
-    Ground = 3, // suelo: cuadrícula procedural
+    Ground = 3, // suelo de la plaza: adoquines procedurales
+    Glow = 4,   // emisivo: no lo oscurecen las sombras (ojos, cristales, orbes, farolas)
+    Grass = 5,  // césped con variación de color procedural
+    Water = 6,  // agua: ondas animadas y reflejo del cielo
 };
 
 struct RenderCamera {

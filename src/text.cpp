@@ -52,6 +52,14 @@ const char* glyph(char c) {
         case '<': return "3013 1336";
         case '>': return "1033 3316";
         case '%': return "0640 0011 3546";
+        case '+': return "0343 2125";
+        case '!': return "2023 2526";
+        case ',': return "2527";
+        case '\'': return "2021";
+        case '(': return "2111 1115 1525";
+        case ')': return "2131 3135 3525";
+        case '?': return "0040 4043 4323 2324 2526";
+        case '=': return "0242 0444";
         default:  return "";  // espacio y caracteres sin glifo
         // clang-format on
     }

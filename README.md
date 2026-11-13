@@ -1,16 +1,16 @@
 # unamed_game
 
-Prototipo en C++17 + OpenGL 3.3 Core, sin motor: personaje con esqueleto y animación
-procedural, combate cuerpo a cuerpo con combos y defensa, armas de fuego y arrojadizas,
-enemigos con escudo, ragdolls y cajas con Jolt Physics, fuego volumétrico y render con
-sombras. Única dependencia externa: Jolt Physics (submódulo de git).
+Action-RPG en tercera persona en C++17 + OpenGL 3.3 Core, sin motor ni dependencias
+externas, inspirado en la filosofía de los *Kingdom Hearts* (sin copiar nada suyo):
+personajes de dibujo animado, combos vistosos con un arma, magias, enemigos que sueltan
+orbes y objetos de colores, inventario y cofres. Primer escenario: una plaza soleada con
+fuente, casas, terraza y plataformas, con oleadas de enemigos.
 
 ## Compilar y ejecutar
 
 ```bash
-git submodule update --init      # Jolt Physics en third_party/ (solo la primera vez)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j4
-./build/game
+./build/game              # --debug arranca en modo debug
 
 # Debug: símbolos, UBSan, aserciones de libstdc++ y mensajes de KHR_debug del driver
 cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug && cmake --build build-debug -j4
@@ -22,103 +22,86 @@ ctest --test-dir build --output-on-failure     # o ./build/logic_test para ver c
 Dependencias: `libOpenGL`/`libGLX` (glvnd + Mesa), `libX11` y `libXi` (`sudo apt install libxi-dev`),
 esta última para leer el ratón en crudo (XInput2 raw motion, sin aceleración del sistema).
 
+Opciones de desarrollo: `--autoplay` (un bot fija objetivos y combate solo, sin capturar el
+ratón), `--screenshot fichero.ppm segundos` (guarda un frame y sale) y `--camyaw radianes`.
+
 ## Controles
 
 | Tecla | Acción |
 |---|---|
-| W A S D | Mover (el personaje mira siempre hacia la cámara: A/D se desplazan de lado, S retrocede) |
-| Shift | Sprint hacia delante (8 m/s) |
-| Espacio | Saltar. **Yendo de lado: voltereta** (esquiva los golpes) |
-| Clic izquierdo / F | Usar el objeto: golpe (combos de 3 con puños y espada), disparo, lanzamiento |
-| Clic derecho (mantener) | Pistola/escopeta: apuntar (cámara al hombro, mira). Piedras/molotov/granada: apuntar el lanzamiento (se ve la trayectoria; el clic izquierdo lanza). Espada: **defenderse** |
-| G | Lanzar una piedra sin cambiar de objeto |
-| 1 … 8 | Puños / Espada / Pistola / Piedras / Molotov / Escopeta / Granada / Martillo |
-| Ratón | Orbitar la cámara (queda capturado al arrancar). Las acciones van hacia donde mira la cámara |
-| Flechas / Q E | Orbitar la cámara con teclado |
-| Rueda | Zoom |
-| F12 / º | Modo debug: alambre sin shaders (huesos, articulaciones, cajas) |
-| F1 / F2 / F3 / F4 | (solo en modo debug) Mostrar/ocultar huesos / articulaciones / cuerpo / cuadrícula |
-| Esc / P | Menú de pausa (continuar, reiniciar nivel, sensibilidad del ratón, salir) |
-| R | Reiniciar jugador (vida y munición) |
-
-Al perder el foco (alt-tab) el ratón se suelta y se abre el menú de pausa.
+| W A S D | Correr (relativo a la cámara; el personaje gira hacia donde va) |
+| Espacio | Saltar |
+| Clic izquierdo | Atacar: combo de suelo o aéreo, con acercamiento automático al objetivo |
+| Clic derecho (mantener) | Guardia. Si el golpe llega justo al levantarla: **bloqueo perfecto** |
+| Shift | Voltereta de esquiva (invulnerable mientras dura) |
+| Tab | Fijar objetivo / pasar al siguiente. Clic central o X: soltarlo |
+| Rueda + E | Elegir y usar una entrada del menú de comandos |
+| 1 2 3 | Magias: Fuego, Hielo, Cura |
+| 4 5 6 | Atajos de objetos (se asignan en el inventario) |
+| F | Abrir cofres |
+| I | Inventario (pausa): usar objetos, equipar armas, asignar atajos |
+| Ratón / flechas | Orbitar la cámara (con objetivo fijado gira sola para encuadrarlo) |
+| F12 / º | Modo debug: solo esqueletos y cajas en alambre |
+| F1 / F2 / F3 / F4 | (en modo debug) Huesos / articulaciones / cajas / cuadrícula |
+| Esc / P | Menú de pausa (continuar, reiniciar, sensibilidad, salir) |
 
 ## Jugabilidad
 
-- **Salto y plataformas**: salto de ~1,2 m. Los bordillos de hasta 0,3 m se suben andando
-  (escalinata al fondo a la izquierda); los bloques más altos requieren saltar (escalera
-  hasta la plataforma alta a la derecha, plataformas flotantes a la izquierda).
-- **Movimiento relativo a la cámara**: el cuerpo mira hacia donde mira la cámara y las
-  piernas se animan según la dirección (paso lateral, marcha atrás a 0,75x).
-- **Voltereta** (espacio yendo de lado): 0,55 s a 7,5 m/s; durante ella no te alcanzan.
-- **Combos**: clics seguidos dentro de 0,45 s encadenan golpes (un clic durante un golpe
-  queda en cola). Puños: directo (8), izquierdo (8), gancho (15, con impulso). Espada:
-  tajo (25), barrido horizontal (20, arco muy ancho), estocada (35, alcance largo).
-- **Defensa con espada** (clic derecho): un golpe de frente hace el 20 % del daño y casi no
-  empuja. Te mueves más despacio y no puedes atacar mientras bloqueas.
-- **Pistola** (12): balas a 45 m/s. Desde la cadera salen rectas al frente; apuntando
-  (clic derecho) van exactamente al punto bajo la mira, también hacia arriba o abajo. La
-  mira se pone roja sobre un enemigo. Al apuntar se camina más despacio (2,2 m/s).
-- **Escopeta** (16 cartuchos): 8 perdigones de 7 en un cono de ~8,5°, alcance ~18 m y
-  0,8 s entre disparos. Devastadora de cerca.
-- **Piedras** (15): parábola con gravedad y rebotes. Mirando hacia arriba con el ratón se
-  lanzan más alto y más lejos. Se recogen al pasar por encima (máx. 20).
-- **Lanzamiento apuntado** (piedra, molotov, granada): con clic derecho se ve la parábola
-  exacta (la misma simulación que el proyectil) y dónde caerá; el clic izquierdo lanza.
-- **Granada** (4): rebota y explota a los 2 s: hasta 55 de daño en 4 m con empuje; el
-  escudo cubre el 40 % si mira a la explosión. También te daña a ti si estás cerca.
-- **Martillo**: golpe lento (0,85 s) de 40 que lanza por los aires; el escudo solo para el
-  40 %. La onda contra el suelo empuja y daña a los que estén alrededor.
-- **Cócteles molotov** (5, máx. 10; R los recarga): se lanzan como las piedras y se rompen
-  al chocar. Explosión de hasta 25 de daño en 3 m con empuje (el escudo no la para) y un
-  charco de fuego de ~2,6 m durante 7 s sobre la superficie de debajo (en una plataforma
-  arde encima, sin flotar en el borde). Quien pisa el fuego arde: 20 de daño por segundo,
-  y sigue ardiendo 2,5 s al salir.
-- **Enemigos**: no se mueven, pero llevan **escudo**: los golpes que les llegan de frente
-  hacen solo el 20 % del daño y la mitad de retroceso. Por la espalda o el costado reciben
-  el golpe completo. Todo impacto les hace retroceder (se les puede tirar de una
-  plataforma). Al llegar a 0 de vida caen y reaparecen a los 4 s. Si estás delante y a
-  menos de 1,7 m levantan la **porra** (0,55 s de aviso) y golpean: 15 de daño y empujón.
-  Golpearles durante la preparación les interrumpe.
-- **Vida del jugador** (barra abajo a la izquierda): a 0 caes y reapareces en el inicio.
-- **Ragdolls** (Jolt Physics): al morir, el esqueleto pasa a 11 cuerpos rígidos unidos por
-  articulaciones con límites anatómicos (cono + giro en hombros, caderas, cuello y
-  columna; bisagra en codos y rodillas), con el empujón del golpe que lo mató. Los
-  cadáveres se pueden empujar, disparar y lanzar con explosiones.
-- **Cajas** sueltas por el nivel: las mueven balas, golpes, explosiones y el propio
-  jugador al andar contra ellas (los personajes vivos son cápsulas cinemáticas en Jolt).
+- **Combo de suelo**: tajo, revés, giro de 360° y **remate** con salto y voltereta que lanza
+  a los enemigos por los aires y deja una onda en el suelo. El arma decide cuántos golpes
+  hay antes del remate. Un clic durante un golpe queda en cola y se encadena.
+- **Combo aéreo**: dos golpes y un remate en remolino; mientras golpea, el personaje casi
+  no cae. Un remate aéreo por salto.
+- **Acercamiento**: si el objetivo está a menos de 7 m, el golpe empieza con un impulso
+  hacia él. Sin objetivo fijado se elige el enemigo más a mano en la dirección pulsada.
+- **Peso de los golpes**: parón de 50–90 ms al impactar, destellos, temblor de cámara en
+  los remates y estela del color del arma.
+- **Guardia**: para todo lo que llegue de frente. En los primeros 0,35 s es un bloqueo
+  perfecto: rechaza al atacante y lo deja tambaleándose.
+- **Magias** (PM, se regeneran despacio y con orbes azules): **Fuego** (bola que persigue
+  al objetivo y explota en área quemando), **Hielo** (tres esquirlas que congelan y
+  ralentizan) y **Cura**.
+- **Enemigos** (cada uno con su esqueleto, animación procedural e IA por estados:
+  aparece → persigue → avisa → ataca → se recupera; un golpe le hace tambalearse):
+  - *Duende*: rápido, se agacha con las garras en alto y se lanza con un zarpazo.
+  - *Seta saltarina*: salta y cae aplastando con una onda (se esquiva saltando). Mientras
+    salta solo la detiene un remate.
+  - *Polilla lunar*: vuela en círculos y dispara orbes de luz que se pueden **devolver**
+    de un golpe.
+- **Oleadas**: salen de portales en el suelo; al limpiar una llega la siguiente, más dura.
+- **Botín**: monedas (munny), orbes verdes (PV) y azules (PM) y, a veces, objetos (cristales
+  que giran con un haz de luz). Saltan del enemigo, rebotan y vuelan hacia el jugador al
+  acercarse. Las **cajas** se rompen a golpes y sueltan botín; los **cofres** guardan
+  objetos y armas nuevas (uno está en la plataforma alta: hay que subir saltando).
+- **Inventario**: consumibles (Poción, Hipoción, Éter, Elixir), materiales que sueltan los
+  enemigos y armas: *Espada de madera* (equilibrada), *Báculo estelar* (magia fuerte,
+  combo de 5) y *Hoja aurora* (golpes fuertes y largos).
+- **Derrota**: a 0 PV el personaje cae y reaparece en el inicio con todo recuperado.
+
+## Modo debug (F12)
+
+No usa el render con shaders: ni sombras, ni iluminación, ni instancias. Se dibuja en
+alambre con un único buffer de líneas: los esqueletos de todos los personajes (huesos con
+la izquierda en azul y la derecha en rojo, articulaciones y cajas de cada segmento), el
+escenario, cajas y cofres, el sector del último golpe, el botín como cruces, y encima de
+cada enemigo su estado de IA y su vida.
 
 ## Render
 
-Por defecto, todo se dibuja instanciado (un cubo y una esfera en la GPU y una matriz +
-color por instancia; unos pocos draw calls para toda la escena) con un shader propio. Los
-personajes son ~27 elipsoides solapados (estilo maniquí: cabeza con pelo, ojos y nariz,
-deltoides, músculos, articulaciones); el escenario son cajas. Iluminación:
-sol con sombras (shadow mapping 2048², PCF), ambiente hemisférico + relleno, especular,
-luz de contorno en personajes, bisel en aristas, suelo con cuadrícula procedural, cielo
-en degradado, niebla y tonemapping ACES. Las balas, el láser, las chispas y las barras de
-vida siguen siendo líneas. En la HD 620: ~210 fps sin vsync (~4,8 ms por frame).
+Todo se dibuja instanciado (un cubo y una esfera en la GPU y una matriz + color por
+instancia) con un shader propio. Los personajes son elipsoides pegados a sus
+articulaciones, con proporciones de dibujo animado (cabeza grande, pelo de punta,
+zapatones). Estilo visual:
 
-Fuego volumétrico: cada fuego (charco, cuerpo ardiendo, explosión, mecha) es una caja que
-el fragment shader recorre con raymarching (hasta 22 pasos) evaluando ruido fractal 3D animado:
-la densidad forma lenguas que suben y la "temperatura" da el color (brasa → naranja →
-amarillo). Es 3D desde cualquier ángulo y, sobre una plataforma, se recorta a su cara de
-arriba. Además: humo (billboards con alfa premultiplicado), ascuas, hasta 8 luces
-puntuales parpadeantes y suelo chamuscado. Optimizaciones (dentro del fuego de un molotov:
-de ~68 a ~130 fps):
-
-- El ruido fractal está precalculado en una **textura 3D** de 128³ (R16, periódica): una
-  lectura con filtrado trilineal sustituye a 3 octavas × 8 hashes por paso.
-- Humo y fuego se dibujan a **media resolución** en un buffer aparte que luego se compone
-  encima, y solo en el rectángulo de pantalla que ocupan (scissor).
-- Cada rayo se recorta al **cilindro o esfera real** (no a la caja) y a la profundidad de
-  la escena, y el número de pasos depende del tramo recorrido.
-
-Objetivo apuntado: al apuntar con la pistola, el enemigo bajo la mira lleva una silueta
-roja que late. Se hace con el stencil buffer: se dibuja marcando el stencil y luego se
-vuelve a dibujar inflado, con color plano, solo donde el stencil no está marcado.
-
-El modo debug (F12) es el render original en alambre, sin shaders de iluminación.
+- Paleta luminosa: cielo azul saturado con nubes procedurales, sol cálido y relleno frío.
+- Sombreado de animación en los personajes (la luz pasa a sombra en una franja estrecha),
+  sombras proyectadas suaves y luz de contorno.
+- Materiales: adoquines procedurales, césped, agua con ondas y reflejo del cielo, metal y
+  **emisivo** (ojos, cristales, orbes, farolas, ventanas).
+- Efectos translúcidos en una capa aparte: estelas del arma, destellos de 4 puntas, halos,
+  ondas en el suelo y retícula del objetivo fijado.
+- Del prototipo anterior: sombras (shadow mapping 2048², PCF), fuego volumétrico por
+  raymarching (la magia Fuego y los enemigos ardiendo), luces puntuales, niebla y ACES.
 
 ## Hardware objetivo y decisiones
 
@@ -134,10 +117,13 @@ Máquina de desarrollo: i7-7500U (2C/4T), 12 GB RAM, Intel HD 620 (Mesa) + GeFor
   cambiar a GLFW/SDL (p. ej. para Windows) es reescribir un único fichero.
 - **Simulación a paso fijo de 60 Hz** desacoplada del render, **vsync** activado (o un
   limitador a 60 fps si no hay vsync) para no quemar CPU/GPU en un portátil.
-- **Un único VBO dinámico** con *orphaning* y 2 draw calls por frame para toda la escena.
+- **Un único VBO dinámico** con *orphaning* y pocos draw calls por frame para toda la escena.
+- **Sin motor de físicas externo**: los personajes son cuerpos verticales contra cajas
+  (AABB), que es todo lo que necesita este tipo de combate. Jolt Physics (ragdolls) se
+  quitó al cambiar de género: los enemigos se desvanecen en luz al morir.
 
-Coste medido en Release: <0,1 ms de CPU por frame, ~120 cajas; la GPU usa ~27 % del
-presupuesto de 60 fps.
+Coste medido en Release (HD 620, 1280×720): ~0,5 ms de CPU por frame con ~600 instancias;
+sin vsync, ~90 fps con shaders y ~365 fps en modo debug.
 
 ## Estructura
 
@@ -146,25 +132,24 @@ src/
   platform.h / platform_x11.cpp  Ventana, contexto GL 3.3, teclado/ratón, reloj
   gl.h                           Cabeceras GL (sin loader: glvnd exporta todo en Linux)
   vmath.h                        Vec3/Mat4, perspectiva, lookAt (column-major, Y arriba)
-  debug_draw.h/.cpp              Lote de líneas/puntos + shader mínimo pass-through
-  skeleton.h/.cpp                19 articulaciones, jerarquía y cinemática directa
+  debug_draw.h/.cpp              Lote de líneas/triángulos/puntos + shader mínimo
+  skeleton.h/.cpp                Esqueletos genéricos (jerarquía y cinemática directa)
   physics.h/.cpp                 Cajas AABB, cuerpos con gravedad, rayos (segmento vs caja)
-  physics_jolt.h/.cpp            Jolt Physics tras una interfaz propia: ragdolls, cajas, rayos
-  character.h/.cpp               Movimiento, salto, animación procedural y keyframes de acciones
-  game.h/.cpp                    Nivel, enemigos, combate, proyectiles, partículas
-  game_draw.cpp                  Dibujado del mundo 3D (cuerpos de elipsoides), armas, HUD
-  text.h/.cpp                    Fuente vectorial mínima (A-Z, 0-9) para HUD y menús
+  character.h/.cpp               Protagonista: carrera, salto, combos, esquiva, guardia
+  enemy.h/.cpp                   Especies de enemigos: esqueletos, formas, animación
+  items.h/.cpp                   Objetos, armas e inventario
+  game.h/.cpp                    Escenario, oleadas, IA, combate, magias, botín, cofres
+  game_draw.cpp                  Dibujado del mundo, efectos y HUD (y su versión debug)
+  inventory_menu.h/.cpp          Menú de inventario
+  text.h/.cpp                    Fuente vectorial mínima para HUD y menús
   menu.h/.cpp                    Menú de pausa
-  renderer.h/.cpp                Render con shaders: instancing, sombras, cielo, niebla,
-                                 fuego volumétrico, humo, silueta por stencil
-  main.cpp                       Bucle principal, cámara orbital, entrada
-third_party/
-  JoltPhysics/                   Submódulo: Jolt Physics 5.6.0 (licencia MIT)
+  renderer.h/.cpp                Render con shaders: instancing, sombras, cielo, materiales
+  main.cpp                       Bucle principal, cámara, entrada
 tests/
-  logic_test.cpp                 Tests de la lógica sin ventana (combate, físicas, armas...)
+  logic_test.cpp                 Tests de la lógica sin ventana (combate, IA, botín...)
 ```
 
-### Cómo funciona el esqueleto
+### Cómo funcionan los esqueletos
 
 Cada articulación tiene un padre, un offset fijo respecto a él (pose de reposo) y una
 rotación local que pone la animación. La matriz mundo se calcula recorriendo el array en
@@ -174,14 +159,13 @@ orden (los padres siempre van antes que los hijos):
 world[i] = world[padre] * T(offset) * Ry * Rx * Rz
 ```
 
-Cada hueso arrastra una caja (muslo, antebrazo...) con *skinning rígido*: cada vértice
-pertenece a un solo hueso. Es lo que hacían muchos juegos de PS2/PC de la época de Vice
-City para personajes secundarios. El siguiente paso es el *skinning suavizado* (cada
-vértice con varios huesos y pesos), que se hace en el vertex shader.
+El protagonista usa un esqueleto humanoide de 19 articulaciones; cada enemigo tiene el
+suyo (orejas y cola del duende, sombrero de la seta, alas de la polilla). Las formas del
+cuerpo son elipsoides pegados a una articulación (*skinning rígido*).
 
 ## Próximos pasos sugeridos
 
-1. Colisión de la cámara con el escenario (ahora puede atravesar plataformas).
-2. IA de enemigos que se muevan: patrullar, perseguir, cubrirse con el escudo.
-3. Malla real del personaje cargada desde fichero (glTF) con skinning por pesos en GPU.
-4. Clips de animación con keyframes e interpolación (cuaterniones + slerp) y blending.
+1. Más habilidades estilo género: planear, doble salto, contraataque tras guardia.
+2. Tienda / síntesis con los materiales que sueltan los enemigos.
+3. Un jefe con varias fases al final de las oleadas.
+4. Sonido (golpes, recoger botín, música) y vibración de cámara más elaborada.

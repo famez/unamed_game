@@ -31,9 +31,9 @@ const JointDef kSkeleton[JointCount] = {
 };
 // clang-format on
 
-void computeWorldMatrices(const Pose& pose, const Mat4& model, Mat4 out[JointCount]) {
-    for (int i = 0; i < JointCount; ++i) {
-        const JointDef& j = kSkeleton[i];
+void computeWorldMatrices(const JointDef* rig, int count, const Pose& pose, const Mat4& model, Mat4* out) {
+    for (int i = 0; i < count; ++i) {
+        const JointDef& j = rig[i];
         const Vec3& r = pose.rotation[i];
         Vec3 offset = j.parent < 0 ? j.offset + pose.rootOffset : j.offset;
         Mat4 local = translate(offset) * rotateY(r.y) * rotateX(r.x) * rotateZ(r.z);

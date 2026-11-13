@@ -1,32 +1,27 @@
 #pragma once
 
-// Estado y reglas del juego: nivel, jugador, enemigos, proyectiles y partículas.
-// game.cpp contiene la lógica; game_draw.cpp el dibujado (mundo 3D y HUD).
+// Estado y reglas del juego: escenario, protagonista, enemigos por oleadas, combate,
+// magias, botín, cofres e inventario. game.cpp contiene la lógica; game_draw.cpp el
+// dibujado (mundo 3D, efectos y HUD).
 
 #include "character.h"
 #include "debug_draw.h"
+#include "enemy.h"
+#include "items.h"
 #include "physics.h"
-#include "physics_jolt.h"
 #include "renderer.h"
 #include "skeleton.h"
 #include "vmath.h"
 
-#include <algorithm>
 #include <cstdint>
+#include <string>
 #include <vector>
 
-// Geometría de los objetos, en espacio local de la muñeca derecha (la mano apunta a -Y).
-constexpr Vec3 kPistolMuzzle{0, -0.22f, 0.035f};
-constexpr Vec3 kShotgunMuzzle{0, -0.66f, 0.045f};
-constexpr Vec3 kRockInHand{0, -0.09f, 0.02f};
-// Escudo de los enemigos, en espacio local del pecho.
-constexpr Vec3 kShieldCenter{0.06f, 0.06f, 0.30f};
-constexpr Vec3 kShieldHalf{0.26f, 0.34f, 0.025f};
-
-constexpr int kMaxRocks = 20;
-constexpr int kMaxMolotovs = 10;
-constexpr int kMaxShells = 32;
-constexpr int kMaxGrenades = 8;
+// Hoja del arma en espacio local de la muñeca derecha: sale perpendicular al antebrazo
+// (+Z local), desde la empuñadura hasta la punta (la longitud la da el arma).
+constexpr Vec3 kGripLocal{0, -0.08f, 0};
+constexpr Vec3 kBladeBase{0, -0.08f, 0.10f};
+constexpr float kTrailLife = 0.16f;  // segundos que dura la estela del arma
 
 struct DrawFlags {
     bool bones = true;
@@ -35,188 +30,244 @@ struct DrawFlags {
     bool grid = true;
 };
 
-// Órdenes del jugador para un paso de simulación. Los flancos (saltar, usar...) valen
+// Órdenes del jugador para un paso de simulación. Los flancos (saltar, atacar...) valen
 // true en un único paso.
 struct Controls {
-    Vec3 move;  // dirección deseada en el mundo (XZ), longitud 0..1
-    bool run = false;
+    Vec3 move;               // dirección deseada en el mundo (XZ), longitud 0..1
     bool jump = false;
-    bool use = false;        // usar el objeto seleccionado
-    bool throwRock = false;  // lanzar piedra sin cambiar de objeto
-    int selectSlot = -1;     // -1 = sin cambio
-    float aimYaw = 0;        // hacia dónde mira la cámara
-    float aimPitch = 0;      // inclinación de la cámara (positivo = mirando hacia abajo)
-    bool aim = false;        // botón derecho mantenido
-    Vec3 aimOrigin;          // rayo de la mira: posición de la cámara...
-    Vec3 aimDir{0, 0, 1};    // ...y dirección por el centro de la pantalla
+    bool attack = false;
+    bool dodge = false;
+    bool guard = false;      // mantenido
+    bool interact = false;   // abrir cofres
+    bool lockOn = false;     // fijar objetivo / pasar al siguiente
+    bool unlock = false;     // soltar el objetivo
+    int command = -1;        // 0..5: ejecutar directamente esa entrada del menú de comandos
+    bool runCommand = false; // ejecutar la entrada seleccionada
+    int commandScroll = 0;   // mover la selección del menú de comandos
+    Vec3 camForward{0, 0, 1};  // hacia dónde mira la cámara (para elegir objetivo)
 };
 
-struct Enemy {
-    Body body;
-    float yaw = 0;
-    Vec3 spawn;
-    float spawnYaw = 0;
-    float health = 100, maxHealth = 100;
-    float hitTimer = 0;    // tambaleo tras un impacto
-    float blockTimer = 0;  // destello del escudo
-    bool hitFromFront = false;
-    float deadTimer = -1;  // >= 0: muerto (segundos desde la muerte)
-    float burnTimer = 0;   // > 0: está ardiendo
-    int ragdoll = -1;      // muerto: ragdoll de Jolt que mueve su esqueleto
-    int proxy = -1;        // vivo: cápsula cinemática que empuja cajas y cadáveres
-    float attackTime = -1; // >= 0: atacando con la porra (segundos desde que empezó)
-    float attackCooldown = 0;
-    float breathOffset = 0;
-    Pose pose;
-    Mat4 joints[JointCount] = {};
-
-    bool alive() const { return deadTimer < 0; }
-    Vec3 forward() const { return {std::sin(yaw), 0, std::cos(yaw)}; }
-    AABB hitBox() const { return body.bounds(); }
-    Mat4 modelMatrix() const;
+// Datos de la cámara para dibujar: billboards, proyección de etiquetas al HUD.
+struct ViewInfo {
+    Mat4 viewProj = Mat4::identity();
+    Vec3 eye, right{1, 0, 0}, up{0, 1, 0};
+    int width = 1, height = 1;
 };
 
-enum class ProjectileKind { Bullet, Rock, Molotov, Pellet, Grenade };
+enum class Spell { Fire, Ice, Cure, Count };
+
+struct SpellDef {
+    const char* name;
+    float cost;  // PM
+    uint32_t color;
+};
+const SpellDef& spellDef(Spell s);
+
+enum class ProjectileKind { Fire, Ice, EnemyOrb };
 
 struct Projectile {
     ProjectileKind kind;
     Vec3 pos, vel;
-    float life = 0;       // balas: segundos que les quedan; granada: mecha
-    bool armed = true;    // hace daño (las piedras dejan de hacerlo al frenarse)
-    bool resting = false; // piedra parada en el suelo: se puede recoger
+    float life = 0;       // segundos que le quedan
+    int target = -1;      // enemigo al que persigue (magias), -1 = ninguno
+    bool reflected = false;  // orbe enemigo devuelto de un golpe: ahora daña a los enemigos
     bool dead = false;
-    float spin = 0;       // giro del cóctel en vuelo
+    float seed = 0;
+};
+
+enum class PickupKind { Hp, Mp, Munny, Item };
+
+// Botín: salta del enemigo, rebota y, al acercarse el jugador, vuela hacia él.
+struct Pickup {
+    PickupKind kind;
+    ItemId item = ItemId::Potion;
+    int value = 0;
+    Vec3 pos, vel;
+    float age = 0, seed = 0;
+    bool resting = false;
+    bool dead = false;
 };
 
 struct Particle {
     Vec3 pos, vel;
-    float life;
+    float life, maxLife;
+    float size;
     uint32_t color;
-    float gravity = 1.0f;  // negativo = asciende (ascuas)
+    float gravity = 0;  // m/s² hacia abajo (negativo = asciende)
+    bool star = false;  // destello de 4 puntas (si no, punto suave)
 };
 
-// Charco de fuego de un cóctel molotov. Las "lenguas" son puntos con suelo debajo de donde
-// salen humo y ascuas (y lo que se ve en modo debug). Si arde sobre una plataforma,
-// `supportMin/Max` es su cara superior: el volumen de fuego se recorta a ella.
-struct FireTongue {
+struct Ring {  // onda expansiva en el suelo
     Vec3 pos;
-    float dist;  // distancia al centro: el fuego se extiende de dentro afuera
-    float seed, size;
+    float age, life, radius;
+    uint32_t color;
 };
 
-struct Fire {
+struct Blast {  // bola de fuego de la magia Fuego
     Vec3 pos;
-    float maxRadius = 2.6f;
-    float age = 0, duration = 7.0f;
-    float seed = 0;
-    bool onPlatform = false;
-    Vec3 supportMin, supportMax;
-    std::vector<FireTongue> tongues;
-
-    float radius() const { return maxRadius * smoothstep01(age / 0.35f); }
-    // 0..1: aparece en 0,15 s y se apaga durante los últimos 1,5 s.
-    float strength() const { return std::min(1.0f, age / 0.15f) * clampf((duration - age) / 1.5f, 0, 1); }
+    float age, radius, seed;
 };
 
-struct SmokePuff {
-    Vec3 pos, vel;
-    float age, life, seed;
+struct Notice {  // "OBTENIDO: POCION" a la derecha de la pantalla
+    std::string text;
+    uint32_t color;
+    float age = 0;
 };
 
-struct Blast {  // bola de fuego de la explosión
+struct TreasureChest {
     Vec3 pos;
-    float age, seed;
+    float yaw = 0;
+    std::vector<std::pair<ItemId, int>> contents;
+    int munny = 0;
+    bool open = false;
+    float openTime = 0;
 };
 
-struct ScorchMark {  // suelo chamuscado
-    Vec3 pos;
-    float radius, age;
+struct Crate {  // caja rompible: suelta dinero y orbes
+    AABB box;
+    float hp = 2;
+    bool broken = false;
+    float hitFlash = 0;
 };
 
-const char* itemName(Item item);
+struct TrailSample {  // estela del arma: base y punta de la hoja en un instante
+    Vec3 base, tip;
+    float age;
+};
+
+// Bloque sólido del escenario con su aspecto.
+struct Block {
+    AABB box;
+    uint32_t color;
+    Material material;
+};
+
+// Decoración sin colisión (copas de árboles, flores, tejados...): se calcula una vez.
+struct Decor {
+    Mat4 transform;
+    Vec3 center, half;
+    uint32_t color;
+    Material material;
+    bool sphere;
+};
 
 class Game {
 public:
+    static constexpr int kCommandCount = 3 + Inventory::kQuickSlots;  // magias + atajos de objetos
+
     void init();
     void update(float dt, const Controls& c);
-    void resetHero();
 
-    // Con `solid` (render con shaders) las cajas van ahí y `dd` recibe solo los efectos
-    // (balas, láser, chispas, barras de vida). Con nullptr, todo en alambre (modo debug).
-    void draw(DebugDraw& dd, Renderer* solid, const DrawFlags& flags, Vec3 cameraRight) const;
-    void drawHud(DebugDraw& hud, int width, int height) const;
+    // Con `solid` (render con shaders) los cuerpos van ahí, `glow` recibe los efectos
+    // aditivos (estelas, destellos, halos) y `lines` lo poco que se dibuja con líneas. Con
+    // nullptr, todo en alambre (modo debug: esqueletos, cajas, sin casi trabajo de GPU).
+    void draw(DebugDraw& lines, DebugDraw& glow, Renderer* solid, const DrawFlags& flags, const ViewInfo& view) const;
+    void drawHud(DebugDraw& hud, const ViewInfo& view, bool debug) const;
 
     const Character& hero() const { return hero_; }
-    int rocks() const { return rocks_; }
-    int molotovs() const { return molotovs_; }
-    // Munición de un objeto (-1 si no gasta).
-    int ammo(Item item) const;
+    float hp() const { return hp_; }
+    float maxHp() const { return maxHp_; }
+    float mp() const { return mp_; }
+    float maxMp() const { return maxMp_; }
+    Inventory& inventory() { return inv_; }
+    const Inventory& inventory() const { return inv_; }
+    // Usar un consumible (desde el inventario o un atajo). Falso si no hay o no hace falta.
+    bool useItem(ItemId id);
+    bool equip(ItemId id);
     float time() const { return time_; }
+    int wave() const { return wave_; }
     int kills() const { return kills_; }
-    float heroHealth() const { return heroHealth_; }
+    size_t enemyCount() const { return enemies_.size(); }
+    size_t pickupCount() const { return pickups_.size(); }
+    // Posición del objetivo fijado (para la cámara). Falso si no hay.
+    bool lockTarget(Vec3& pos) const;
+    float cameraShake() const { return shake_; }
+    // Fracción [0,1] del segmento from→to libre de escenario (para que la cámara no
+    // atraviese las casas).
+    float cameraClear(Vec3 from, Vec3 to) const;
 
 private:
-    void addEnemy(Vec3 pos, float yaw);
-    void drawFire(DebugDraw& dd, Renderer* solid) const;
-    void useItem(Item item, float aimYaw, float aimPitch);
-    void resolveImpact(Action a);
-    void meleeHit(float range, float cosHalfArc, float damage, float knock, float lift);
-    void hitEnemy(Enemy& e, Vec3 dir, Vec3 point, float damage, float knock, float lift);
+    void buildLevel();
+    void rebuildSolids();
+    void applyWeapon();
+    int nearbyChest() const;
+    void spawnWave();
+    void cycleLock(Vec3 camForward);
+    int pickTarget(Vec3 dir, float range) const;
+    void heroAttack(Vec3 moveInput);
+    void runCommand(int index);
+    bool castSpell(Spell s);
+    void resolveImpact(Move m);
+    void hitEnemy(Enemy& e, Vec3 dir, float damage, float knock, float lift, bool heavy);
+    void killEnemy(Enemy& e);
+    void hurtHero(Vec3 dir, float damage, float knock, Enemy* source);
     void updateEnemy(Enemy& e, float dt);
+    void enemyStartAttack(Enemy& e);
     void updateProjectiles(float dt);
-    void updateParticles(float dt);
-    void updateFires(float dt);
-    void igniteAt(Vec3 point, Vec3 normal);
-    void explodeGrenade(Vec3 point);
-    int* ammoRef(Item item);
-    void damageEnemy(Enemy& e, float damage);
-    // Golpe de un enemigo al jugador: `dir` es hacia donde empuja. Lo esquiva rodando y lo
-    // para casi del todo bloqueando de frente con la espada.
-    void hurtHero(Vec3 dir, float damage, float knock);
-    Item handItem() const;  // lo que se ve en la mano (Count = nada)
-    void updateAimPoint(Vec3 origin, Vec3 dir);
-    // Lanzamiento apuntado: de dónde sale, con qué velocidad y por dónde irá.
-    Vec3 throwOrigin() const;
-    Vec3 aimedThrowVelocity(Vec3 aimDir) const;
-    void predictThrowArc(Vec3 origin, Vec3 vel);
-    void spawnSparks(Vec3 pos, Vec3 dir, int count, uint32_t color, float speed);
+    void explodeFire(Vec3 point);
+    void updatePickups(float dt);
+    void collect(Pickup& p);
+    void dropLoot(Vec3 pos, int munny, int hpOrbs, int mpOrbs, ItemId item, bool withItem);
+    void updateEffects(float dt);
+    void tryOpenChest();
+    void breakCrate(Crate& c);
+    void notify(const std::string& text, uint32_t color);
+    void heal(float hp, float mp);
+    void castImpact(Spell s);
+    void spawnSparks(Vec3 pos, Vec3 dir, int count, uint32_t color, float speed, bool stars = true);
+    void spawnRing(Vec3 pos, float radius, float life, uint32_t color);
+    float groundHeight(Vec3 p) const;
+    Vec3 bladeTip() const;
     float random01();
+    float randRange(float a, float b) { return a + (b - a) * random01(); }
 
-    void killHero(Vec3 velocity);
+    void defeatHero();
     void respawnHero();
 
+    // Dibujado (game_draw.cpp).
+    void drawLevel(DebugDraw& lines, Renderer* solid, const DrawFlags& f) const;
+    void drawHero(DebugDraw& lines, Renderer* solid, const DrawFlags& f) const;
+    void drawEnemies(DebugDraw& lines, DebugDraw& glow, Renderer* solid, const DrawFlags& f,
+                     const ViewInfo& view) const;
+    void drawEffects(DebugDraw& lines, DebugDraw& glow, Renderer* solid, const ViewInfo& view) const;
+
     World world_;
-    RigidWorld rigid_;     // Jolt: ragdolls, cajas y cápsulas de los personajes
-    int heroProxy_ = -1;
-    int heroRagdoll_ = -1;    Character hero_;
+    std::vector<Block> blocks_;  // escenario fijo (world_ = esto + cajas + cofres)
+    std::vector<Decor> decor_;
+    std::vector<Vec3> lamps_;
+    std::vector<Vec3> spawnPoints_;
+    Vec3 heroStart_;
+    Character hero_;
+    Inventory inv_;
+    float hp_ = 100, maxHp_ = 100;
+    float mp_ = 50, maxMp_ = 50;
+    float hpGhost_ = 100;     // barra roja que va detrás al perder vida
+    float heroInvuln_ = 0;    // tras un golpe, un momento sin recibir otro
+    float heroFlash_ = 0;
+    float guardFlash_ = 0;    // destello de bloqueo (perfecto = más fuerte)
+    bool perfectGuard_ = false;
+    Spell pendingSpell_ = Spell::Fire;  // la que sale al llegar el impacto del Cast
+    int commandSel_ = 0;
+    int lock_ = -1;           // enemigo fijado
     std::vector<Enemy> enemies_;
     std::vector<Projectile> projectiles_;
+    std::vector<Pickup> pickups_;
     std::vector<Particle> particles_;
-    int rocks_ = 10;
-    int molotovs_ = 5;
-    int shells_ = 16;
-    int grenades_ = 4;
-    Item throwItem_ = Item::Rocks;  // qué se está lanzando (piedra o cóctel)
-    std::vector<Fire> fires_;
-    std::vector<SmokePuff> smoke_;
+    std::vector<Ring> rings_;
     std::vector<Blast> blasts_;
-    std::vector<ScorchMark> scorches_;
+    std::vector<Notice> notices_;
+    std::vector<TreasureChest> chests_;
+    std::vector<Crate> crates_;
+    std::vector<TrailSample> trail_;
+    int wave_ = 0;
+    float waveTimer_ = 2.0f;  // hasta la siguiente oleada
+    float waveBanner_ = 0;    // cartel "OLEADA N"
     int kills_ = 0;
-    float blockFactor_ = 0.2f;  // daño que pasa por el escudo en el golpe en curso
-    float heroHealth_ = 100;
-    float heroHitTimer_ = 0;      // destello y tambaleo al recibir un golpe
-    float heroBlockTimer_ = 0;    // destello de la espada al parar un golpe
-    float heroDeadTimer_ = -1;    // >= 0: derribado, reaparece al rato
-    float throwUp_ = 0;  // velocidad vertical del lanzamiento en curso (según la cámara)
-    Vec3 aimPoint_;            // dónde impactaría una bala disparada con la mira
-    bool aimOnEnemy_ = false;  // la mira está sobre un enemigo
-    int aimEnemy_ = -1;        // índice del enemigo bajo la mira (para resaltarlo)
-    bool throwAiming_ = false;       // botón derecho con piedras o molotov
-    bool aimedThrow_ = false;        // el lanzamiento en curso se apuntó
-    Vec3 throwVel_;                  // velocidad del lanzamiento apuntado
-    std::vector<Vec3> throwArc_;     // trayectoria prevista (para dibujarla)
-    bool throwArcHits_ = false;      // la trayectoria acaba en algo (no se pierde)
-    bool throwArcOnEnemy_ = false;
+    float hitStop_ = 0;       // congelación breve al golpear (da peso a los golpes)
+    float shake_ = 0;         // temblor de cámara
+    // Último golpe (para dibujarlo en modo debug): sector delante del jugador.
+    Vec3 lastHitOrigin_, lastHitDir_;
+    float lastHitRange_ = 0, lastHitCos_ = 1, lastHitAge_ = 10;
     float time_ = 0;
     uint32_t rng_ = 12345;
 };

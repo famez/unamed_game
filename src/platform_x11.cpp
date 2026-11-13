@@ -65,6 +65,9 @@ bool mapKey(KeySym ks, Key& out) {
         case XK_grave: out = Key::DebugView; return true;
         case XK_p: out = Key::P; return true;
         case XK_r: out = Key::R; return true;
+        case XK_i: out = Key::I; return true;
+        case XK_x: out = Key::X; return true;
+        case XK_Tab: out = Key::Tab; return true;
         case XK_1: out = Key::N1; return true;
         case XK_2: out = Key::N2; return true;
         case XK_3: out = Key::N3; return true;
@@ -260,6 +263,7 @@ bool pumpEvents(Input& in) {
     std::memset(in.pressed, 0, sizeof(in.pressed));
     in.mouseDX = in.mouseDY = in.wheel = 0;
     in.mouseLeftPressed = false;
+    in.mouseMiddlePressed = false;
 
     while (XPending(g.dpy)) {
         XEvent ev;
@@ -290,6 +294,10 @@ bool pumpEvents(Input& in) {
                     case Button1:
                         if (isDown && !in.mouseLeft) in.mouseLeftPressed = true;
                         in.mouseLeft = isDown;
+                        break;
+                    case Button2:
+                        if (isDown && !in.mouseMiddle) in.mouseMiddlePressed = true;
+                        in.mouseMiddle = isDown;
                         break;
                     case Button3: in.mouseRight = isDown; break;
                     case Button4: if (isDown) in.wheel += 1; break;

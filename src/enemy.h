@@ -1,0 +1,78 @@
+#pragma once
+
+// Enemigos: cada especie tiene su propio esqueleto (rig), sus formas de cuerpo (elipsoides
+// pegados a las articulaciones), sus estadísticas y su animación procedural. La IA (qué
+// decide hacer en cada estado) está en game.cpp, porque necesita al jugador y al mundo.
+
+#include "physics.h"
+#include "skeleton.h"
+#include "vmath.h"
+
+#include <cstdint>
+
+enum class EnemyKind { Imp, Shroom, Moth, Count };
+
+// Ciclo de combate: aparece, persigue, avisa (preparación), ataca y se recupera. Un golpe
+// le hace tambalearse (interrumpe la preparación).
+enum class AiState { Spawning, Idle, Chase, Windup, Attack, Recover, Stagger, Dying };
+
+const char* aiStateName(AiState s);
+
+// Trozo de cuerpo: elipsoide en el espacio de una articulación.
+struct EnemyShape {
+    int joint;
+    Vec3 center, radii;
+    uint32_t color;
+    bool glow;  // emisivo (ojos, puntas brillantes)
+};
+
+struct EnemyDef {
+    const char* name;
+    const JointDef* rig;
+    int jointCount;
+    const EnemyShape* shapes;
+    int shapeCount;
+    float maxHealth;
+    float speed;          // m/s persiguiendo
+    float radius, height; // cuerpo para colisiones
+    float aggroRange;     // a esta distancia empieza a perseguir
+    float attackRange;    // a esta distancia empieza a preparar el ataque
+    float windup, attackTime, recover, cooldown;  // segundos
+    float damage, knock;
+    bool flying;
+    float hoverHeight;    // voladores: altura del cuerpo sobre el suelo
+    int munnyMin, munnyMax;
+};
+
+const EnemyDef& enemyDef(EnemyKind k);
+
+struct Enemy {
+    EnemyKind kind = EnemyKind::Imp;
+    Body body;
+    float yaw = 0;
+    float health = 1;
+    AiState state = AiState::Spawning;
+    float stateTime = 0;
+    float hitFlash = 0;   // destello blanco al recibir un golpe
+    float cooldown = 0;   // hasta poder volver a atacar
+    float freeze = 0;     // > 0: congelado (Hielo): todo a menos velocidad
+    float burn = 0;       // > 0: ardiendo (Fuego): daño continuo
+    float seed = 0;       // desfase de animación y de la deambulación
+    float phase = 0;      // ciclo de pasos / aleteo
+    bool attackHit = false;  // el ataque en curso ya ha golpeado
+    Vec3 knock;           // empujón recibido, se frena solo
+    Pose pose;
+    Mat4 joints[kMaxJoints] = {};
+
+    const EnemyDef& def() const { return enemyDef(kind); }
+    bool alive() const { return state != AiState::Dying; }
+    bool targetable() const { return state != AiState::Dying && state != AiState::Spawning; }
+    Vec3 forward() const { return {std::sin(yaw), 0, std::cos(yaw)}; }
+    // Centro del cuerpo (donde se apunta y se comprueban los golpes).
+    Vec3 center() const;
+    Mat4 modelMatrix() const;
+};
+
+Enemy makeEnemy(EnemyKind kind, Vec3 pos, float yaw, float seed);
+// Pose según el estado y el tiempo; calcula también las matrices de las articulaciones.
+void animateEnemy(Enemy& e, float time);

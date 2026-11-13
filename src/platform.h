@@ -11,7 +11,7 @@ enum class Key {
     N1, N2, N3, N4, N5, N6, N7, N8,
     F1, F2, F3, F4,
     DebugView,  // F12 o la tecla º (a la izquierda del 1 en teclado español)
-    F, G, P, R,
+    F, G, P, R, I, X, Tab,
     Count
 };
 
@@ -20,8 +20,9 @@ struct Input {
     bool pressed[(int)Key::Count] = {};  // flanco de bajada en este frame
     float mouseDX = 0, mouseDY = 0;      // píxeles movidos en este frame
     float wheel = 0;                     // +1 arriba / -1 abajo
-    bool mouseLeft = false, mouseRight = false;
+    bool mouseLeft = false, mouseRight = false, mouseMiddle = false;
     bool mouseLeftPressed = false;       // clic izquierdo en este frame
+    bool mouseMiddlePressed = false;     // clic central en este frame
     float mouseX = 0, mouseY = 0;        // posición del cursor en la ventana (píxeles)
 
     bool isDown(Key k) const { return down[(int)k]; }

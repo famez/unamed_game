@@ -13,12 +13,13 @@ const Vec3 kSunDir = normalize(Vec3{0.45f, 0.8f, 0.35f});  // hacia el sol
 
 // Constantes y funciones comunes a los shaders de color (en espacio lineal).
 const char* kCommonGlsl = R"(
-const vec3 kSunColor = vec3(1.0, 0.93, 0.82) * 2.0;
-const vec3 kFillColor = vec3(0.55, 0.62, 0.75) * 0.35;  // relleno frío opuesto al sol
-const vec3 kZenith   = vec3(0.12, 0.26, 0.58);
-const vec3 kHorizon  = vec3(0.58, 0.67, 0.78);
-const vec3 kBounce   = vec3(0.22, 0.19, 0.15);
-const float kFogDensity = 0.011;
+// Paleta luminosa y saturada, de tarde soleada.
+const vec3 kSunColor = vec3(1.0, 0.92, 0.78) * 1.8;
+const vec3 kFillColor = vec3(0.55, 0.65, 0.95) * 0.45;  // relleno frío opuesto al sol
+const vec3 kZenith   = vec3(0.10, 0.32, 0.85);
+const vec3 kHorizon  = vec3(0.62, 0.80, 0.98);
+const vec3 kBounce   = vec3(0.30, 0.26, 0.18);
+const float kFogDensity = 0.008;
 
 vec3 toLinear(vec3 c) { return pow(c, vec3(2.2)); }
 
@@ -92,6 +93,7 @@ uniform int uScorchCount;
 uniform vec4 uScorch[8];      // xyz, radio
 uniform float uScorchAmount[8];
 uniform vec4 uOutlineColor;  // a > 0: pasada de silueta (color plano, sin iluminación)
+uniform float uTime;
 out vec4 fragColor;
 
 float shadowFactor(float ndl) {
@@ -122,17 +124,44 @@ void main() {
     vec3 n = normalize(vNormal);
     vec3 base = toLinear(vColor.rgb);
 
-    if (material == 3) {  // suelo: losas de 10 m alternas + líneas cada 1 m y 10 m
-        vec2 w = vWorldPos.xz;
-        float checker = mod(floor(w.x / 10.0) + floor(w.y / 10.0), 2.0);
-        base *= mix(0.9, 1.06, checker);
-        base *= 1.0 - 0.25 * gridLine(w);
-        base *= 1.0 - 0.45 * gridLine(w / 10.0);
+    if (material == 3) {  // plaza: adoquines de 0,8 m en hileras desplazadas, cada uno de un tono
+        vec2 w = vWorldPos.xz / 0.8;
+        w.x += 0.5 * mod(floor(w.y), 2.0);
+        vec2 cell = floor(w), f = fract(w);
+        float tone = hash(cell);
+        base *= mix(0.86, 1.08, tone);
+        vec2 e = min(f, 1.0 - f) / fwidth(w);  // junta antialiasada
+        base *= mix(0.72, 1.0, clamp(min(e.x, e.y) * 0.5, 0.0, 1.0));
+        // Rosetón de piedra más clara alrededor de la fuente.
+        float r = length(vWorldPos.xz);
+        base *= 1.0 + 0.12 * (1.0 - smoothstep(3.6, 3.8, r)) * step(2.4, r);
+    } else if (material == 5) {  // césped: manchas de ruido en dos tonos
+        // Dos lecturas de ruido (no fbm): el césped ocupa media pantalla y es barato así.
+        float n = 0.65 * noise(vWorldPos.xz * 0.35) + 0.35 * noise(vWorldPos.xz * 1.3);
+        base *= mix(0.8, 1.15, n);
+        base = mix(base, base * vec3(1.15, 1.1, 0.7), smoothstep(0.6, 0.8, noise(vWorldPos.xz * 0.5 + 7.0)));
+    }
+    if (material == 4) {  // emisivo: el color es luz propia, sin sombras
+        vec3 Ve = normalize(uCameraPos - vWorldPos);
+        float rimE = pow(1.0 - max(dot(n, Ve), 0.0), 2.0);
+        vec3 glow = base * (1.6 + 0.8 * rimE) + vec3(0.25) * rimE;
+        glow = mix(glow, vec3(2.0), vParams.y);
+        float distE = length(uCameraPos - vWorldPos);
+        glow = mix(glow, kHorizon, 1.0 - exp(-pow(distE * kFogDensity, 2.0)));
+        fragColor = vec4(finish(glow), 1.0);
+        return;
+    }
+    if (material == 6) {  // agua: ondas que se mueven y reflejo del cielo según el ángulo
+        vec2 q = vWorldPos.xz * 3.0;
+        float t = uTime * 1.5;
+        vec3 wn = normalize(vec3(sin(q.x + t) * 0.15 + sin(q.y * 1.3 - t * 0.8) * 0.1, 1.0,
+                                 cos(q.y + t * 1.1) * 0.15 + cos(q.x * 0.7 + t) * 0.1));
+        n = wn;
     }
 
     // Chamuscado: oscurece suelo y plataformas (caras de arriba) bajo los fuegos, con
     // borde irregular gracias al ruido.
-    if ((material == 1 || material == 3) && n.y > 0.5) {
+    if ((material == 1 || material == 3 || material == 5) && n.y > 0.5) {
         for (int i = 0; i < uScorchCount; ++i) {
             if (abs(vWorldPos.y - uScorch[i].y) > 0.4) continue;
             float d = length(vWorldPos.xz - uScorch[i].xz) + (fbm(vWorldPos.xz * 2.0) - 0.5) * 1.2;
@@ -144,7 +173,7 @@ void main() {
     // Bisel: oscurece cerca de las aristas. En una cara, una de las tres distancias al
     // borde es ~0 (la del eje de la cara); la arista más cercana es la mediana.
     float edge = 1.0;
-    if (material != 3 && vParams.z < 0.5) {  // los elipsoides no tienen aristas
+    if (material != 3 && material != 5 && material != 6 && vParams.z < 0.5) {  // los elipsoides no tienen aristas
         vec3 d = (0.5 - abs(vLocal)) * vSize;
         float mid = d.x + d.y + d.z - min(d.x, min(d.y, d.z)) - max(d.x, max(d.y, d.z));
         float width = material == 1 ? 0.06 : 0.012;
@@ -154,16 +183,21 @@ void main() {
     vec3 V = normalize(uCameraPos - vWorldPos);
     float ndl = max(dot(n, uSunDir), 0.0);
     float shadow = shadowFactor(ndl);
+    // Sombreado de animación: la luz pasa a sombra en una franja estrecha (no a cel puro),
+    // y las sombras proyectadas son más suaves y algo azuladas.
+    if (material == 0) ndl = mix(ndl, smoothstep(0.05, 0.3, ndl), 0.7);
+    shadow = mix(0.25, 1.0, shadow);
 
     // Ambiente hemisférico (cielo arriba, rebote cálido del suelo abajo) + relleno suave
     // desde el lado contrario al sol, para que las caras en sombra no queden planas.
     vec3 skyAmbient = mix(kHorizon, kZenith, 0.35) * 1.3;
-    vec3 ambient = mix(kBounce * 1.6, skyAmbient, n.y * 0.5 + 0.5) * 0.75;
+    vec3 ambient = mix(kBounce * 1.6, skyAmbient, n.y * 0.5 + 0.5) * 0.62;
     vec3 fillDir = normalize(vec3(-uSunDir.x, 0.3, -uSunDir.z));
     ambient += kFillColor * max(dot(n, fillDir), 0.0);
     float specPower = material == 2 ? 80.0 : 20.0;
     // La tela de los cuerpos redondeados (normales suaves) brilla menos que la de las cajas.
-    float specAmount = material == 2 ? 1.2 : (material == 3 ? 0.04 : (vParams.z > 0.5 ? 0.05 : 0.15));
+    float specAmount = material == 2 ? 1.2 : (material == 6 ? 2.0 : (material == 3 || material == 5 ? 0.04 : (vParams.z > 0.5 ? 0.12 : 0.15)));
+    if (material == 6) specPower = 120.0;
     vec3 H = normalize(uSunDir + V);
     float spec = pow(max(dot(n, H), 0.0), specPower) * specAmount * step(0.0, dot(n, uSunDir));
 
@@ -179,7 +213,11 @@ void main() {
     }
     if (material == 0 || material == 2) {  // luz de contorno: separa la silueta del fondo
         float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0);
-        color += rim * kHorizon * 0.5;
+        color += rim * kHorizon * (vParams.z > 0.5 ? 0.8 : 0.5);
+    }
+    if (material == 6) {  // reflejo del cielo (Fresnel)
+        float fr = pow(1.0 - max(dot(n, V), 0.0), 4.0);
+        color = mix(color, mix(kHorizon, kZenith, 0.3) * 1.4, 0.3 + 0.6 * fr);
     }
     color *= edge;
     color = mix(color, vec3(1.6), vParams.y);  // destello de impacto
@@ -217,10 +255,17 @@ in vec2 vNdc;
 uniform vec3 uCamForward, uCamRight, uCamUp;
 uniform vec2 uTanHalf;  // tan(fov/2) * aspect, tan(fov/2)
 uniform vec3 uSunDir;
+uniform float uTime;
 out vec4 fragColor;
 void main() {
     vec3 dir = normalize(uCamForward + vNdc.x * uTanHalf.x * uCamRight + vNdc.y * uTanHalf.y * uCamUp);
     vec3 color = mix(kHorizon, kZenith, smoothstep(0.0, 0.5, dir.y));
+    // Nubes: ruido sobre un plano alto, más densas hacia el horizonte.
+    if (dir.y > 0.0) {
+        vec2 uv = dir.xz / (dir.y + 0.15) * 1.6;
+        float c = smoothstep(0.5, 0.75, fbm(uv + vec2(uTime * 0.01, 0.0)));
+        color = mix(color, vec3(1.0, 0.98, 0.96) * 1.25, c * smoothstep(0.0, 0.15, dir.y) * 0.9);
+    }
     float sun = max(dot(dir, uSunDir), 0.0);
     color += kSunColor * (pow(sun, 600.0) * 4.0 + pow(sun, 12.0) * 0.08);  // disco + halo
     fragColor = vec4(finish(color), 1.0);
@@ -519,13 +564,6 @@ struct CubeVertex {
     float p[3], n[3];
 };
 
-Mat4 scale(Vec3 s) {
-    Mat4 r = Mat4::identity();
-    r.m[0] = s.x;
-    r.m[5] = s.y;
-    r.m[10] = s.z;
-    return r;
-}
 
 }  // namespace
 
@@ -914,6 +952,7 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
     setVec3(skyProgram_, "uCamRight", cam.right);
     setVec3(skyProgram_, "uCamUp", cam.up);
     setVec3(skyProgram_, "uSunDir", kSunDir);
+    glUniform1f(glGetUniformLocation(skyProgram_, "uTime"), time);
     float t = std::tan(cam.fovY * 0.5f);
     glUniform2f(glGetUniformLocation(skyProgram_, "uTanHalf"), t * cam.aspect, t);
     glBindVertexArray(emptyVao_);
@@ -928,6 +967,7 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
     setMat4(meshProgram_, "uLightViewProj", lightViewProj);
     setVec3(meshProgram_, "uSunDir", kSunDir);
     setVec3(meshProgram_, "uCameraPos", cam.position);
+    glUniform1f(glGetUniformLocation(meshProgram_, "uTime"), time);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, shadowTex_);
     glUniform1i(glGetUniformLocation(meshProgram_, "uShadowMap"), 0);

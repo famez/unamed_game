@@ -30,10 +30,19 @@ struct JointDef {
 
 extern const JointDef kSkeleton[JointCount];
 
+// Otros esqueletos (los de los enemigos) usan la misma estructura con sus propias
+// articulaciones; ninguno pasa de kMaxJoints.
+constexpr int kMaxJoints = 20;
+
 struct Pose {
-    Vec3 rotation[JointCount];  // Euler locales (radianes): se aplica Y * X * Z
-    Vec3 rootOffset;            // desplazamiento extra de la pelvis (balanceo vertical)
+    Vec3 rotation[kMaxJoints];  // Euler locales (radianes): se aplica Y * X * Z
+    Vec3 rootOffset;            // desplazamiento extra de la raíz (balanceo vertical)
 };
 
-// Calcula la matriz mundo de cada joint. `model` coloca al personaje en el mundo.
-void computeWorldMatrices(const Pose& pose, const Mat4& model, Mat4 out[JointCount]);
+// Calcula la matriz mundo de cada joint de un esqueleto cualquiera. `model` lo coloca en
+// el mundo.
+void computeWorldMatrices(const JointDef* rig, int count, const Pose& pose, const Mat4& model, Mat4* out);
+// Esqueleto humanoide (el del protagonista).
+inline void computeWorldMatrices(const Pose& pose, const Mat4& model, Mat4 out[JointCount]) {
+    computeWorldMatrices(kSkeleton, JointCount, pose, model, out);
+}
