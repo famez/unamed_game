@@ -265,6 +265,7 @@ void Game::draw(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const DrawFlags
     drawHero(dd, solid, f, alpha);
     drawEnemies(dd, glow, solid, f, view, alpha);
     drawEffects(dd, glow, solid, view);
+    drawStory(dd, glow, solid, view);
 }
 
 void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const ViewInfo& view, float alpha) const {
@@ -634,12 +635,167 @@ void Game::drawEffects(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Vi
     }
 }
 
+// --- Historia: Brizna, ecos de memoria e interfaz de diálogo ----------------------------
+
+void Game::drawStory(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const ViewInfo& view) const {
+    // Brizna: una chispa de luz cálida con dos destellos que la orbitan; late al hablar.
+    const StoryLine* l = dialogue_.line();
+    bool speaking = l && l->speaker == "brizna" && !dialogue_.lineComplete();
+    float pulse = 1.0f + (speaking ? 0.35f * std::sin(time_ * 30.0f) : 0.12f * std::sin(time_ * 3.0f));
+    uint32_t core = mixRgb(rgba(255, 200, 110), rgba(255, 150, 200), 0.5f + 0.5f * std::sin(time_ * 0.7f));
+    if (!solid) {
+        dd.point(briznaPos_, core);
+        dd.circleXZ(briznaPos_, 0.12f, 12, core);
+    } else {
+        solid->ellipsoid(Mat4::identity(), briznaPos_, Vec3{0.055f, 0.055f, 0.055f} * pulse, core, Material::Glow);
+        solid->light(briznaPos_, Vec3{1.0f, 0.8f, 0.5f} * (0.7f * pulse), 2.5f);
+        glowDot(glow, view, briznaPos_, 0.16f * pulse, withAlpha(core, 0.18f));
+        for (int k = 0; k < 2; ++k) {
+            float a = time_ * 3.0f + float(k) * kPi;
+            Vec3 p = briznaPos_ + Vec3{std::cos(a) * 0.16f, 0.05f * std::sin(a * 2.0f), std::sin(a) * 0.16f};
+            glowStar(glow, view, p, 0.06f, time_ * 4.0f, withAlpha(rgba(255, 255, 255), 0.8f));
+        }
+    }
+    // Ecos de memoria: cristales blancos que giran con un halo irisado y un haz de luz.
+    for (const MemoryEcho& m : echoes_) {
+        if (!m.active || m.taken) continue;
+        float s = smoothstep01(m.appear / 0.8f);
+        Vec3 c = m.pos + Vec3{0, 0.08f * std::sin(time_ * 2.0f), 0};
+        if (!solid) {
+            dd.box(Mat4::identity(), c, {0.15f, 0.15f, 0.15f}, rgba(255, 255, 255));
+            continue;
+        }
+        for (int k = 0; k < 3; ++k) {
+            Mat4 t = translate(c) * rotateY(time_ * (0.8f + 0.3f * float(k)) + float(k) * 2.1f) * rotateX(0.6f * float(k));
+            solid->box(t * rotateZ(kPi * 0.25f), {0.1f * float(k - 1), 0, 0}, Vec3{0.07f, 0.16f, 0.07f} * s,
+                       rgba(250, 250, 255), Material::Glow);
+        }
+        uint32_t hue = mixRgb(rgba(120, 220, 255), rgba(255, 140, 220), 0.5f + 0.5f * std::sin(time_ * 1.5f));
+        solid->light(c, Vec3{0.8f, 0.8f, 1.0f} * (1.5f * s), 4.0f);
+        glowDot(glow, view, c, 0.6f * s, withAlpha(hue, 0.3f));
+        glowQuad(glow, c + Vec3{0, 1.6f, 0}, view.right * 0.06f, Vec3{0, 1.6f, 0}, withAlpha(rgba(255, 255, 255), 0.18f * s));
+    }
+}
+
+namespace {
+
+// Parte un texto en líneas que caben en `maxW` píxeles (por palabras).
+std::vector<std::string> wrapText(const std::string& text, float size, float maxW) {
+    std::vector<std::string> lines;
+    std::string cur, word;
+    auto flushWord = [&] {
+        if (word.empty()) return;
+        std::string tryLine = cur.empty() ? word : cur + " " + word;
+        if (!cur.empty() && textWidth(tryLine.c_str(), size) > maxW) {
+            lines.push_back(cur);
+            cur = word;
+        } else {
+            cur = tryLine;
+        }
+        word.clear();
+    };
+    for (char ch : text) {
+        if (ch == ' ') flushWord();
+        else word += ch;
+    }
+    flushWord();
+    if (!cur.empty()) lines.push_back(cur);
+    return lines;
+}
+
+uint32_t speakerColor(const std::string& id) {
+    if (id == "brizna") return rgba(255, 228, 150);
+    if (id == "prota") return rgba(255, 120, 205);
+    if (id == "eco") return rgba(90, 225, 255);
+    if (id == "sistema") return rgba(255, 196, 70);
+    return rgba(240, 240, 255);
+}
+
+}  // namespace
+
+void Game::drawStoryHud(UiLayer& ui, const ViewInfo& view) const {
+    DebugDraw& d = ui.shapes;
+    const float w = float(view.width), h = float(view.height);
+    if (fade_ > 0) fillRect(d, 0, 0, w, h, withAlpha(rgba(0, 0, 0), smoothstep01(fade_)));
+
+    // Carteles de capítulo.
+    if (chapterBanner_ > 0) {
+        float total = chapterEnded_ ? 7.0f : 5.0f;
+        float a = clampf(std::min((total - chapterBanner_) / 0.8f, chapterBanner_ / 1.0f), 0, 1);
+        float y = h * 0.3f;
+        fillRect(d, 0, y - 20, w, y + 110, withAlpha(rgba(8, 10, 30), 0.55f * a));
+        uiText(ui, w * 0.5f, y, 22, chapterEnded_ ? "FIN DEL CAPÍTULO 1" : "CAPÍTULO 1", withAlpha(kUiCyan, a), FontFace::Title,
+               Align::Center, 0.5f * a);
+        uiText(ui, w * 0.5f, y + 34, 46, chapterEnded_ ? "Continuará…" : "La primera luz", withAlpha(kUiText, a),
+               FontFace::Body, Align::Center, 0.6f * a);
+    }
+
+    const StoryLine* l = dialogue_.line();
+    if (!l) return;
+    std::string shown = utf8Prefix(l->text, dialogue_.visibleChars());
+    std::string name = speakerName(l->speaker);
+    uint32_t col = speakerColor(l->speaker);
+
+    if (dialogue_.memory()) {
+        // Recuerdo: la imagen se vela en blanco y la voz aparece en el centro.
+        fillRect(d, 0, 0, w, h, withAlpha(rgba(235, 240, 255), 0.55f));
+        fillRect(d, 0, h * 0.38f, w, h * 0.62f, withAlpha(rgba(20, 24, 60), 0.35f));
+        std::vector<std::string> lines = wrapText(shown, 30, w * 0.6f);
+        float y = h * 0.5f - float(lines.size()) * 20.0f;
+        if (!name.empty()) uiText(ui, w * 0.5f, y - 34, 16, name.c_str(), withAlpha(col, 0.9f), FontFace::Title, Align::Center);
+        for (const std::string& line : lines) {
+            uiText(ui, w * 0.5f, y, 30, line.c_str(), rgba(255, 255, 255), FontFace::Body, Align::Center, 0.6f);
+            y += 40;
+        }
+        return;
+    }
+    if (!dialogue_.blocking()) {
+        // Aviso: subtítulo arriba, sin detener el juego.
+        std::vector<std::string> lines = wrapText(shown, 21, 640);
+        float y = 128;
+        float bw = 700;
+        fillRect(d, (w - bw) * 0.5f, y - 8, (w + bw) * 0.5f, y + 30 + float(lines.size()) * 28.0f, withAlpha(rgba(8, 10, 30), 0.6f));
+        if (!name.empty()) uiText(ui, (w - bw) * 0.5f + 16, y - 2, 14, name.c_str(), col, FontFace::Title);
+        y += 22;
+        for (const std::string& line : lines) {
+            uiText(ui, (w - bw) * 0.5f + 16, y, 21, line.c_str(), kUiText);
+            y += 28;
+        }
+        return;
+    }
+    // Diálogo: caja abajo con el nombre en una pestaña y el texto letra a letra.
+    const float bw = 880, bx = (w - bw) * 0.5f, by = h - 200, bh = 158;
+    skewRect(d, bx, by, bx + bw, by + bh, 12, withAlpha(rgba(10, 14, 40), 0.9f));
+    fillRect(d, bx + 12, by, bx + bw + 12, by + 3, col);
+    if (!name.empty()) {
+        float nw = textWidth(name.c_str(), 18, FontFace::Title) + 40;
+        skewRect(d, bx + 20, by - 30, bx + 20 + nw, by, 8, col);
+        uiText(ui, bx + 40, by - 26, 18, name.c_str(), rgba(14, 18, 46), FontFace::Title);
+    }
+    std::vector<std::string> lines = wrapText(shown, 25, bw - 80);
+    float y = by + 26;
+    for (const std::string& line : lines) {
+        uiText(ui, bx + 40, y, 25, line.c_str(), l->speaker == "sistema" ? kUiAmber : kUiText);
+        y += 34;
+    }
+    if (dialogue_.lineComplete() && std::fmod(time_, 0.8f) < 0.5f) {
+        float tx = bx + bw - 30, ty = by + bh - 30;
+        d.triangle({tx - 9, ty - 6, 0}, {tx + 9, ty - 6, 0}, {tx, ty + 5, 0}, col);
+    }
+    uiText(ui, bx + bw - 6, by + bh + 10, 14, "Clic / E / Espacio · continuar", kUiDim, FontFace::Body, Align::Right);
+}
+
 // --- HUD -------------------------------------------------------------------------------
 
 void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
     DebugDraw& d = ui.shapes;
     const float w = float(view.width), h = float(view.height);
     char buf[128];
+    // En las escenas que detienen el juego (y al despertar) solo se ve la historia.
+    if (dialogue_.blocking() || hero_.lying > 0.01f) {
+        drawStoryHud(ui, view);
+        return;
+    }
 
     // Vitalidad abajo a la derecha: retrato hexagonal y barras de PV y PM inclinadas y
     // segmentadas (su longitud crece con el máximo).
@@ -806,4 +962,5 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
         uiText(ui, 28, 74, 15, buf, rgba(120, 255, 160));
         uiText(ui, 28, 94, 15, "F1 huesos · F2 articulaciones · F3 cajas · F4 rejilla", rgba(120, 200, 160));
     }
+    drawStoryHud(ui, view);
 }

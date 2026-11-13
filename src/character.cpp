@@ -185,6 +185,10 @@ Mat4 Character::modelMatrix() const {
         const Vec3 pivot{0, 0.1f, 0};
         return m * translate(pivot) * rotateX(-smoothstep01(downTimer / 0.6f) * kPi * 0.48f) * translate(-pivot);
     }
+    if (lying > 0) {  // tumbado: pivota sobre los talones
+        const Vec3 pivot{0, 0.1f, 0};
+        m = m * translate(pivot) * rotateX(-smoothstep01(lying) * kPi * 0.48f) * translate(-pivot);
+    }
     if (move_ != Move::None) {
         const MoveDef& d = kMoves[int(move_)];
         // El giro arranca fuerte y frena al final (la hoja "corta" en la primera vuelta).
@@ -641,9 +645,9 @@ void Character::animate(Pose& out) const {
         r[ShoulderL].z += 0.5f * w;
         r[ShoulderR].z -= 0.5f * w;
     }
-    // Derrotado: brazos y cabeza sueltos.
-    if (downTimer >= 0) {
-        float w = clampf(downTimer / 0.4f, 0, 1);
+    // Derrotado o tumbado: brazos y cabeza sueltos.
+    if (downTimer >= 0 || lying > 0) {
+        float w = downTimer >= 0 ? clampf(downTimer / 0.4f, 0, 1) : smoothstep01(lying);
         r[ShoulderL].z = lerpf(r[ShoulderL].z, 1.2f, w);
         r[ShoulderR].z = lerpf(r[ShoulderR].z, -1.2f, w);
         r[Neck].x = lerpf(r[Neck].x, -0.4f, w);

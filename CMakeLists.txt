@@ -24,6 +24,8 @@ set(LOGIC_SOURCES
     src/items.cpp
     src/enemy.cpp
     src/game.cpp
+    src/game_story.cpp
+    src/story.cpp
 )
 
 add_executable(game
@@ -58,6 +60,7 @@ if(GAME_TESTS)
     enable_testing()
     add_executable(logic_test tests/logic_test.cpp ${LOGIC_SOURCES})
     target_include_directories(logic_test PRIVATE src)
+    target_compile_definitions(logic_test PRIVATE GAME_ASSET_DIR="${CMAKE_SOURCE_DIR}/assets")
     target_compile_options(logic_test PRIVATE -Wall -Wextra -g -fsanitize=address,undefined -fno-omit-frame-pointer)
     target_link_options(logic_test PRIVATE -fsanitize=address,undefined)
     add_test(NAME logic COMMAND logic_test)

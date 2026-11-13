@@ -39,6 +39,7 @@ struct OrbitCamera {
 // cae en un frame en el que no toca ningún paso fijo (pasa a veces a 60 Hz) se perdería.
 struct PendingInput {
     bool jump = false, attack = false, dodge = false, lockOn = false, unlock = false, interact = false;
+    bool advance = false;  // pasar la línea de diálogo
     bool runCommand = false;
     int command = -1, scroll = 0;
 };
@@ -84,7 +85,11 @@ int main(int argc, char** argv) {
     Renderer renderer;
     if (!dd.init() || !glow.init() || !hud.init() || !overlay.init() || !renderer.init(quality)) return 1;
     // Fuentes: carpeta assets junto al directorio de trabajo o la del código fuente.
-    if (!loadFonts("assets") && !loadFonts(GAME_ASSET_DIR)) return 1;
+    // Carpeta assets: junto al directorio de trabajo o, si no, la del código fuente.
+    const char* assetDir = "assets";
+    if (FILE* f = std::fopen("assets/story/capitulo1.txt", "r")) std::fclose(f);
+    else assetDir = GAME_ASSET_DIR;
+    if (!loadFonts(assetDir)) return 1;
     double modelStart = platform::timeSeconds();
     buildModels(renderer);
     std::printf("modelos generados en %.0f ms\n", 1000.0 * (platform::timeSeconds() - modelStart));
@@ -94,10 +99,11 @@ int main(int argc, char** argv) {
     glClearColor(0.08f, 0.09f, 0.11f, 1.0f);
 
     Game game;
-    game.init();
+    game.init(assetDir);
     OrbitCamera cam;
     cam.target = game.hero().body.pos + Vec3{0, 1.0f, 0};
     Vec3 camVel;  // velocidad del muelle de la cámara
+    float sceneBlend = 0;  // 0 = cámara de juego, 1 = plano de diálogo
     DrawFlags flags;
     // Modo debug (F12 / º, o --debug al arrancar): solo esqueletos y cajas en alambre.
     bool debugView = false;
@@ -181,7 +187,7 @@ int main(int argc, char** argv) {
                 case PauseMenu::Result::Resume: closeMenu(); break;
                 case PauseMenu::Result::Restart:
                     game = Game{};
-                    game.init();
+                    game.init(assetDir);
                     cam = OrbitCamera{};
                     cam.target = game.hero().body.pos + Vec3{0, 1.0f, 0};
                     closeMenu();
@@ -210,13 +216,18 @@ int main(int argc, char** argv) {
 
         bool guardHeld = false;
         if (playing) {
-            pending.jump |= input.wasPressed(Key::Space);
-            pending.attack |= input.mouseLeftPressed;
-            pending.dodge |= input.wasPressed(Key::Shift);
-            pending.lockOn |= input.wasPressed(Key::Tab);
-            pending.unlock |= input.mouseMiddlePressed || input.wasPressed(Key::X);
-            pending.interact |= input.wasPressed(Key::F);
-            pending.runCommand |= input.wasPressed(Key::E);
+            if (game.dialogueBlocking()) {  // en una escena, todo sirve para avanzar
+                pending.advance |= input.mouseLeftPressed || input.wasPressed(Key::E) || input.wasPressed(Key::Space) ||
+                                   input.wasPressed(Key::Enter);
+            } else {
+                pending.jump |= input.wasPressed(Key::Space);
+                pending.attack |= input.mouseLeftPressed;
+                pending.dodge |= input.wasPressed(Key::Shift);
+                pending.lockOn |= input.wasPressed(Key::Tab);
+                pending.unlock |= input.mouseMiddlePressed || input.wasPressed(Key::X);
+                pending.interact |= input.wasPressed(Key::F);
+                pending.runCommand |= input.wasPressed(Key::E);
+            }
             pending.scroll -= int(input.wheel);  // rueda arriba = entrada de arriba
             const Key slotKeys[] = {Key::N1, Key::N2, Key::N3, Key::N4, Key::N5, Key::N6};
             for (int i = 0; i < Game::kCommandCount; ++i)
@@ -255,9 +266,11 @@ int main(int argc, char** argv) {
                 c.unlock = pending.unlock;
                 c.command = pending.command;
                 c.runCommand = pending.runCommand;
+                c.advance = pending.advance;
                 c.commandScroll = pending.scroll;
                 c.camForward = cam.forwardFlat();
                 if (autoplay) {
+                    c.advance = botStep % 25 == 0;  // el bot pasa los diálogos
                     // Bot: fija al enemigo más cercano, se acerca y encadena combos; de vez
                     // en cuando lanza Fuego o Hielo.
                     ++botStep;
@@ -308,6 +321,18 @@ int main(int argc, char** argv) {
             cam.target = desired + (change + temp) * k;
         }
         OrbitCamera view = cam;
+        // Escenas: la cámara se pone de cara al personaje, más cerca y más baja (plano de
+        // diálogo); al terminar vuelve a la orbital con suavidad.
+        sceneBlend = moveTowards(sceneBlend, game.dialogueBlocking() ? 1.0f : 0.0f, 2.0f * fd);
+        if (sceneBlend > 0) {
+            float k = smoothstep01(sceneBlend);
+            float faceYaw = game.hero().yaw + kPi + 0.35f;
+            view.yaw = lerpAngle(cam.yaw, faceYaw, k);
+            view.pitch = lerpf(cam.pitch, 0.12f, k);
+            view.distance = lerpf(cam.distance, 3.4f, k);
+            view.target = cam.target + Vec3{0, 0.25f * k, 0};
+            if (sceneBlend >= 1.0f) cam.yaw = faceYaw;  // al salir, se parte de este encuadre
+        }
         // La cámara se acerca si hay una pared entre ella y el personaje.
         float clear = game.cameraClear(cam.target, cam.eye());
         if (clear < 1.0f) view.distance = std::max(1.0f, cam.distance * clear - 0.3f);

@@ -154,7 +154,7 @@ void main() {
     // Las salpicaduras que dejan los Grises al disiparse devuelven el color a su alrededor.
     if (scenery) {
         float l = dot(base, vec3(0.299, 0.587, 0.114));
-        base = mix(vec3(l), base, mix(0.06, 1.0, uWorldColor));
+        base = mix(vec3(l), base, mix(0.06, 1.0, uWorldColor)) * mix(0.72, 1.0, uWorldColor);
         if (material == 4) base *= mix(0.25, 1.0, uWorldColor);
         seamGlow *= uWorldColor;
         if (n.y > 0.5) {

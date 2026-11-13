@@ -252,10 +252,21 @@ void Game::rebuildSolids() {
     for (const TreasureChest& c : chests_) world_.solids.push_back(boxFromCenter(c.pos + Vec3{0, 0.35f, 0}, {0.45f, 0.35f, 0.45f}));
 }
 
-void Game::init() {
+void Game::init(const char* assetDir) {
     buildLevel();
     rebuildSolids();
     hero_.body.pos = heroStart_;
+    // Historia: el guion del capítulo y los ecos de memoria repartidos por la plaza.
+    names_ = {{"brizna", "???"}, {"prota", "???"}, {"voz", "Una voz"}, {"eco", "Eco"}, {"sistema", ""}};
+    echoes_ = {{{0, 1.3f, -3.3f}, "recuerdo_1"}, {{-11.5f, 3.6f, 11.0f}, "recuerdo_2"}, {{12.5f, 2.2f, 9.2f}, "recuerdo_3"}};
+    if (assetDir && script_.load(std::string(assetDir) + "/story/capitulo1.txt")) {
+        story_ = true;
+        wavesEnabled_ = false;
+        hero_.body.pos = {0, 0, -3.4f};  // despierta junto a la fuente
+        hero_.yaw = kPi;
+        hero_.lying = 1;
+        playScene("intro");
+    }
     inv_.add(ItemId::WoodenSword);
     inv_.add(ItemId::Potion, 3);
     inv_.add(ItemId::Ether, 1);
@@ -272,6 +283,16 @@ void Game::applyWeapon() {
 
 void Game::update(float dt, const Controls& c) {
     time_ += dt;
+    updateStory(dt);
+    // Escena que bloquea: el juego se detiene (salvo animaciones y efectos) hasta leerla.
+    if (dialogue_.blocking()) {
+        if (c.advance) dialogue_.advance();
+        hero_.setGuard(false);
+        hero_.update(dt, {}, false, world_);
+        updateBrizna(dt);
+        updateEffects(dt);
+        return;
+    }
     heroFlash_ = std::max(0.0f, heroFlash_ - dt);
     guardFlash_ = std::max(0.0f, guardFlash_ - dt);
     heroInvuln_ = std::max(0.0f, heroInvuln_ - dt);
@@ -295,10 +316,12 @@ void Game::update(float dt, const Controls& c) {
         if (c.command >= 0 && c.command < kCommandCount) runCommand(c.command);
         else if (c.runCommand) runCommand(commandSel_);
         hero_.setGuard(c.guard);
+        if (c.advance && dialogue_.active()) dialogue_.advance();
         if (c.dodge) dodgeBuffer_ = 0.15f;
         if (c.attack) attackBuffer_ = 0.25f;
         if (c.dodge || c.attack) bufferedMove_ = c.move;
         if (dodgeBuffer_ > 0 && hero_.dodge(length(bufferedMove_) > 0.1f ? bufferedMove_ : hero_.forward())) {
+            sound(Sfx::Dodge, hero_.body.pos);
             dodgeBuffer_ = 0;
             attackBuffer_ = 0;
         }
@@ -316,7 +339,10 @@ void Game::update(float dt, const Controls& c) {
         return;
     }
 
+    bool wasGrounded = hero_.body.grounded;
     hero_.update(dt, down ? Vec3{} : c.move, !down && c.jump, world_);
+    if (c.jump && wasGrounded && hero_.body.vel.y > 1.0f) sound(Sfx::Jump, hero_.body.pos, 0.7f);
+    updateBrizna(dt);
     Move impact = hero_.takeImpact();
     if (impact != Move::None) resolveImpact(impact);
 
@@ -378,12 +404,13 @@ void Game::update(float dt, const Controls& c) {
 
     if (enemies_.empty() && waveActive_) {  // oleada superada: la ciudad recupera color
         waveActive_ = false;
+        if (wave_ == 1) playScene("plaza_luz");
         croma_ = std::min(1.0f, croma_ + kCromaPerWave);
         notify(croma_ >= 1.0f ? "La ciudad brilla de nuevo" : "El color vuelve a la ciudad", rgba(110, 255, 190));
     }
     cromaShown_ = moveTowards(cromaShown_, croma_, 0.25f * dt);
     for (ColorSplash& sp : splashes_) sp.age += dt;
-    if (enemies_.empty()) {
+    if (enemies_.empty() && wavesEnabled_) {
         waveTimer_ -= dt;
         if (waveTimer_ <= 0) {
             spawnWave();
@@ -399,6 +426,7 @@ void Game::spawnWave() {
     ++wave_;
     waveBanner_ = 2.5f;
     waveActive_ = true;
+    uiSound(Sfx::WaveStart, 0.8f);
     for (int kind = 0; kind < int(EnemyKind::Count); ++kind)
         for (int n = 0; n < w[kind] + extra; ++n) {
             // Un punto de aparición lejos del jugador (y no siempre el mismo).
@@ -553,6 +581,7 @@ void Game::castImpact(Spell s) {
     if (t >= 0) aim = normalize(enemies_[size_t(t)].center() - origin);
     switch (s) {
         case Spell::Fire: {
+            sound(Sfx::Fire, origin);
             Projectile p{ProjectileKind::Fire, origin, aim * 14.0f, 1.6f, t};
             p.seed = random01() * 100.0f;
             projectiles_.push_back(p);
@@ -560,6 +589,7 @@ void Game::castImpact(Spell s) {
             break;
         }
         case Spell::Ice:
+            sound(Sfx::Ice, origin);
             for (float a : {-0.22f, 0.0f, 0.22f}) {
                 Vec3 d = normalize(Vec3{aim.x * std::cos(a) + aim.z * std::sin(a), aim.y,
                                         -aim.x * std::sin(a) + aim.z * std::cos(a)});
@@ -570,6 +600,7 @@ void Game::castImpact(Spell s) {
             spawnSparks(origin, fwd, 12, rgba(170, 235, 255), 3.0f);
             break;
         case Spell::Cure: {
+            uiSound(Sfx::Cure);
             heal(35 + w.magic * 2.5f, 0);
             Vec3 base = hero_.body.pos;
             spawnRing(base + Vec3{0, 0.05f, 0}, 1.8f, 0.8f, rgba(120, 255, 150));
@@ -637,6 +668,10 @@ void Game::resolveImpact(Move m) {
         spawnSparks(p.pos, aim, 14, rgba(255, 255, 200), 4.0f);
         ++hits;
     }
+    // Silbido del arma (según su forma) y golpe si ha alcanzado algo.
+    Sfx swing = m == Move::Finisher ? Sfx::Hammer : (m == Move::Slash3 || m == Move::AirFinisher) ? Sfx::Whip : Sfx::Slash;
+    sound(swing, origin, 0.8f, 0.95f + 0.1f * random01());
+    if (hits > 0) sound(isFinisher(m) ? Sfx::HitHeavy : Sfx::Hit, origin + fwd, 1.0f, 0.9f + 0.2f * random01());
     if (hits > 0) {
         hitStop_ = isFinisher(m) ? 0.09f : 0.05f;
         shake_ = std::max(shake_, isFinisher(m) ? 0.35f : 0.12f);
@@ -676,6 +711,8 @@ void Game::killEnemy(Enemy& e) {
     e.health = 0;
     ++kills_;
     croma_ = std::min(1.0f, croma_ + kCromaPerKill);
+    sound(Sfx::EnemyDie, e.center(), 1.0f, 0.9f + 0.25f * random01());
+    playScene("primer_disipado");
     for (size_t i = 0; i < enemies_.size(); ++i)
         if (&enemies_[i] == &e && lock_ == int(i)) lock_ = -1;
     Vec3 c = e.center();
@@ -739,9 +776,11 @@ void Game::hurtHero(Vec3 dir, float damage, float knock, Enemy* source) {
             source->knock = -dir * (perfectGuard_ ? 7.0f : 3.0f);
         }
         if (perfectGuard_) hitStop_ = 0.08f;
+        sound(perfectGuard_ ? Sfx::PerfectGuard : Sfx::Guard, chest);
         return;
     }
     hp_ = std::max(0.0f, hp_ - damage);
+    sound(Sfx::HeroHurt, chest);
     heroInvuln_ = kInvulnAfterHit;
     heroFlash_ = 0.25f;
     shake_ = std::max(shake_, 0.25f);
@@ -765,6 +804,7 @@ void Game::respawnHero() {
     hp_ = hpGhost_ = maxHp_;
     mp_ = maxMp_;
     heroInvuln_ = 2.0f;
+    playScene("caida");
     spawnRing(heroStart_ + Vec3{0, 0.05f, 0}, 1.5f, 0.8f, rgba(255, 255, 200));
 }
 
@@ -837,6 +877,7 @@ void Game::updateEnemy(Enemy& e, float dt) {
         case AiState::Windup:
             faceHero = true;
             if (e.stateTime > d.windup) enemyStartAttack(e);
+            else if (e.stateTime <= edt) sound(Sfx::EnemyWindup, e.center(), 0.6f, e.kind == EnemyKind::Shroom ? 0.7f : 1.0f);
             break;
         case AiState::Attack: {
             Vec3 heroChest = hero_.body.pos + Vec3{0, 0.9f, 0};
@@ -1028,6 +1069,7 @@ void Game::explodeFire(Vec3 point) {
     const float radius = 2.2f;
     float magic = inv_.weaponStats().magic;
     blasts_.push_back({point, 0, 1.6f, random01() * 100.0f});
+    sound(Sfx::FireBoom, point);
     spawnSparks(point, {0, 1, 0}, 18, rgba(255, 170, 60), 5.0f);
     spawnRing(Vec3{point.x, groundHeight(point) + 0.05f, point.z}, radius, 0.4f, rgba(255, 150, 60));
     shake_ = std::max(shake_, 0.15f);
@@ -1117,10 +1159,15 @@ void Game::collect(Pickup& p) {
     p.dead = true;
     uint32_t col = rgba(255, 255, 255);
     switch (p.kind) {
-        case PickupKind::Hp: heal(kHpOrb, 0); col = rgba(120, 255, 140); break;
-        case PickupKind::Mp: heal(0, kMpOrb); col = rgba(120, 170, 255); break;
-        case PickupKind::Munny: inv_.munny += p.value; col = rgba(255, 220, 80); break;
+        case PickupKind::Hp: heal(kHpOrb, 0); col = rgba(120, 255, 140); uiSound(Sfx::Pickup, 0.5f, 1.0f); break;
+        case PickupKind::Mp: heal(0, kMpOrb); col = rgba(120, 170, 255); uiSound(Sfx::Pickup, 0.5f, 1.25f); break;
+        case PickupKind::Munny:
+            inv_.munny += p.value;
+            col = rgba(255, 220, 80);
+            uiSound(Sfx::Coin, 0.45f, 0.9f + 0.03f * float(kills_ % 8));
+            break;
         case PickupKind::Item:
+            uiSound(Sfx::ItemGet, 0.8f);
             col = itemDef(p.item).color;
             if (inv_.add(p.item) > 0)
                 notify(std::string("Obtenido: ") + itemName(p.item), col);
@@ -1176,6 +1223,7 @@ void Game::tryOpenChest() {
     if (i < 0 || hero_.busy()) return;
     TreasureChest& c = chests_[size_t(i)];
     c.open = true;
+    uiSound(Sfx::Chest);
     c.openTime = 0;
     for (const auto& [id, n] : c.contents) {
         inv_.add(id, n);
@@ -1193,6 +1241,7 @@ void Game::tryOpenChest() {
 
 void Game::breakCrate(Crate& c) {
     c.broken = true;
+    sound(Sfx::Crate, c.box.center());
     rebuildSolids();
     Vec3 p = c.box.center();
     for (int i = 0; i < 18 && particles_.size() < kMaxParticles; ++i) {

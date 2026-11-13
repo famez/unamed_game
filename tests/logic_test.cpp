@@ -311,6 +311,53 @@ int main() {
         CHECK(g.croma_ == 1.0f && g.splashes_.size() == size_t(Renderer::kMaxPaints),
               "el croma se queda en el 100%% y se guardan las %zu salpicaduras mas recientes", g.splashes_.size());
     }
+    {  // Guion: escenas, avisos, recuerdos y órdenes
+        Script sc;
+        sc.parse("# comentario\n== a\nbrizna: Hola, ¿qué tal?\n!oleadas\nprota: …\n== b\n!aviso\nbrizna: Ojo.\n== c\n!recuerdo\nvoz: Te llamábamos…\n");
+        const Scene* a = sc.find("a");
+        CHECK(sc.scenes().size() == 3 && a && a->blocking && a->lines.size() == 3 && a->lines[1].command &&
+                  a->lines[1].speaker == "oleadas",
+              "guion: 3 escenas, la primera con 2 lineas y una orden");
+        CHECK(!sc.find("b")->blocking && sc.find("c")->memory, "aviso no bloquea; recuerdo marcado");
+        Dialogue d;
+        d.start(a);
+        std::vector<StoryLine> cmds;
+        d.update(0.1f, cmds);
+        CHECK(d.visibleChars() == 4 && !d.lineComplete(), "maquina de escribir: %d caracteres en 0,1 s", d.visibleChars());
+        d.advance();
+        CHECK(d.lineComplete() && utf8Prefix(d.line()->text, d.visibleChars()) == "Hola, ¿qué tal?",
+              "pulsar completa la linea (UTF-8 intacto)");
+        d.advance();
+        d.update(0.01f, cmds);
+        CHECK(cmds.size() == 1 && cmds[0].speaker == "oleadas" && d.line() && d.line()->speaker == "prota",
+              "al pasar se entrega la orden y sigue la siguiente linea");
+        d.advance();
+        d.advance();
+        CHECK(!d.active(), "la escena termina");
+    }
+    {  // Historia en el juego: la intro detiene todo hasta leerla
+        Game g;
+        g.init(GAME_ASSET_DIR);
+        CHECK(g.story_ && g.hero_.lying == 1, "con guion: el Prismero despierta tumbado");
+        run(g, 3.0f);
+        CHECK(g.dialogueBlocking() && g.wave_ == 0, "la intro bloquea: sin oleadas todavia");
+        CHECK(g.speakerName("brizna") == "???", "Brizna aun no tiene nombre");
+        Controls adv;
+        adv.advance = true;
+        for (int i = 0; i < 200 && g.dialogueBlocking(); ++i) {
+            g.update(dt, adv);
+            run(g, 0.05f);
+        }
+        CHECK(!g.dialogueBlocking() && g.speakerName("brizna") == "Brizna", "tras leer la intro, Brizna tiene nombre");
+        run(g, 2.0f);
+        CHECK(g.wave_ == 1 && g.hero_.lying == 0, "empiezan las oleadas y el Prismero esta de pie");
+        // Eco de memoria: aparece con su orden y se recoge al pasar.
+        g.storyCommand({true, "eco_activa", "1"});
+        g.hero_.body.pos = g.echoes_[0].pos - Vec3{0, 0.9f, 0};
+        g.update(dt, {});
+        g.update(dt, {});
+        CHECK(g.echoes_[0].taken && g.dialogue().memory(), "el eco de memoria lanza su recuerdo");
+    }
     {  // Derrota y vuelta a empezar
         Game g = fresh();
         g.hurtHero({0, 0, 1}, 500, 2, nullptr);

@@ -32,6 +32,7 @@ public:
     float yaw = 0;    // orientación; 0 = mirando hacia +Z
     float speed = 0;  // velocidad horizontal actual (m/s)
     float downTimer = -1;  // >= 0: derrotado (se desploma)
+    float lying = 0;       // 1 = tumbado boca arriba (al despertar), 0 = de pie
     int comboHits = 3;     // golpes en el suelo antes del remate (lo fija el arma)
     float attackSpeed = 1; // multiplicador de la velocidad de los golpes (arma)
     Pose pose;             // pose mostrada (ya mezclada)
@@ -62,7 +63,7 @@ public:
     float moveU() const;  // 0..1 dentro del movimiento en curso
     bool rolling() const { return rollTime_ >= 0; }
     bool hurt() const { return hurtTimer_ > 0; }
-    bool busy() const { return move_ != Move::None || rolling() || hurt() || downTimer >= 0; }
+    bool busy() const { return move_ != Move::None || rolling() || hurt() || downTimer >= 0 || lying > 0.01f; }
     bool airComboSpent() const { return airComboSpent_; }
     // Acercamiento rápido en curso (para abrir un poco el campo de visión).
     float dashAmount() const { return dashTime_ > 0 ? 1.0f : 0.0f; }

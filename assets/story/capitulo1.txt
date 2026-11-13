@@ -1,0 +1,102 @@
+# Capítulo 1 · La primera luz
+#
+# Hablantes: brizna (la luz guía), prota (el Prismero; su nombre aún no se sabe),
+# voz (voces de los recuerdos), eco (lo que susurran los Eco), sistema (ayudas).
+# Órdenes: levantarse, nombre <hablante> <Nombre>, oleadas, eco_activa <n>, fin_capitulo.
+
+== intro
+!negro
+brizna: …
+brizna: ¿Me oyes?
+brizna: No intentes moverte todavía. Acabas de despertar.
+prota: ¿Dónde…?
+brizna: En lo que queda de la plaza. Te encontré dentro del prisma de la fuente, hecho un ovillo de luz.
+!levantarse
+brizna: Mira a tu alrededor. Antes todo esto tenía color. Las fachadas, el agua, hasta el cielo.
+brizna: Hasta que llegó el Apagón.
+prota: ¿Quién eres?
+brizna: Una chispa que se quedó atrás cuando todo lo demás se fue. Puedes llamarme Brizna.
+!nombre brizna Brizna
+brizna: ¿Y tú? ¿Recuerdas tu nombre?
+prota: …
+prota: No.
+brizna: No pasa nada. Llevas color encima. Aquí, eso ya es mucho.
+brizna: Y en la mano llevas un prisma. Hacía tanto que no veía uno encendido…
+brizna: Cuidado. Ya vienen.
+brizna: Los Grises sienten el color como las polillas sienten una lámpara.
+sistema: Clic izquierdo para atacar · Shift para esquivar · Tab para fijar un objetivo.
+!oleadas
+
+== primer_disipado
+!aviso
+brizna: ¿Lo has visto? Al disiparse… ha soltado su color.
+prota: ¿Era… una persona?
+brizna: Lo era. Quizá todavía lo sea, en algún sitio.
+
+== domo
+!aviso
+brizna: Ese es más grande. Cuando salte, salta tú también.
+
+== eco_enemigo
+!aviso
+brizna: Un Eco. Repiten lo último que oyeron antes de apagarse.
+eco: …el prisma… vuelve… vuelve a casa…
+
+== plaza_luz
+brizna: La plaza ha recuperado un poco de luz.
+brizna: Es raro. Siento algo cálido… como si recordara una canción.
+brizna: Mira, junto a la fuente. Hay algo brillando.
+!eco_activa 1
+sistema: Los ecos de memoria guardan fragmentos del pasado. Acércate para recogerlos.
+
+== recuerdo_1
+!recuerdo
+voz: Si un día se apaga todo… prométeme que encenderás la primera luz.
+voz: Aunque no te acuerdes de mí. Aunque no te acuerdes de nada.
+prota: Esa voz… la conozco.
+brizna: …
+brizna: Deberíamos seguir.
+
+== neones
+!aviso
+brizna: ¿Notas el calor? Los neones vuelven a respirar.
+brizna: Allí arriba, en la plataforma, hay otro eco esperando.
+!eco_activa 2
+
+== recuerdo_2
+!recuerdo
+voz: No eres un error. Eres lo que quedó cuando todo lo demás se fue.
+voz: Por eso brillas.
+brizna: No le hagas mucho caso a los ecos. A veces se equivocan.
+prota: ¿Y si no se equivocan?
+brizna: …
+brizna: Entonces tendremos que descubrir qué significa.
+
+== caida
+!aviso
+brizna: ¡Eh! Quédate conmigo.
+brizna: No pienso perderte otra vez.
+
+== casi
+!aviso
+brizna: Queda poco. Huele a lluvia de colores.
+brizna: En la terraza, junto al árbol… otro eco.
+!eco_activa 3
+
+== recuerdo_3
+!recuerdo
+voz: Te llamábamos…
+voz: …
+prota: ¿Cómo? ¿Cómo me llamabais?
+brizna: Se ha cortado. Lo siento.
+
+== fin_capitulo
+brizna: Mírala. La plaza brilla otra vez.
+brizna: Hacía tanto que no la veía así que ya no recordaba cómo era.
+prota: Brizna.
+prota: Antes dijiste «otra vez». Que no pensabas perderme otra vez.
+brizna: …
+brizna: Hay una luz encendida al otro lado del puente. La veo desde aquí.
+brizna: Quizá allí encuentres tu nombre.
+brizna: Y quizá yo encuentre el valor para contarte lo que sé.
+!fin_capitulo

@@ -10,11 +10,16 @@
 #include "items.h"
 #include "physics.h"
 #include "renderer.h"
+#include "sfx.h"
+#include "story.h"
 #include "skeleton.h"
 #include "text.h"
 #include "vmath.h"
 
 #include <cstdint>
+#include <deque>
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -46,6 +51,7 @@ struct Controls {
     bool runCommand = false; // ejecutar la entrada seleccionada
     int commandScroll = 0;   // mover la selección del menú de comandos
     Vec3 camForward{0, 0, 1};  // hacia dónde mira la cámara (para elegir objetivo)
+    bool advance = false;      // pasar la línea de diálogo
 };
 
 // Datos de la cámara para dibujar: billboards, proyección de etiquetas al HUD.
@@ -144,6 +150,14 @@ struct TrailSample {  // estela del arma: base y punta de la hoja en un instante
     float age;
 };
 
+// Eco de memoria: fragmento de luz que, al tocarlo, reproduce un recuerdo del guion.
+struct MemoryEcho {
+    Vec3 pos;
+    std::string scene;
+    bool active = false, taken = false;
+    float appear = 0;  // segundos desde que apareció
+};
+
 // Bloque sólido del escenario con su aspecto.
 struct Block {
     AABB box;
@@ -164,7 +178,9 @@ class Game {
 public:
     static constexpr int kCommandCount = 3 + Inventory::kQuickSlots;  // magias + atajos de objetos
 
-    void init();
+    // `assetDir`: carpeta assets (para cargar el guion). Sin ella no hay historia: el
+    // juego empieza directamente con las oleadas (lo usan los tests).
+    void init(const char* assetDir = nullptr);
     void update(float dt, const Controls& c);
 
     // Con `solid` (render con shaders) los cuerpos van ahí, `glow` recibe los efectos
@@ -193,6 +209,17 @@ public:
     // Posición del objetivo fijado (para la cámara). Falso si no hay.
     bool lockTarget(Vec3& pos) const;
     float cameraShake() const { return shake_; }
+    // Historia.
+    const Dialogue& dialogue() const { return dialogue_; }
+    bool dialogueBlocking() const { return dialogue_.blocking(); }
+    std::string speakerName(const std::string& id) const;
+    // Sonidos emitidos desde la última llamada (los reproduce main con el audio).
+    std::vector<SoundEvent> takeSounds() {
+        std::vector<SoundEvent> out;
+        out.swap(sounds_);
+        return out;
+    }
+    bool inCombat() const;
     // "El color es energía": 0 = ciudad gris y apagada, 1 = a todo color.
     float croma() const { return croma_; }
     // Apertura extra del campo de visión (radianes) en acercamientos y remates.
@@ -237,6 +264,12 @@ private:
     float random01();
     float randRange(float a, float b) { return a + (b - a) * random01(); }
 
+    void playScene(const std::string& id);
+    void storyCommand(const StoryLine& cmd);
+    void updateStory(float dt);
+    void updateBrizna(float dt);
+    void sound(Sfx id, Vec3 pos, float gain = 1, float pitch = 1);
+    void uiSound(Sfx id, float gain = 1, float pitch = 1);
     void defeatHero();
     void respawnHero();
 
@@ -246,6 +279,8 @@ private:
     void drawEnemies(DebugDraw& lines, DebugDraw& glow, Renderer* solid, const DrawFlags& f, const ViewInfo& view,
                      float alpha) const;
     void drawEffects(DebugDraw& lines, DebugDraw& glow, Renderer* solid, const ViewInfo& view) const;
+    void drawStory(DebugDraw& lines, DebugDraw& glow, Renderer* solid, const ViewInfo& view) const;
+    void drawStoryHud(UiLayer& ui, const ViewInfo& view) const;
 
     World world_;
     std::vector<Block> blocks_;  // escenario fijo (world_ = esto + cajas + cofres)
@@ -275,6 +310,22 @@ private:
     std::vector<TreasureChest> chests_;
     std::vector<Crate> crates_;
     std::vector<TrailSample> trail_;
+    // Historia: guion, escena en curso, cola de escenas y lo ya visto.
+    Script script_;
+    bool story_ = false;
+    Dialogue dialogue_;
+    std::deque<std::string> sceneQueue_;
+    std::set<std::string> played_;
+    std::map<std::string, std::string> names_;
+    bool wavesEnabled_ = true;
+    float fade_ = 0;              // 1 = pantalla en negro (despertar)
+    float chapterBanner_ = 0;     // cartel de capítulo
+    bool chapterEnded_ = false;
+    bool standingUp_ = false;
+    bool seenShroom_ = false, seenMoth_ = false;
+    std::vector<MemoryEcho> echoes_;
+    Vec3 briznaPos_, briznaVel_;
+    std::vector<SoundEvent> sounds_;
     float croma_ = 0.12f;        // sube al disipar Grises y al superar oleadas
     float cromaShown_ = 0.12f;   // el que se ve: lo sigue suavemente
     std::vector<ColorSplash> splashes_;
