@@ -29,6 +29,16 @@ enum class Material : int {
     Water = 6,  // agua: ondas animadas y reflejo del cielo
 };
 
+// Vértice de una malla deformada por huesos (skinning en la GPU): hasta 2 huesos.
+struct SkinVertex {
+    float pos[3];
+    float normal[3];
+    uint32_t color;
+    uint8_t joints[4];
+    uint8_t weights[4];  // normalizados (suman 255)
+    float material;
+};
+
 struct RenderCamera {
     Mat4 view, proj;
     Vec3 position, forward, right, up;
@@ -64,13 +74,20 @@ public:
     // Mancha de chamuscado sobre las superficies horizontales cercanas a `pos`.
     void scorch(Vec3 pos, float radius, float strength);
 
-    static constexpr int kMaxLights = 8, kMaxScorches = 8;
+    static constexpr int kMaxLights = 8, kMaxScorches = 8, kMaxBones = 20;
+
+    // Mallas con skinning (cuerpos continuos de los personajes). Se suben una vez;
+    // `skinned` encola un dibujo con las matrices de los huesos (mundo × bind⁻¹).
+    // `outline` != 0: contorno de ese color (casco invertido: la malla inflada por detrás).
+    int createSkinnedMesh(const std::vector<SkinVertex>& verts, const std::vector<uint32_t>& indices);
+    void skinned(int mesh, const Mat4* bones, int boneCount, float flash, uint32_t outline);
 
     // Dibuja cielo + sombras + escena en el framebuffer actual y vacía la lista.
     // `shadowCenter`: centro del área con sombras (normalmente el jugador).
     void render(const RenderCamera& cam, Vec3 shadowCenter, int width, int height, float time);
 
     size_t instanceCount() const { return boxes_.items.size() + spheres_.items.size(); }
+    size_t skinnedCount() const { return skinDraws_.size(); }
 
 private:
     struct Instance {
@@ -102,6 +119,22 @@ private:
         Vec3 pos, color;
         float radius;
     };
+
+    struct SkinMesh {
+        GLuint vao = 0, vbo = 0, ebo = 0;
+        GLsizei count = 0;
+    };
+    struct SkinDraw {
+        int mesh;
+        float bones[kMaxBones * 16];
+        int boneCount;
+        float flash;
+        uint32_t outline;
+    };
+    std::vector<SkinMesh> skinMeshes_;
+    std::vector<SkinDraw> skinDraws_;
+    GLuint skinProgram_ = 0, skinShadowProgram_ = 0;
+    void drawSkinned(GLuint prog, bool outlinePass);
 
     Batch boxes_, spheres_, highlightBoxes_, highlightSpheres_;
     std::vector<FxInstance> smoke_;

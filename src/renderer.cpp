@@ -229,6 +229,56 @@ void main() {
 }
 )";
 
+// Skinning: cada vértice se mueve con la mezcla de las matrices de sus dos huesos. Las
+// salidas son las mismas que las del shader de instancias, así se reutiliza su fragment
+// shader (iluminación, sombras, contorno).
+const char* kSkinVs = R"(
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aNormal;
+layout(location = 2) in vec4 aColor;
+layout(location = 3) in vec4 aJoints;
+layout(location = 4) in vec4 aWeights;
+layout(location = 5) in float aMaterial;
+uniform mat4 uBones[20];
+uniform mat4 uViewProj;
+uniform mat4 uLightViewProj;
+uniform float uInflate;
+uniform float uFlash;
+out vec3 vWorldPos;
+out vec3 vNormal;
+out vec3 vLocal;
+out vec3 vSize;
+out vec4 vColor;
+out vec4 vLightPos;
+flat out vec3 vParams;
+void main() {
+    mat4 skin = uBones[int(aJoints.x)] * aWeights.x + uBones[int(aJoints.y)] * aWeights.y;
+    vec3 n = normalize(mat3(skin) * aNormal);
+    vec4 world = skin * vec4(aPos, 1.0);
+    world.xyz += n * uInflate;
+    vWorldPos = world.xyz;
+    vNormal = n;
+    vLocal = vec3(0.0);
+    vSize = vec3(1.0);
+    vColor = aColor;
+    vParams = vec3(aMaterial, uFlash, 1.0);  // forma "redondeada": sin bisel
+    vLightPos = uLightViewProj * world;
+    gl_Position = uViewProj * world;
+}
+)";
+
+const char* kSkinShadowVs = R"(
+layout(location = 0) in vec3 aPos;
+layout(location = 3) in vec4 aJoints;
+layout(location = 4) in vec4 aWeights;
+uniform mat4 uBones[20];
+uniform mat4 uLightViewProj;
+void main() {
+    mat4 skin = uBones[int(aJoints.x)] * aWeights.x + uBones[int(aJoints.y)] * aWeights.y;
+    gl_Position = uLightViewProj * skin * vec4(aPos, 1.0);
+}
+)";
+
 const char* kShadowVs = R"(
 layout(location = 0) in vec3 aPos;
 layout(location = 2) in mat4 aModel;
@@ -569,6 +619,9 @@ struct CubeVertex {
 
 bool Renderer::init() {
     meshProgram_ = link(kMeshVs, kMeshFs, true);
+    skinProgram_ = link(kSkinVs, kMeshFs, true);
+    skinShadowProgram_ = link(kSkinShadowVs, kShadowFs, false);
+    if (!skinProgram_ || !skinShadowProgram_) return false;
     shadowProgram_ = link(kShadowVs, kShadowFs, false);
     skyProgram_ = link(kSkyVs, kSkyFs, true);
     fxProgram_ = link(kSmokeVs, kSmokeFs, true);
@@ -698,6 +751,13 @@ void Renderer::shutdown() {
     }
     glDeleteVertexArrays(1, &emptyVao_);
     glDeleteProgram(meshProgram_);
+    glDeleteProgram(skinProgram_);
+    glDeleteProgram(skinShadowProgram_);
+    for (SkinMesh& m : skinMeshes_) {
+        glDeleteBuffers(1, &m.vbo);
+        glDeleteBuffers(1, &m.ebo);
+        glDeleteVertexArrays(1, &m.vao);
+    }
     glDeleteProgram(shadowProgram_);
     glDeleteProgram(skyProgram_);
     glDeleteProgram(fxProgram_);
@@ -905,6 +965,66 @@ void Renderer::ellipsoid(const Mat4& transform, Vec3 center, Vec3 radii, uint32_
     addInstance(transform * translate(center) * scale(radii * 2.0f), color, m, flash, true);
 }
 
+int Renderer::createSkinnedMesh(const std::vector<SkinVertex>& verts, const std::vector<uint32_t>& indices) {
+    SkinMesh m;
+    glGenVertexArrays(1, &m.vao);
+    glGenBuffers(1, &m.vbo);
+    glGenBuffers(1, &m.ebo);
+    glBindVertexArray(m.vao);
+    glBindBuffer(GL_ARRAY_BUFFER, m.vbo);
+    glBufferData(GL_ARRAY_BUFFER, GLsizeiptr(verts.size() * sizeof(SkinVertex)), verts.data(), GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m.ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, GLsizeiptr(indices.size() * sizeof(uint32_t)), indices.data(), GL_STATIC_DRAW);
+    const GLsizei st = sizeof(SkinVertex);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, st, (void*)offsetof(SkinVertex, pos));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, st, (void*)offsetof(SkinVertex, normal));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE, st, (void*)offsetof(SkinVertex, color));
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(3, 4, GL_UNSIGNED_BYTE, GL_FALSE, st, (void*)offsetof(SkinVertex, joints));
+    glEnableVertexAttribArray(4);
+    glVertexAttribPointer(4, 4, GL_UNSIGNED_BYTE, GL_TRUE, st, (void*)offsetof(SkinVertex, weights));
+    glEnableVertexAttribArray(5);
+    glVertexAttribPointer(5, 1, GL_FLOAT, GL_FALSE, st, (void*)offsetof(SkinVertex, material));
+    glBindVertexArray(0);
+    m.count = GLsizei(indices.size());
+    skinMeshes_.push_back(m);
+    return int(skinMeshes_.size()) - 1;
+}
+
+void Renderer::skinned(int mesh, const Mat4* bones, int boneCount, float flash, uint32_t outline) {
+    if (mesh < 0 || mesh >= int(skinMeshes_.size())) return;
+    SkinDraw d;
+    d.mesh = mesh;
+    d.boneCount = std::min(boneCount, kMaxBones);
+    for (int i = 0; i < d.boneCount; ++i)
+        for (int k = 0; k < 16; ++k) d.bones[i * 16 + k] = bones[i].m[k];
+    d.flash = flash;
+    d.outline = outline;
+    skinDraws_.push_back(d);
+}
+
+// Dibuja las mallas encoladas con el programa ya activo y sus uniforms de escena puestos.
+// En la pasada de contorno: solo las que lo llevan, infladas y con color plano.
+void Renderer::drawSkinned(GLuint prog, bool outlinePass) {
+    GLint bonesLoc = glGetUniformLocation(prog, "uBones");
+    GLint flashLoc = glGetUniformLocation(prog, "uFlash");
+    GLint outlineLoc = glGetUniformLocation(prog, "uOutlineColor");
+    for (const SkinDraw& d : skinDraws_) {
+        if (outlinePass && !d.outline) continue;
+        glUniformMatrix4fv(bonesLoc, d.boneCount, GL_FALSE, d.bones);
+        if (flashLoc >= 0) glUniform1f(flashLoc, d.flash);
+        if (outlinePass)
+            glUniform4f(outlineLoc, float(d.outline & 0xFF) / 255.0f, float((d.outline >> 8) & 0xFF) / 255.0f,
+                        float((d.outline >> 16) & 0xFF) / 255.0f, 1.0f);
+        const SkinMesh& m = skinMeshes_[size_t(d.mesh)];
+        glBindVertexArray(m.vao);
+        glDrawElements(GL_TRIANGLES, m.count, GL_UNSIGNED_INT, nullptr);
+    }
+}
+
 void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int height, float time) {
     // Cámara de la luz: orientación fija y centro ajustado a la rejilla de texels, para
     // que las sombras no "tiemblen" al moverse el jugador.
@@ -940,6 +1060,11 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
     drawBatch(boxes_);
     drawBatch(spheres_);
     drawHighlighted();
+    if (!skinDraws_.empty()) {
+        glUseProgram(skinShadowProgram_);
+        setMat4(skinShadowProgram_, "uLightViewProj", lightViewProj);
+        drawSkinned(skinShadowProgram_, false);
+    }
     glDisable(GL_POLYGON_OFFSET_FILL);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, width, height);
@@ -962,15 +1087,6 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
-    glUseProgram(meshProgram_);
-    setMat4(meshProgram_, "uViewProj", cam.proj * cam.view);
-    setMat4(meshProgram_, "uLightViewProj", lightViewProj);
-    setVec3(meshProgram_, "uSunDir", kSunDir);
-    setVec3(meshProgram_, "uCameraPos", cam.position);
-    glUniform1f(glGetUniformLocation(meshProgram_, "uTime"), time);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, shadowTex_);
-    glUniform1i(glGetUniformLocation(meshProgram_, "uShadowMap"), 0);
     // Luces: si hay más de las que admite el shader, se quedan las más intensas.
     std::sort(lights_.begin(), lights_.end(), [](const PointLight& a, const PointLight& b) {
         return a.color.x + a.color.y + a.color.z > b.color.x + b.color.y + b.color.z;
@@ -984,24 +1100,47 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
         p[0] = l.pos.x; p[1] = l.pos.y; p[2] = l.pos.z; p[3] = l.radius;
         col[0] = l.color.x; col[1] = l.color.y; col[2] = l.color.z;
     }
-    glUniform1i(glGetUniformLocation(meshProgram_, "uLightCount"), lightCount);
-    if (lightCount > 0) {
-        glUniform4fv(glGetUniformLocation(meshProgram_, "uLightPos"), lightCount, lightPos);
-        glUniform3fv(glGetUniformLocation(meshProgram_, "uLightColor"), lightCount, lightColor);
-    }
     int scorchCount = int(scorches_.size() / 5);
     float scorchPos[kMaxScorches * 4], scorchAmount[kMaxScorches];
     for (int i = 0; i < scorchCount; ++i) {
         for (int k = 0; k < 4; ++k) scorchPos[i * 4 + k] = scorches_[size_t(i) * 5 + size_t(k)];
         scorchAmount[i] = scorches_[size_t(i) * 5 + 4];
     }
-    glUniform1i(glGetUniformLocation(meshProgram_, "uScorchCount"), scorchCount);
-    if (scorchCount > 0) {
-        glUniform4fv(glGetUniformLocation(meshProgram_, "uScorch"), scorchCount, scorchPos);
-        glUniform1fv(glGetUniformLocation(meshProgram_, "uScorchAmount"), scorchCount, scorchAmount);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, shadowTex_);
+    // Uniforms comunes a los dos programas de la escena (instancias y skinning).
+    auto sceneUniforms = [&](GLuint prog) {
+        glUseProgram(prog);
+        setMat4(prog, "uViewProj", cam.proj * cam.view);
+        setMat4(prog, "uLightViewProj", lightViewProj);
+        setVec3(prog, "uSunDir", kSunDir);
+        setVec3(prog, "uCameraPos", cam.position);
+        glUniform1f(glGetUniformLocation(prog, "uTime"), time);
+        glUniform1i(glGetUniformLocation(prog, "uShadowMap"), 0);
+        glUniform1i(glGetUniformLocation(prog, "uLightCount"), lightCount);
+        if (lightCount > 0) {
+            glUniform4fv(glGetUniformLocation(prog, "uLightPos"), lightCount, lightPos);
+            glUniform3fv(glGetUniformLocation(prog, "uLightColor"), lightCount, lightColor);
+        }
+        glUniform1i(glGetUniformLocation(prog, "uScorchCount"), scorchCount);
+        if (scorchCount > 0) {
+            glUniform4fv(glGetUniformLocation(prog, "uScorch"), scorchCount, scorchPos);
+            glUniform1fv(glGetUniformLocation(prog, "uScorchAmount"), scorchCount, scorchAmount);
+        }
+        glUniform1f(glGetUniformLocation(prog, "uInflate"), 0.0f);
+        glUniform4f(glGetUniformLocation(prog, "uOutlineColor"), 0, 0, 0, 0);
+    };
+    // Personajes: malla con skinning y, detrás, su contorno (la malla inflada con las
+    // caras frontales descartadas: solo asoma el borde).
+    if (!skinDraws_.empty()) {
+        sceneUniforms(skinProgram_);
+        drawSkinned(skinProgram_, false);
+        glCullFace(GL_FRONT);
+        glUniform1f(glGetUniformLocation(skinProgram_, "uInflate"), 0.011f);
+        drawSkinned(skinProgram_, true);
+        glCullFace(GL_BACK);
     }
-    glUniform1f(glGetUniformLocation(meshProgram_, "uInflate"), 0.0f);
-    glUniform4f(glGetUniformLocation(meshProgram_, "uOutlineColor"), 0, 0, 0, 0);
+    sceneUniforms(meshProgram_);
     drawBatch(boxes_);
     drawBatch(spheres_);
 
@@ -1117,6 +1256,7 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
 
     glBindVertexArray(0);
     for (Batch* b : {&boxes_, &spheres_, &highlightBoxes_, &highlightSpheres_}) b->items.clear();
+    skinDraws_.clear();
     smoke_.clear();
     volumes_.clear();
     lights_.clear();

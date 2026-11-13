@@ -35,6 +35,7 @@ add_executable(game
     src/text.cpp
     src/menu.cpp
     src/inventory_menu.cpp
+    src/models.cpp
     src/renderer.cpp
 )
 

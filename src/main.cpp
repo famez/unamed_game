@@ -3,6 +3,7 @@
 #include "gl.h"
 #include "inventory_menu.h"
 #include "menu.h"
+#include "models.h"
 #include "platform.h"
 #include "renderer.h"
 #include "vmath.h"
@@ -70,6 +71,9 @@ int main(int argc, char** argv) {
     DebugDraw dd, glow, hud, overlay;  // líneas, efectos aditivos, HUD y menús
     Renderer renderer;
     if (!dd.init() || !glow.init() || !hud.init() || !overlay.init() || !renderer.init()) return 1;
+    double modelStart = platform::timeSeconds();
+    buildModels(renderer);
+    std::printf("modelos generados en %.0f ms\n", 1000.0 * (platform::timeSeconds() - modelStart));
 
     glEnable(GL_PROGRAM_POINT_SIZE);
     if (platform::msaaEnabled()) glEnable(GL_MULTISAMPLE);

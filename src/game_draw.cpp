@@ -1,6 +1,7 @@
 #include "game.h"
 
 #include "renderer.h"
+#include "models.h"
 #include "text.h"
 
 #include <cstdio>
@@ -72,52 +73,46 @@ struct Shape {
     uint32_t color;
     Material material;
 };
-const uint32_t kSkin = rgba(250, 214, 182), kHair = rgba(128, 74, 42), kJacket = rgba(40, 92, 200);
-const uint32_t kTrim = rgba(250, 250, 255), kScarf = rgba(235, 60, 70), kShorts = rgba(58, 58, 76);
-const uint32_t kGlove = rgba(250, 205, 60), kShoe = rgba(240, 96, 60), kSole = rgba(250, 245, 235);
+// Detalles rígidos del Prismero (el cuerpo es la malla de models.cpp): lo que debe verse
+// nítido o brillar.
+const uint32_t kHair = rgba(232, 78, 176), kSuitC = rgba(240, 244, 252), kNeon = rgba(40, 215, 255);
+const uint32_t kNeonPink = rgba(255, 80, 190), kEye = rgba(24, 58, 112), kOutline = rgba(28, 24, 58);
 // clang-format off
 const Shape kHeroShapes[] = {
-    // tronco: chaqueta con capucha, bufanda y colgante
-    {Pelvis,    {0, -0.01f, 0},       {0.155f, 0.10f, 0.115f},  kShorts, Material::Cloth},
-    {Pelvis,    {0, 0.06f, 0},        {0.16f, 0.035f, 0.12f},   rgba(110, 70, 45), Material::Cloth},  // cinturón
-    {Pelvis,    {0, 0.06f, 0.115f},   {0.03f, 0.025f, 0.012f},  rgba(255, 220, 90), Material::Metal},
-    {Spine,     {0, 0.07f, 0.005f},   {0.155f, 0.13f, 0.11f},   kJacket, Material::Cloth},
-    {Chest,     {0, 0.10f, 0.01f},    {0.18f, 0.15f, 0.12f},    kJacket, Material::Cloth},
-    {Chest,     {0, 0.10f, 0.115f},   {0.02f, 0.13f, 0.012f},   kTrim, Material::Cloth},  // cremallera
-    {Chest,     {0, 0.21f, -0.06f},   {0.17f, 0.075f, 0.10f},   kTrim, Material::Cloth},  // capucha
-    {Chest,     {0, 0.20f, 0.03f},    {0.115f, 0.05f, 0.095f},  kScarf, Material::Cloth},
-    {Chest,     {0.03f, 0.10f, 0.13f},{0.028f, 0.028f, 0.012f}, rgba(255, 230, 110), Material::Glow},  // colgante
-    {Neck,      {0, 0.05f, 0},        {0.05f, 0.07f, 0.05f},    kSkin, Material::Cloth},
-    // cabeza grande (los ojos y el pelo se dibujan aparte)
-    {Head,      {0, 0.14f, 0.01f},    {0.125f, 0.14f, 0.13f},   kSkin, Material::Cloth},
-    {Head,      {0, 0.065f, 0.045f},  {0.085f, 0.07f, 0.08f},   kSkin, Material::Cloth},
-    {Head,      {0, 0.10f, 0.135f},   {0.014f, 0.016f, 0.014f}, kSkin, Material::Cloth},
-    {Head,      {0.125f, 0.13f, 0},   {0.02f, 0.035f, 0.025f},  kSkin, Material::Cloth},
-    {Head,      {-0.125f, 0.13f, 0},  {0.02f, 0.035f, 0.025f},  kSkin, Material::Cloth},
-    {Head,      {0.047f, 0.135f, 0.122f},  {0.026f, 0.036f, 0.014f}, rgba(40, 70, 160), Material::Cloth},
-    {Head,      {-0.047f, 0.135f, 0.122f}, {0.026f, 0.036f, 0.014f}, rgba(40, 70, 160), Material::Cloth},
-    {Head,      {0.054f, 0.148f, 0.133f},  {0.008f, 0.01f, 0.005f},  rgba(255, 255, 255), Material::Glow},
-    {Head,      {-0.040f, 0.148f, 0.133f}, {0.008f, 0.01f, 0.005f},  rgba(255, 255, 255), Material::Glow},
-    {Head,      {0, 0.19f, -0.015f},  {0.138f, 0.115f, 0.145f}, kHair, Material::Cloth},
-    // brazos: manga, antebrazo, guante grande
-    {ShoulderL, {0, -0.03f, 0},       {0.075f, 0.08f, 0.075f},  kJacket, Material::Cloth},
-    {ShoulderL, {0, -0.15f, 0},       {0.058f, 0.14f, 0.058f},  kJacket, Material::Cloth},
-    {ElbowL,    {0, -0.11f, 0},       {0.042f, 0.13f, 0.044f},  kSkin, Material::Cloth},
-    {WristL,    {0, -0.06f, 0.005f},  {0.048f, 0.075f, 0.058f}, kGlove, Material::Cloth},
-    {ShoulderR, {0, -0.03f, 0},       {0.075f, 0.08f, 0.075f},  kJacket, Material::Cloth},
-    {ShoulderR, {0, -0.15f, 0},       {0.058f, 0.14f, 0.058f},  kJacket, Material::Cloth},
-    {ElbowR,    {0, -0.11f, 0},       {0.042f, 0.13f, 0.044f},  kSkin, Material::Cloth},
-    {WristR,    {0, -0.06f, 0.005f},  {0.048f, 0.075f, 0.058f}, kGlove, Material::Cloth},
-    // piernas: pantalón corto abombado, pierna, zapatones
-    {HipL,      {0, -0.17f, 0.005f},  {0.105f, 0.24f, 0.108f},  kShorts, Material::Cloth},
-    {KneeL,     {0, -0.18f, -0.01f},  {0.062f, 0.21f, 0.066f},  kSkin, Material::Cloth},
-    {AnkleL,    {0, -0.025f, 0.065f}, {0.072f, 0.065f, 0.15f},  kShoe, Material::Cloth},
-    {AnkleL,    {0, -0.07f, 0.065f},  {0.076f, 0.022f, 0.155f}, kSole, Material::Cloth},
-    {HipR,      {0, -0.17f, 0.005f},  {0.105f, 0.24f, 0.108f},  kShorts, Material::Cloth},
-    {KneeR,     {0, -0.18f, -0.01f},  {0.062f, 0.21f, 0.066f},  kSkin, Material::Cloth},
-    {AnkleR,    {0, -0.025f, 0.065f}, {0.072f, 0.065f, 0.15f},  kShoe, Material::Cloth},
-    {AnkleR,    {0, -0.07f, 0.065f},  {0.076f, 0.022f, 0.155f}, kSole, Material::Cloth},
+    // ojos grandes con iris luminoso y brillo, cejas y boca
+    {Head,      {0.055f, 0.14f, 0.143f},  {0.031f, 0.043f, 0.016f}, kEye, Material::Cloth},
+    {Head,      {-0.055f, 0.14f, 0.143f}, {0.031f, 0.043f, 0.016f}, kEye, Material::Cloth},
+    {Head,      {0.055f, 0.134f, 0.155f}, {0.019f, 0.026f, 0.008f}, kNeon, Material::Glow},
+    {Head,      {-0.055f, 0.134f, 0.155f},{0.019f, 0.026f, 0.008f}, kNeon, Material::Glow},
+    {Head,      {0.064f, 0.153f, 0.16f},  {0.008f, 0.011f, 0.004f}, rgba(255, 255, 255), Material::Glow},
+    {Head,      {-0.046f, 0.153f, 0.16f}, {0.008f, 0.011f, 0.004f}, rgba(255, 255, 255), Material::Glow},
+    {Head,      {0.058f, 0.195f, 0.142f}, {0.032f, 0.008f, 0.012f}, kHair, Material::Cloth},
+    {Head,      {-0.058f, 0.195f, 0.142f},{0.032f, 0.008f, 0.012f}, kHair, Material::Cloth},
+    {Head,      {0, 0.068f, 0.138f},      {0.018f, 0.005f, 0.008f}, rgba(200, 90, 110), Material::Cloth},
+    // auriculares con anillo de neón
+    {Head,      {0.158f, 0.14f, 0},       {0.03f, 0.052f, 0.052f},  kSuitC, Material::Metal},
+    {Head,      {-0.158f, 0.14f, 0},      {0.03f, 0.052f, 0.052f},  kSuitC, Material::Metal},
+    {Head,      {0.186f, 0.14f, 0},       {0.007f, 0.036f, 0.036f}, kNeon, Material::Glow},
+    {Head,      {-0.186f, 0.14f, 0},      {0.007f, 0.036f, 0.036f}, kNeon, Material::Glow},
 };
+// Líneas de neón del traje (cajas finas sobre la superficie).
+struct NeonLine {
+    int joint;
+    Vec3 center, half;
+    uint32_t color;
+};
+const NeonLine kNeonLines[] = {
+    {Chest,  {0.07f, 0.08f, 0.124f},  {0.005f, 0.09f, 0.004f}, kNeon},
+    {Chest,  {-0.07f, 0.08f, 0.124f}, {0.005f, 0.09f, 0.004f}, kNeon},
+    {ElbowL, {0, -0.11f, 0.044f},     {0.006f, 0.08f, 0.004f}, kNeon},
+    {ElbowR, {0, -0.11f, 0.044f},     {0.006f, 0.08f, 0.004f}, kNeon},
+    {HipL,   {0, -0.13f, 0.111f},     {0.006f, 0.12f, 0.004f}, kNeonPink},
+    {HipR,   {0, -0.13f, 0.111f},     {0.006f, 0.12f, 0.004f}, kNeonPink},
+    {AnkleL, {0, -0.074f, 0.065f},    {0.082f, 0.006f, 0.162f}, kNeon},
+    {AnkleR, {0, -0.074f, 0.065f},    {0.082f, 0.006f, 0.162f}, kNeon},
+    {Pelvis, {0, 0.06f, 0.119f},      {0.03f, 0.018f, 0.006f}, kNeonPink},
+};
+// clang-format on
 // Pelo de punta: direcciones desde el centro de la cabeza.
 const Vec3 kSpikes[] = {
     {0, 0.35f, -1}, {0.6f, 0.4f, -0.8f}, {-0.6f, 0.4f, -0.8f}, {0.9f, 0.5f, -0.2f}, {-0.9f, 0.5f, -0.2f},
@@ -353,26 +348,30 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
     }
     if (blink) return;
     float flash = heroFlash_ > 0 ? 0.7f : 0;
-    // Cabeza más grande de lo realista (proporciones de dibujo animado): todo lo que
-    // cuelga de la articulación de la cabeza se escala desde la base del cráneo.
-    const Mat4 head = j[Head] * scale({1.3f, 1.3f, 1.3f});
-    for (const Shape& s : kHeroShapes)
-        solid->ellipsoid(s.joint == Head ? head : j[s.joint], s.center, s.radii, s.color, s.material, flash);
-    // Pelo de punta: los mechones se inclinan hacia donde se queda atrás el punto con
-    // muelle que sigue a la cabeza (inercia al correr, saltar y girar).
+    // Cuerpo continuo (malla con skinning) con contorno, y los detalles rígidos encima.
+    const BuiltModel& body = model(ModelId::Hero);
+    Mat4 skin[kMaxJoints];
+    skinMatrices(body, j, skin);
+    solid->skinned(body.mesh, skin, body.jointCount, flash, kOutline);
+    for (const Shape& s : kHeroShapes) solid->ellipsoid(j[s.joint], s.center, s.radii, s.color, s.material, flash);
+    for (const NeonLine& l : kNeonLines) solid->box(j[l.joint], l.center, l.half, l.color, Material::Glow, flash);
+    solid->box(j[Chest] * translate({0, 0.12f, 0.128f}) * rotateZ(kPi * 0.25f), {}, {0.028f, 0.028f, 0.012f}, kNeonPink,
+               Material::Glow, flash);  // núcleo del pecho
+    // Mechones de pelo: se inclinan hacia donde se queda atrás el punto con muelle que
+    // sigue a la cabeza (inercia al correr, saltar y girar).
     Vec3 lagW = hero_.hairLag();
     const float* hm = j[Head].m;
     Vec3 lag{hm[0] * lagW.x + hm[1] * lagW.y + hm[2] * lagW.z, hm[4] * lagW.x + hm[5] * lagW.y + hm[6] * lagW.z,
              hm[8] * lagW.x + hm[9] * lagW.y + hm[10] * lagW.z};
-    Vec3 headCenter{0, 0.19f, -0.02f};
+    Vec3 headCenter{0, 0.2f, -0.02f};
     for (Vec3 d : kSpikes) {
         Vec3 n = normalize(normalize(d) + lag * 5.0f);
-        solid->ellipsoid(head * translate(headCenter + n * 0.11f) * basisY(n), {}, {0.05f, 0.12f, 0.05f}, kHair,
+        solid->ellipsoid(j[Head] * translate(headCenter + n * 0.13f) * basisY(n), {}, {0.06f, 0.14f, 0.055f}, kHair,
                          Material::Cloth, flash);
     }
-    for (float x : {-0.06f, 0.0f, 0.06f}) {  // flequillo
-        Vec3 n = normalize(Vec3{x * 3.0f, -0.4f, 1.0f});
-        solid->ellipsoid(head * translate(Vec3{x, 0.24f, 0.09f}) * basisY(-n), {}, {0.035f, 0.07f, 0.03f}, kHair,
+    for (float x : {-0.07f, 0.0f, 0.07f}) {  // flequillo hacia un lado
+        Vec3 n = normalize(Vec3{-0.6f + x * 2.0f, -0.5f, 1.0f} + lag * 3.0f);
+        solid->ellipsoid(j[Head] * translate(Vec3{x, 0.27f, 0.1f}) * basisY(-n), {}, {0.045f, 0.09f, 0.035f}, kHair,
                          Material::Cloth, flash);
     }
     drawWeapon(*solid, j[WristR], ws, time_);
@@ -386,7 +385,8 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
         if (len < 1e-4f) continue;
         float t = float(i) / float(Character::kRibbonPoints - 1);
         float wdt = lerpf(0.07f, 0.035f, t);
-        solid->ellipsoid(translate((a + b) * 0.5f) * basisY(d), {}, {wdt, len * 0.62f, 0.012f}, kScarf, Material::Cloth, flash);
+        uint32_t col = mixRgb(kNeon, kNeonPink, t);  // cinta de luz: del cian al magenta
+        solid->ellipsoid(translate((a + b) * 0.5f) * basisY(d), {}, {wdt, len * 0.62f, 0.012f}, col, Material::Glow, flash);
     }
     if (guardFlash_ > 0)
         solid->light(translationOf(j[WristR]) + hero_.forward() * 0.3f,
