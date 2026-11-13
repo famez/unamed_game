@@ -91,6 +91,13 @@ public:
     void light(Vec3 pos, Vec3 color, float radius);
     // Mancha de chamuscado sobre las superficies horizontales cercanas a `pos`.
     void scorch(Vec3 pos, float radius, float strength);
+    // "El color es energía": croma del mundo (0 gris, 1 a todo color). Afecta solo a lo que
+    // se añade entre setScenery(true) y setScenery(false) (el escenario) y al cielo.
+    void setWorldColor(float c) { worldColor_ = c; }
+    void setScenery(bool on) { scenery_ = on; }
+    // Salpicadura de color en el suelo (no le afecta la falta de croma).
+    void paint(Vec3 pos, float radius, uint32_t color);
+    static constexpr int kMaxPaints = 16;
 
     static constexpr int kMaxLights = 8, kMaxScorches = 8, kMaxBones = 20;
 
@@ -174,6 +181,9 @@ private:
     std::vector<FxInstance> smoke_;
     std::vector<VolumeInstance> volumes_;
     bool highlighting_ = false;
+    bool scenery_ = false;
+    float worldColor_ = 1.0f;
+    std::vector<float> paints_;  // x, y, z, radio, r, g, b
     uint32_t highlightColor_ = 0;
     std::vector<PointLight> lights_;
     std::vector<float> scorches_;  // x, y, z, radio, intensidad por mancha

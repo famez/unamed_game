@@ -291,6 +291,26 @@ int main() {
         run(g, 5.0f);
         CHECK(g.wave_ == 2 && g.enemies_.size() == 3, "oleada 2 al limpiar la 1: %zu enemigos", g.enemies_.size());
     }
+    {  // El color es energía: cada Gris disipado y cada oleada superada devuelven croma
+        Game g;
+        g.init();
+        float c0 = g.croma_;
+        run(g, 2.2f);
+        for (Enemy& e : g.enemies_) g.killEnemy(e);
+        CHECK(std::fabs(g.croma_ - (c0 + 3 * 0.035f)) < 1e-4f, "3 Grises disipados: croma %.0f%% -> %.0f%%", c0 * 100,
+              g.croma_ * 100);
+        CHECK(g.splashes_.size() == 3, "dejan %zu salpicaduras de color", g.splashes_.size());
+        float c1 = g.croma_;
+        run(g, 1.0f);
+        CHECK(std::fabs(g.croma_ - (c1 + 0.1f)) < 1e-4f, "oleada superada: +10%% (croma %.0f%%)", g.croma_ * 100);
+        for (int i = 0; i < 60; ++i) {
+            Enemy e = makeEnemy(EnemyKind::Imp, {0, 0, 5}, 0, 0);
+            g.enemies_.push_back(e);
+            g.killEnemy(g.enemies_.back());
+        }
+        CHECK(g.croma_ == 1.0f && g.splashes_.size() == size_t(Renderer::kMaxPaints),
+              "el croma se queda en el 100%% y se guardan las %zu salpicaduras mas recientes", g.splashes_.size());
+    }
     {  // Derrota y vuelta a empezar
         Game g = fresh();
         g.hurtHero({0, 0, 1}, 500, 2, nullptr);

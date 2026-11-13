@@ -9,10 +9,6 @@
 namespace {
 
 uint32_t withAlpha(uint32_t c, float a) { return (c & 0x00FFFFFFu) | uint32_t(clampf(a, 0, 1) * 255.0f + 0.5f) << 24; }
-uint32_t scaleRgb(uint32_t c, float k) {
-    auto ch = [&](int shift) { return uint32_t(clampf(float((c >> shift) & 0xFF) * k, 0, 255)) << shift; };
-    return ch(0) | ch(8) | ch(16) | (c & 0xFF000000u);
-}
 uint32_t mixRgb(uint32_t a, uint32_t b, float t) {
     auto ch = [&](int shift) {
         return uint32_t(lerpf(float((a >> shift) & 0xFF), float((b >> shift) & 0xFF), t)) << shift;
@@ -147,38 +143,51 @@ void drawGrid(DebugDraw& dd) {
     }
 }
 
-// Arma en la mano: la hoja sale de la muñeca a lo largo de +Z local.
-void drawWeapon(Renderer& r, const Mat4& w, const WeaponStats& ws, float time) {
+// Arma prisma: empuñadura blanca con anillo de luz y una forma de luz sólida que cambia
+// con el golpe: hoja (tajos), látigo (giros) y martillo (remate). La hoja sale de la
+// muñeca a lo largo de +Z local.
+void drawWeapon(Renderer& r, const Mat4& w, const WeaponStats& ws, Move m, float u, float time) {
     float len = ws.length;
+    // Cuánto de látigo o de martillo: entra y sale suave al principio y al final del golpe.
+    float morph = smoothstep01(u / 0.15f) * smoothstep01((1.0f - u) / 0.15f);
+    float whip = (m == Move::Slash3 || m == Move::AirFinisher) ? morph : 0.0f;
+    float hammer = m == Move::Finisher ? morph : 0.0f;
+    const uint32_t grip = rgba(235, 238, 248);
+    r.box(w, kGripLocal, {0.02f, 0.02f, 0.075f}, grip, Material::Metal);
+    r.ellipsoid(w, kGripLocal + Vec3{0, 0, 0.09f}, {0.07f, 0.07f, 0.025f}, grip, Material::Metal);
+    r.ellipsoid(w, kGripLocal + Vec3{0, 0, 0.1f}, {0.055f, 0.055f, 0.02f}, ws.trail, Material::Glow);
+    r.ellipsoid(w, kGripLocal - Vec3{0, 0, 0.08f}, {0.03f, 0.03f, 0.03f}, ws.trail, Material::Glow);  // pomo
+
+    if (whip > 0.01f) {
+        // Látigo: cadena de cuentas de luz, más larga, que se curva hacia atrás.
+        const int n = 14;
+        float total = len * (1.0f + 1.3f * whip);
+        for (int i = 0; i < n; ++i) {
+            float t = float(i + 1) / float(n);
+            Vec3 p = kBladeBase + Vec3{-0.45f * whip * t * t, 0.05f * std::sin(time * 20.0f + t * 6.0f) * whip, total * t};
+            float rad = lerpf(0.035f, 0.022f, t);
+            r.ellipsoid(w, p, {rad, rad, rad * 1.6f}, ws.trail, Material::Glow);
+        }
+        return;
+    }
     Vec3 base = kBladeBase, tip = kBladeBase + Vec3{0, 0, len};
     Vec3 mid = (base + tip) * 0.5f;
-    switch (ws.style) {
-        case WeaponStyle::Sword:
-            r.box(w, kGripLocal, {0.02f, 0.02f, 0.075f}, ws.hilt, Material::Cloth);
-            r.box(w, kGripLocal + Vec3{0, 0, 0.085f}, {0.085f, 0.022f, 0.022f}, scaleRgb(ws.hilt, 1.3f), Material::Cloth);
-            r.box(w, mid, {0.036f, 0.013f, len * 0.5f}, ws.blade, Material::Cloth);
-            r.ellipsoid(w, tip, {0.036f, 0.013f, 0.06f}, ws.blade, Material::Cloth);
-            break;
-        case WeaponStyle::Staff: {
-            r.box(w, mid - Vec3{0, 0, 0.12f}, {0.02f, 0.02f, len * 0.5f + 0.12f}, ws.blade, Material::Metal);
-            r.ellipsoid(w, base, {0.035f, 0.035f, 0.03f}, ws.hilt, Material::Metal);
-            // Estrella de cinco puntas que gira en la punta.
-            Mat4 star = w * translate(tip + Vec3{0, 0, 0.06f}) * rotateZ(time * 2.0f);
-            r.ellipsoid(star, {}, {0.05f, 0.05f, 0.03f}, ws.hilt, Material::Glow);
-            for (int i = 0; i < 5; ++i) {
-                float a = 2.0f * kPi * float(i) / 5.0f;
-                Vec3 d{std::cos(a), std::sin(a), 0};
-                r.ellipsoid(star * translate(d * 0.07f) * basisY(d), {}, {0.024f, 0.06f, 0.016f}, ws.hilt, Material::Glow);
-            }
-            break;
+    // Hoja: núcleo luminoso del color del prisma dentro de una funda clara.
+    r.box(w, mid, {0.04f, 0.011f, len * 0.5f}, ws.blade, Material::Metal);
+    r.box(w, mid, {0.014f, 0.015f, len * 0.48f}, ws.trail, Material::Glow);
+    r.ellipsoid(w, tip, {0.045f, 0.018f, 0.09f}, ws.trail, Material::Glow);
+    if (hammer > 0.01f) {  // martillo: una cabeza de luz que crece en la punta
+        Vec3 head = tip + Vec3{0, 0, 0.05f};
+        r.box(w, head, Vec3{0.16f, 0.11f, 0.11f} * hammer, ws.blade, Material::Metal);
+        r.box(w, head, Vec3{0.17f, 0.06f, 0.06f} * hammer, ws.trail, Material::Glow);
+    }
+    if (ws.style == WeaponStyle::Staff) {  // el prisma estelar lleva una estrella en la punta
+        Mat4 star = w * translate(tip + Vec3{0, 0, 0.06f}) * rotateZ(time * 2.0f);
+        for (int i = 0; i < 5; ++i) {
+            float a = 2.0f * kPi * float(i) / 5.0f;
+            Vec3 d{std::cos(a), std::sin(a), 0};
+            r.ellipsoid(star * translate(d * 0.06f) * basisY(d), {}, {0.02f, 0.05f, 0.014f}, rgba(255, 230, 120), Material::Glow);
         }
-        case WeaponStyle::Saber:
-            r.box(w, kGripLocal, {0.02f, 0.02f, 0.075f}, ws.hilt, Material::Metal);
-            r.ellipsoid(w, kGripLocal + Vec3{0, 0, 0.09f}, {0.11f, 0.03f, 0.04f}, ws.trail, Material::Glow);
-            r.box(w, mid, {0.042f, 0.011f, len * 0.5f}, ws.blade, Material::Metal);
-            r.box(w, mid, {0.012f, 0.014f, len * 0.48f}, ws.trail, Material::Glow);
-            r.ellipsoid(w, tip, {0.045f, 0.02f, 0.09f}, ws.trail, Material::Glow);
-            break;
     }
 }
 
@@ -271,6 +280,10 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
                    c.open ? rgba(120, 110, 60) : rgba(255, 220, 80));
         return;
     }
+    // Todo el escenario se ve con el croma actual; las salpicaduras de color lo devuelven.
+    solid->setWorldColor(cromaShown_);
+    solid->setScenery(true);
+    for (const ColorSplash& sp : splashes_) solid->paint(sp.pos, sp.radius * smoothstep01(sp.age / 0.3f), sp.color);
     // Césped alrededor y plaza de adoquines.
     solid->box(id, {0, -0.5f, 0}, {200, 0.5f, 200}, rgba(80, 200, 140), Material::Grass);
     solid->box(id, {0, 0.004f, 0}, {16.2f, 0.004f, 16.2f}, rgba(205, 210, 226), Material::Ground);
@@ -351,6 +364,7 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
             solid->light(c.pos + Vec3{0, 0.8f, 0}, Vec3{1.0f, 0.9f, 0.5f} * (3.0f * (1.0f - c.openTime / 1.5f)), 4.0f);
         }
     }
+    solid->setScenery(false);
 }
 
 void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float alpha) const {
@@ -413,7 +427,7 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
         solid->ellipsoid(j[Head] * translate(Vec3{x, 0.27f, 0.1f}) * basisY(-n), {}, {0.045f, 0.09f, 0.035f}, kHair,
                          Material::Cloth, flash);
     }
-    drawWeapon(*solid, j[WristR], ws, time_);
+    drawWeapon(*solid, j[WristR], ws, hero_.move(), hero_.moveU(), time_);
     // Cinta de la espalda: segmentos alargados entre los puntos de la cadena, que se
     // estrechan hacia la punta.
     Vec3 rib[Character::kRibbonPoints];
@@ -731,7 +745,20 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
         std::snprintf(buf, sizeof(buf), "OLEADA %d", wave_);
         uiText(ui, 30, 18, 20, buf, kUiText, FontFace::Title);
         std::snprintf(buf, sizeof(buf), "Grises disipados: %d", kills_);
-        uiText(ui, 28, 48, 16, buf, kUiDim);
+        uiText(ui, 30, 46, 16, buf, kUiDim);
+        // Croma: barra arcoíris (cada segmento de un color, apagados los que faltan).
+        skewRect(d, 18, 78, 250, 116, 10, kUiPanel);
+        std::snprintf(buf, sizeof(buf), "CROMA %d%%", int(cromaShown_ * 100.0f + 0.5f));
+        uiText(ui, 30, 81, 14, buf, kUiText, FontFace::Title);
+        const uint32_t rainbow[] = {rgba(255, 70, 120), rgba(255, 150, 50), rgba(255, 220, 60), rgba(110, 255, 140),
+                                    rgba(40, 220, 255), rgba(120, 110, 255), rgba(230, 90, 255)};
+        const int segs = 14;
+        for (int i = 0; i < segs; ++i) {
+            float x0 = 30 + float(i) * 15.0f, lit = clampf(cromaShown_ * segs - float(i), 0, 1);
+            uint32_t c = rainbow[i * 7 / segs];
+            skewRect(d, x0, 101, x0 + 12, 109, 3, rgba(50, 50, 70, 220));
+            if (lit > 0) skewRect(d, x0, 101, x0 + 12 * lit, 109, 3, c);
+        }
         float by = h * 0.2f;
         if (waveBanner_ > 0) {
             float a = clampf(std::min((2.5f - waveBanner_) / 0.3f, waveBanner_ / 0.5f), 0, 1);

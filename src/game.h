@@ -131,6 +131,14 @@ struct Crate {  // caja rompible: suelta dinero y orbes
     float hitFlash = 0;
 };
 
+// Salpicadura de color que deja un Gris al disiparse (devuelve el color a su alrededor).
+struct ColorSplash {
+    Vec3 pos;
+    float radius;
+    uint32_t color;
+    float age = 0;
+};
+
 struct TrailSample {  // estela del arma: base y punta de la hoja en un instante
     Vec3 base, tip;
     float age;
@@ -185,6 +193,8 @@ public:
     // Posición del objetivo fijado (para la cámara). Falso si no hay.
     bool lockTarget(Vec3& pos) const;
     float cameraShake() const { return shake_; }
+    // "El color es energía": 0 = ciudad gris y apagada, 1 = a todo color.
+    float croma() const { return croma_; }
     // Apertura extra del campo de visión (radianes) en acercamientos y remates.
     float fovKick() const { return fovKick_; }
     Vec3 heroRenderPos(float alpha) const { return hero_.interpolatedPos(alpha); }
@@ -265,6 +275,10 @@ private:
     std::vector<TreasureChest> chests_;
     std::vector<Crate> crates_;
     std::vector<TrailSample> trail_;
+    float croma_ = 0.12f;        // sube al disipar Grises y al superar oleadas
+    float cromaShown_ = 0.12f;   // el que se ve: lo sigue suavemente
+    std::vector<ColorSplash> splashes_;
+    bool waveActive_ = false;    // hay una oleada en curso (para premiar al limpiarla)
     int wave_ = 0;
     float waveTimer_ = 2.0f;  // hasta la siguiente oleada
     float waveBanner_ = 0;    // cartel "OLEADA N"

@@ -35,11 +35,11 @@ const ItemDef kItems[int(ItemId::Count)] = {
     {"Polvo de eco",     "Al tocarlo se oye un susurro lejano.",     ItemKind::Material,   rgb(200, 160, 255), 0, 0, {}},
     {"Prisma ígneo",     "Una gema tibia. Late como un corazón.",    ItemKind::Material,   rgb(255, 110, 60), 0, 0, {}},
     {"Prisma básico",    "Equilibrado. Combo de 4 golpes.",          ItemKind::Weapon,     rgb(210, 170, 110), 0, 0,
-        weapon(10, 4, 3, 1.9f, 1.0f, 0.80f, rgb(222, 184, 120), rgb(120, 80, 45), rgb(120, 200, 255), WeaponStyle::Sword)},
+        weapon(10, 4, 3, 1.9f, 1.0f, 0.80f, rgb(236, 240, 250), rgb(200, 205, 220), rgb(40, 220, 255), WeaponStyle::Sword)},
     {"Prisma estelar",   "Magia fuerte. Combo rápido de 5.",         ItemKind::Weapon,     rgb(170, 120, 255), 0, 0,
-        weapon(7, 12, 4, 1.8f, 1.2f, 0.95f, rgb(150, 110, 230), rgb(255, 225, 90), rgb(200, 150, 255), WeaponStyle::Staff)},
+        weapon(7, 12, 4, 1.8f, 1.2f, 0.95f, rgb(236, 230, 252), rgb(255, 225, 90), rgb(170, 120, 255), WeaponStyle::Staff)},
     {"Prisma aurora",    "Golpes muy fuertes y de largo alcance.",   ItemKind::Weapon,     rgb(255, 150, 200), 0, 0,
-        weapon(16, 7, 3, 2.3f, 0.95f, 1.00f, rgb(255, 205, 230), rgb(250, 200, 80), rgb(255, 140, 200), WeaponStyle::Saber)},
+        weapon(16, 7, 3, 2.3f, 0.95f, 1.00f, rgb(255, 236, 246), rgb(250, 200, 80), rgb(255, 80, 190), WeaponStyle::Saber)},
 };
 // clang-format on
 

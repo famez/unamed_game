@@ -91,6 +91,10 @@ uniform vec3 uLightColor[8];
 uniform int uScorchCount;
 uniform vec4 uScorch[8];      // xyz, radio
 uniform float uScorchAmount[8];
+uniform float uWorldColor;      // croma del mundo: 0 = gris y apagado, 1 = a todo color
+uniform int uPaintCount;
+uniform vec4 uPaint[16];        // salpicaduras de color: xyz, radio
+uniform vec3 uPaintColor[16];
 uniform vec4 uOutlineColor;  // a > 0: pasada de silueta (color plano, sin iluminación)
 uniform float uTime;
 out vec4 fragColor;
@@ -119,7 +123,8 @@ void main() {
         fragColor = vec4(uOutlineColor.rgb, 0.0);
         return;
     }
-    int material = int(vParams.x + 0.5);
+    bool scenery = vParams.x > 15.5;  // el escenario lleva el material + 16
+    int material = int(mod(vParams.x, 16.0) + 0.5);
     vec3 n = normalize(vNormal);
     vec3 base = toLinear(vColor.rgb);
     float seamGlow = 0.0;  // juntas luminosas del suelo (emisión que alimenta el bloom)
@@ -144,6 +149,24 @@ void main() {
         float n = 0.65 * noise(vWorldPos.xz * 0.35) + 0.35 * noise(vWorldPos.xz * 1.3);
         base *= mix(0.8, 1.15, n);
         base = mix(base, base * vec3(1.15, 1.1, 0.7), smoothstep(0.6, 0.8, noise(vWorldPos.xz * 0.5 + 7.0)));
+    }
+    // El color es energía: sin croma, el escenario se queda gris y los neones casi apagados.
+    // Las salpicaduras que dejan los Grises al disiparse devuelven el color a su alrededor.
+    if (scenery) {
+        float l = dot(base, vec3(0.299, 0.587, 0.114));
+        base = mix(vec3(l), base, mix(0.06, 1.0, uWorldColor));
+        if (material == 4) base *= mix(0.25, 1.0, uWorldColor);
+        seamGlow *= uWorldColor;
+        if (n.y > 0.5) {
+            for (int i = 0; i < uPaintCount; ++i) {
+                vec2 d2 = vWorldPos.xz - uPaint[i].xz;
+                if (abs(vWorldPos.y - uPaint[i].y) > 0.6 || dot(d2, d2) > uPaint[i].w * uPaint[i].w * 1.6) continue;
+                float edge = (fbm(vWorldPos.xz * 2.5 + float(i) * 7.3) - 0.5) * uPaint[i].w * 0.7;
+                float k = 1.0 - smoothstep(uPaint[i].w * 0.55, uPaint[i].w, length(d2) + edge);
+                base = mix(base, toLinear(uPaintColor[i]) * 0.9, k * 0.85);
+                seamGlow = max(seamGlow, k * 0.15);
+            }
+        }
     }
     if (material == 4) {  // emisivo: el color es luz propia, sin sombras
         vec3 Ve = normalize(uCameraPos - vWorldPos);
@@ -312,10 +335,12 @@ uniform vec3 uCamForward, uCamRight, uCamUp;
 uniform vec2 uTanHalf;  // tan(fov/2) * aspect, tan(fov/2)
 uniform vec3 uSunDir;
 uniform float uTime;
+uniform float uWorldColor;
 out vec4 fragColor;
 void main() {
     vec3 dir = normalize(uCamForward + vNdc.x * uTanHalf.x * uCamRight + vNdc.y * uTanHalf.y * uCamUp);
     vec3 color = mix(kHorizon, kZenith, smoothstep(0.0, 0.5, dir.y));
+    color = mix(vec3(dot(color, vec3(0.299, 0.587, 0.114))), color, mix(0.25, 1.0, uWorldColor));
     // Nubes: ruido sobre un plano alto, más densas hacia el horizonte.
     if (dir.y > 0.0) {
         vec2 uv = dir.xz / (dir.y + 0.15) * 1.6;
@@ -1005,6 +1030,12 @@ void Renderer::smoke(Vec3 center, float size, float seed, float opacity) {
 
 void Renderer::light(Vec3 pos, Vec3 color, float radius) { lights_.push_back({pos, color, radius}); }
 
+void Renderer::paint(Vec3 pos, float radius, uint32_t color) {
+    if (int(paints_.size() / 7) >= kMaxPaints) return;
+    paints_.insert(paints_.end(), {pos.x, pos.y, pos.z, radius, float(color & 0xFF) / 255.0f,
+                                   float((color >> 8) & 0xFF) / 255.0f, float((color >> 16) & 0xFF) / 255.0f});
+}
+
 void Renderer::scorch(Vec3 pos, float radius, float strength) {
     if (int(scorches_.size() / 5) >= kMaxScorches) return;
     scorches_.insert(scorches_.end(), {pos.x, pos.y, pos.z, radius, strength});
@@ -1014,7 +1045,7 @@ void Renderer::addInstance(const Mat4& model, uint32_t color, Material m, float 
     Instance inst;
     for (int i = 0; i < 16; ++i) inst.model[i] = model.m[i];
     inst.color = color;
-    inst.material = float(int(m));
+    inst.material = float(int(m)) + (scenery_ ? 16.0f : 0.0f);
     inst.flash = flash;
     inst.shape = sphere ? 1.0f : 0.0f;
     Batch& b = sphere ? (highlighting_ ? highlightSpheres_ : spheres_) : (highlighting_ ? highlightBoxes_ : boxes_);
@@ -1317,6 +1348,7 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
     setVec3(skyProgram_, "uCamUp", cam.up);
     setVec3(skyProgram_, "uSunDir", kSunDir);
     glUniform1f(glGetUniformLocation(skyProgram_, "uTime"), time);
+    glUniform1f(glGetUniformLocation(skyProgram_, "uWorldColor"), worldColor_);
     float t = std::tan(cam.fovY * 0.5f);
     glUniform2f(glGetUniformLocation(skyProgram_, "uTanHalf"), t * cam.aspect, t);
     glBindVertexArray(emptyVao_);
@@ -1368,6 +1400,18 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
         }
         glUniform1f(glGetUniformLocation(prog, "uInflate"), 0.0f);
         glUniform4f(glGetUniformLocation(prog, "uOutlineColor"), 0, 0, 0, 0);
+        glUniform1f(glGetUniformLocation(prog, "uWorldColor"), worldColor_);
+        int paintCount = int(paints_.size() / 7);
+        glUniform1i(glGetUniformLocation(prog, "uPaintCount"), paintCount);
+        if (paintCount > 0) {
+            float pos[kMaxPaints * 4], col[kMaxPaints * 3];
+            for (int i = 0; i < paintCount; ++i) {
+                for (int k = 0; k < 4; ++k) pos[i * 4 + k] = paints_[size_t(i) * 7 + size_t(k)];
+                for (int k = 0; k < 3; ++k) col[i * 3 + k] = paints_[size_t(i) * 7 + 4 + size_t(k)];
+            }
+            glUniform4fv(glGetUniformLocation(prog, "uPaint"), paintCount, pos);
+            glUniform3fv(glGetUniformLocation(prog, "uPaintColor"), paintCount, col);
+        }
     };
     // Personajes: malla con skinning y, detrás, su contorno (la malla inflada con las
     // caras frontales descartadas: solo asoma el borde).
@@ -1500,4 +1544,5 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
     volumes_.clear();
     lights_.clear();
     scorches_.clear();
+    paints_.clear();
 }

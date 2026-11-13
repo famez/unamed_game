@@ -15,11 +15,11 @@ const HitParams kHits[int(Move::Count)] = {
     {0,    0,     1,     0,    0,    false},  // None
     {1.0f, 0,     0.1f,  3.0f, 0.8f, false},  // Slash1
     {1.0f, 0,     0.1f,  3.0f, 0.8f, false},  // Slash2
-    {1.2f, 0.2f, -1.0f,  4.5f, 1.5f, false},  // Slash3: giro, golpea alrededor
-    {2.2f, 0.6f, -1.0f,  9.0f, 5.5f, true},   // Finisher: lanza por los aires
+    {1.2f, 0.9f, -1.0f,  4.5f, 1.5f, false},  // Slash3: giro con el látigo, golpea alrededor
+    {2.2f, 0.9f, -1.0f,  9.0f, 5.5f, true},   // Finisher: martillazo que lanza por los aires
     {1.0f, 0.1f,  0.0f,  1.5f, 2.5f, false},  // Air1: mantiene al enemigo en el aire
     {1.0f, 0.1f,  0.0f,  1.5f, 2.5f, false},  // Air2
-    {2.0f, 0.3f, -1.0f,  8.0f, 3.0f, true},   // AirFinisher
+    {2.0f, 0.9f, -1.0f,  8.0f, 3.0f, true},   // AirFinisher: remolino con el látigo
     {0,    0,     1,     0,    0,    false},  // Cast
 };
 const SpellDef kSpells[int(Spell::Count)] = {
@@ -45,13 +45,15 @@ uint32_t scaleColor(uint32_t c, float k) {
     return ch(0) | ch(8) | ch(16) | (c & 0xFF000000u);
 }
 
+// El color que cada especie de Gris ha robado (y devuelve al disiparse).
 uint32_t enemyColor(EnemyKind k) {
     switch (k) {
-        case EnemyKind::Imp: return rgba(220, 150, 255);
-        case EnemyKind::Shroom: return rgba(90, 240, 220);
-        default: return rgba(255, 190, 235);
+        case EnemyKind::Imp: return rgba(255, 70, 190);
+        case EnemyKind::Shroom: return rgba(255, 185, 50);
+        default: return rgba(40, 225, 255);
     }
 }
+constexpr float kCromaPerKill = 0.035f, kCromaPerWave = 0.1f;
 
 }  // namespace
 
@@ -374,6 +376,13 @@ void Game::update(float dt, const Controls& c) {
     for (TreasureChest& ch : chests_)
         if (ch.open) ch.openTime += dt;
 
+    if (enemies_.empty() && waveActive_) {  // oleada superada: la ciudad recupera color
+        waveActive_ = false;
+        croma_ = std::min(1.0f, croma_ + kCromaPerWave);
+        notify(croma_ >= 1.0f ? "La ciudad brilla de nuevo" : "El color vuelve a la ciudad", rgba(110, 255, 190));
+    }
+    cromaShown_ = moveTowards(cromaShown_, croma_, 0.25f * dt);
+    for (ColorSplash& sp : splashes_) sp.age += dt;
     if (enemies_.empty()) {
         waveTimer_ -= dt;
         if (waveTimer_ <= 0) {
@@ -389,6 +398,7 @@ void Game::spawnWave() {
     int extra = std::max(0, wave_ - (kWaveCount - 1));
     ++wave_;
     waveBanner_ = 2.5f;
+    waveActive_ = true;
     for (int kind = 0; kind < int(EnemyKind::Count); ++kind)
         for (int n = 0; n < w[kind] + extra; ++n) {
             // Un punto de aparición lejos del jugador (y no siempre el mismo).
@@ -527,8 +537,11 @@ bool Game::castSpell(Spell s) {
     return true;
 }
 
+// Punta del arma: el látigo de los giros es más largo que la hoja.
 Vec3 Game::bladeTip() const {
-    return transformPoint(hero_.joints[WristR], kBladeBase + Vec3{0, 0, inv_.weaponStats().length});
+    Move m = hero_.move();
+    float len = inv_.weaponStats().length * (m == Move::Slash3 || m == Move::AirFinisher ? 2.0f : 1.0f);
+    return transformPoint(hero_.joints[WristR], kBladeBase + Vec3{0, 0, len});
 }
 
 void Game::castImpact(Spell s) {
@@ -662,13 +675,23 @@ void Game::killEnemy(Enemy& e) {
     e.stateTime = 0;
     e.health = 0;
     ++kills_;
+    croma_ = std::min(1.0f, croma_ + kCromaPerKill);
     for (size_t i = 0; i < enemies_.size(); ++i)
         if (&enemies_[i] == &e && lock_ == int(i)) lock_ = -1;
     Vec3 c = e.center();
     uint32_t col = enemyColor(e.kind);
     spawnSparks(c, {0, 1, 0}, 24, col, 5.0f);
     spawnSparks(c, {0, 1, 0}, 10, rgba(255, 255, 255), 3.0f);
-    spawnRing(Vec3{c.x, groundHeight(c) + 0.05f, c.z}, 1.6f, 0.5f, col);
+    Vec3 ground{c.x, groundHeight(c), c.z};
+    spawnRing(ground + Vec3{0, 0.05f, 0}, 1.6f, 0.5f, col);
+    // El color robado vuelve al mundo: salpica el suelo y se queda.
+    splashes_.push_back({ground, randRange(1.1f, 1.6f), col, 0});
+    if (splashes_.size() > size_t(Renderer::kMaxPaints)) splashes_.erase(splashes_.begin());
+    for (int i = 0; i < 14 && particles_.size() < kMaxParticles; ++i) {
+        float a = random01() * 2.0f * kPi;
+        particles_.push_back({c, {std::cos(a) * randRange(2, 5), randRange(2, 5), std::sin(a) * randRange(2, 5)}, 0.7f, 0.7f,
+                              0.09f, col, 9.8f, false});
+    }
     // El "alma" del enemigo: un destello grande que sube despacio.
     particles_.push_back({c, {0, 1.6f, 0}, 1.3f, 1.3f, 0.5f, rgba(255, 150, 220), -0.2f, true});
 
