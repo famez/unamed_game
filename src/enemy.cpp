@@ -341,6 +341,9 @@ Enemy makeEnemy(EnemyKind kind, Vec3 pos, float yaw, float seed) {
     e.health = d.maxHealth;
     e.seed = seed;
     e.phase = seed;
+    animateEnemy(e, 0, 0);
+    for (int i = 0; i < d.jointCount; ++i) e.prevJoints[i] = e.joints[i];
+    e.prevPos = pos;
     return e;
 }
 
@@ -361,16 +364,57 @@ Mat4 Enemy::modelMatrix() const {
     return m;
 }
 
-void animateEnemy(Enemy& e, float time) {
-    e.pose = Pose{};
-    Vec3* r = e.pose.rotation;
-    Vec3& root = e.pose.rootOffset;
+void animateEnemy(Enemy& e, float time, float dt) {
+    const EnemyDef& d = e.def();
+    // Inercia de los apéndices: un punto con muelle sigue al centro del cuerpo; su retraso
+    // (en el espacio del enemigo) inclina orejas, cola, sombrero y antenas.
+    Vec3 c = e.center();
+    if (!e.lagInit) {
+        e.lagInit = true;
+        e.lagPoint = c;
+    }
+    Vec3 acc = (c - e.lagPoint) * 120.0f - e.lagVel * 11.0f;
+    e.lagVel += acc * dt;
+    e.lagPoint += e.lagVel * dt;
+    Vec3 lag = e.lagPoint - c;
+    float fwd = clampf(dot(lag, e.forward()) * 5.0f, -0.6f, 0.6f);  // > 0: el punto va por delante
+    float side = clampf(dot(lag, Vec3{std::cos(e.yaw), 0, -std::sin(e.yaw)}) * 5.0f, -0.6f, 0.6f);
+    float up = clampf(lag.y * 5.0f, -0.6f, 0.6f);
+
+    Pose target;
+    Vec3* r = target.rotation;
+    Vec3& root = target.rootOffset;
     switch (e.kind) {
-        case EnemyKind::Imp: animateImp(e, time, r, root); break;
-        case EnemyKind::Shroom: animateShroom(e, time, r, root); break;
-        case EnemyKind::Moth: animateMoth(e, time, r, root); break;
+        case EnemyKind::Imp:
+            animateImp(e, time, r, root);
+            r[ImEarL].x -= fwd + up;
+            r[ImEarR].x -= fwd + up;
+            r[ImEarL].z += side;
+            r[ImEarR].z += side;
+            r[ImTail].x -= up * 1.5f;
+            r[ImTail].y += side * 1.5f;
+            break;
+        case EnemyKind::Shroom:
+            animateShroom(e, time, r, root);
+            r[ShCap].x -= 0.6f * (fwd + 0.5f * up);
+            r[ShCap].z += 0.6f * side;
+            break;
+        case EnemyKind::Moth:
+            animateMoth(e, time, r, root);
+            r[MoAntL].x -= fwd;
+            r[MoAntR].x -= fwd;
+            r[MoAbdomen].x -= up;
+            break;
         case EnemyKind::Count: break;
     }
-    const EnemyDef& d = e.def();
+    // Fundido al cambiar de estado.
+    if (e.state != e.lastState) {
+        e.blendFrom = e.pose;
+        e.blendTime = 0;
+        e.lastState = e.state;
+    }
+    e.blendTime += dt;
+    const float dur = 0.12f;
+    e.pose = e.blendTime >= dur ? target : lerpPose(e.blendFrom, target, smoothstep01(e.blendTime / dur), d.jointCount);
     computeWorldMatrices(d.rig, d.jointCount, e.pose, e.modelMatrix(), e.joints);
 }

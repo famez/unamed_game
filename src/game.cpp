@@ -227,6 +227,8 @@ void Game::update(float dt, const Controls& c) {
     guardFlash_ = std::max(0.0f, guardFlash_ - dt);
     heroInvuln_ = std::max(0.0f, heroInvuln_ - dt);
     shake_ = std::max(0.0f, shake_ - dt * 1.5f);
+    fovKick_ += ((hero_.dashAmount() > 0 ? 0.08f : 0.0f) + (isFinisher(hero_.move()) ? 0.06f : 0.0f) - fovKick_) *
+                (1.0f - std::exp(-8.0f * dt));
     waveBanner_ = std::max(0.0f, waveBanner_ - dt);
     lastHitAge_ += dt;
     hpGhost_ = hpGhost_ > hp_ ? (heroFlash_ > 0 ? hpGhost_ : moveTowards(hpGhost_, hp_, 40.0f * dt)) : hp_;
@@ -244,8 +246,16 @@ void Game::update(float dt, const Controls& c) {
         if (c.command >= 0 && c.command < kCommandCount) runCommand(c.command);
         else if (c.runCommand) runCommand(commandSel_);
         hero_.setGuard(c.guard);
-        if (c.dodge) hero_.dodge(length(c.move) > 0.1f ? c.move : hero_.forward());
-        if (c.attack) heroAttack(c.move);
+        if (c.dodge) dodgeBuffer_ = 0.15f;
+        if (c.attack) attackBuffer_ = 0.25f;
+        if (c.dodge || c.attack) bufferedMove_ = c.move;
+        if (dodgeBuffer_ > 0 && hero_.dodge(length(bufferedMove_) > 0.1f ? bufferedMove_ : hero_.forward())) {
+            dodgeBuffer_ = 0;
+            attackBuffer_ = 0;
+        }
+        if (attackBuffer_ > 0 && heroAttack(length(c.move) > 0.1f ? c.move : bufferedMove_)) attackBuffer_ = 0;
+        attackBuffer_ = std::max(0.0f, attackBuffer_ - dt);
+        dodgeBuffer_ = std::max(0.0f, dodgeBuffer_ - dt);
         if (c.interact) tryOpenChest();
     }
     if (lock_ >= int(enemies_.size()) || (lock_ >= 0 && !enemies_[size_t(lock_)].targetable())) lock_ = -1;
@@ -415,7 +425,7 @@ bool Game::lockTarget(Vec3& pos) const {
 
 // Ataque: hacia el objetivo fijado o, si no hay, hacia el enemigo más a mano en la
 // dirección que se pulsa. Si está algo lejos, el golpe empieza con un acercamiento.
-void Game::heroAttack(Vec3 moveInput) {
+bool Game::heroAttack(Vec3 moveInput) {
     Vec3 dir = length(moveInput) > 0.1f ? normalize(flat(moveInput)) : hero_.forward();
     int t = lock_ >= 0 ? lock_ : pickTarget(dir, 6.0f);
     float yaw = std::atan2(dir.x, dir.z), dash = 0;
@@ -435,7 +445,7 @@ void Game::heroAttack(Vec3 moveInput) {
             if (length(to) > 0.1f) yaw = std::atan2(to.x, to.z);
         }
     }
-    hero_.attack(yaw, dash);
+    return hero_.attack(yaw, dash);
 }
 
 void Game::runCommand(int index) {
@@ -692,6 +702,8 @@ void Game::respawnHero() {
 
 void Game::updateEnemy(Enemy& e, float dt) {
     const EnemyDef& d = e.def();
+    for (int i = 0; i < d.jointCount; ++i) e.prevJoints[i] = e.joints[i];
+    e.prevPos = e.body.pos;
     float slow = e.freeze > 0 ? 0.45f : 1.0f;  // congelado: todo más lento
     float edt = dt * slow;
     e.stateTime += edt;
@@ -814,7 +826,7 @@ void Game::updateEnemy(Enemy& e, float dt) {
     e.phase += (d.flying ? 14.0f : 2.0f + length(desired) * 3.0f) * edt;
 
     if (e.state == AiState::Spawning) {
-        animateEnemy(e, time_);
+        animateEnemy(e, time_, dt);
         return;
     }
     e.knock = e.knock * std::exp(-(e.body.grounded || d.flying ? 6.0f : 0.5f) * dt);
@@ -831,7 +843,7 @@ void Game::updateEnemy(Enemy& e, float dt) {
     moveBody(e.body, world_, dt, 0.3f);
     e.body.pos.x = clampf(e.body.pos.x, -kArena, kArena);
     e.body.pos.z = clampf(e.body.pos.z, -kArena, kArena);
-    animateEnemy(e, time_);
+    animateEnemy(e, time_, dt);
 }
 
 void Game::enemyStartAttack(Enemy& e) {

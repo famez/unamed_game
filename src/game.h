@@ -161,7 +161,9 @@ public:
     // Con `solid` (render con shaders) los cuerpos van ahí, `glow` recibe los efectos
     // aditivos (estelas, destellos, halos) y `lines` lo poco que se dibuja con líneas. Con
     // nullptr, todo en alambre (modo debug: esqueletos, cajas, sin casi trabajo de GPU).
-    void draw(DebugDraw& lines, DebugDraw& glow, Renderer* solid, const DrawFlags& flags, const ViewInfo& view) const;
+    // `alpha` ∈ [0,1]: punto entre el paso de simulación anterior y el actual (interpolación).
+    void draw(DebugDraw& lines, DebugDraw& glow, Renderer* solid, const DrawFlags& flags, const ViewInfo& view,
+              float alpha = 1) const;
     void drawHud(DebugDraw& hud, const ViewInfo& view, bool debug) const;
 
     const Character& hero() const { return hero_; }
@@ -182,6 +184,9 @@ public:
     // Posición del objetivo fijado (para la cámara). Falso si no hay.
     bool lockTarget(Vec3& pos) const;
     float cameraShake() const { return shake_; }
+    // Apertura extra del campo de visión (radianes) en acercamientos y remates.
+    float fovKick() const { return fovKick_; }
+    Vec3 heroRenderPos(float alpha) const { return hero_.interpolatedPos(alpha); }
     // Fracción [0,1] del segmento from→to libre de escenario (para que la cámara no
     // atraviese las casas).
     float cameraClear(Vec3 from, Vec3 to) const;
@@ -194,7 +199,7 @@ private:
     void spawnWave();
     void cycleLock(Vec3 camForward);
     int pickTarget(Vec3 dir, float range) const;
-    void heroAttack(Vec3 moveInput);
+    bool heroAttack(Vec3 moveInput);
     void runCommand(int index);
     bool castSpell(Spell s);
     void resolveImpact(Move m);
@@ -225,10 +230,10 @@ private:
     void respawnHero();
 
     // Dibujado (game_draw.cpp).
-    void drawLevel(DebugDraw& lines, Renderer* solid, const DrawFlags& f) const;
-    void drawHero(DebugDraw& lines, Renderer* solid, const DrawFlags& f) const;
-    void drawEnemies(DebugDraw& lines, DebugDraw& glow, Renderer* solid, const DrawFlags& f,
-                     const ViewInfo& view) const;
+    void drawLevel(DebugDraw& lines, Renderer* solid, const DrawFlags& f, const ViewInfo& view, float alpha) const;
+    void drawHero(DebugDraw& lines, Renderer* solid, const DrawFlags& f, float alpha) const;
+    void drawEnemies(DebugDraw& lines, DebugDraw& glow, Renderer* solid, const DrawFlags& f, const ViewInfo& view,
+                     float alpha) const;
     void drawEffects(DebugDraw& lines, DebugDraw& glow, Renderer* solid, const ViewInfo& view) const;
 
     World world_;
@@ -265,6 +270,11 @@ private:
     int kills_ = 0;
     float hitStop_ = 0;       // congelación breve al golpear (da peso a los golpes)
     float shake_ = 0;         // temblor de cámara
+    float fovKick_ = 0;
+    // Pulsaciones guardadas un instante: si llegan un poco antes de poder ejecutarse
+    // (en mitad de una voltereta, por ejemplo) no se pierden.
+    float attackBuffer_ = 0, dodgeBuffer_ = 0;
+    Vec3 bufferedMove_;
     // Último golpe (para dibujarlo en modo debug): sector delante del jugador.
     Vec3 lastHitOrigin_, lastHitDir_;
     float lastHitRange_ = 0, lastHitCos_ = 1, lastHitAge_ = 10;

@@ -63,6 +63,15 @@ struct Enemy {
     Vec3 knock;           // empujón recibido, se frena solo
     Pose pose;
     Mat4 joints[kMaxJoints] = {};
+    // Fluidez: fundido de pose al cambiar de estado, apéndices con inercia (un punto con
+    // muelle que persigue al cuerpo) y estado anterior para interpolar el render.
+    Pose blendFrom;
+    float blendTime = 1;
+    AiState lastState = AiState::Spawning;
+    Vec3 lagPoint, lagVel;
+    bool lagInit = false;
+    Mat4 prevJoints[kMaxJoints] = {};
+    Vec3 prevPos;
 
     const EnemyDef& def() const { return enemyDef(kind); }
     bool alive() const { return state != AiState::Dying; }
@@ -75,4 +84,4 @@ struct Enemy {
 
 Enemy makeEnemy(EnemyKind kind, Vec3 pos, float yaw, float seed);
 // Pose según el estado y el tiempo; calcula también las matrices de las articulaciones.
-void animateEnemy(Enemy& e, float time);
+void animateEnemy(Enemy& e, float time, float dt);

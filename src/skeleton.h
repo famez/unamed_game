@@ -39,6 +39,16 @@ struct Pose {
     Vec3 rootOffset;            // desplazamiento extra de la raíz (balanceo vertical)
 };
 
+// Mezcla de poses (ángulos por el camino corto): para pasar de un estado a otro sin saltos.
+inline Pose lerpPose(const Pose& a, const Pose& b, float t, int count = kMaxJoints) {
+    Pose r = b;
+    for (int i = 0; i < count; ++i)
+        r.rotation[i] = {lerpAngle(a.rotation[i].x, b.rotation[i].x, t), lerpAngle(a.rotation[i].y, b.rotation[i].y, t),
+                         lerpAngle(a.rotation[i].z, b.rotation[i].z, t)};
+    r.rootOffset = a.rootOffset + (b.rootOffset - a.rootOffset) * t;
+    return r;
+}
+
 // Calcula la matriz mundo de cada joint de un esqueleto cualquiera. `model` lo coloca en
 // el mundo.
 void computeWorldMatrices(const JointDef* rig, int count, const Pose& pose, const Mat4& model, Mat4* out);

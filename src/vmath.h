@@ -75,6 +75,14 @@ inline Vec3 transformPoint(const Mat4& a, Vec3 p) {
             a.m[2] * p.x + a.m[6] * p.y + a.m[10] * p.z + a.m[14]};
 }
 
+// Interpolación componente a componente: válida entre dos pasos de simulación seguidos
+// (la rotación cambia poco y la matriz apenas pierde ortogonalidad).
+inline Mat4 lerpMat(const Mat4& a, const Mat4& b, float t) {
+    Mat4 r;
+    for (int i = 0; i < 16; ++i) r.m[i] = a.m[i] + (b.m[i] - a.m[i]) * t;
+    return r;
+}
+
 inline Vec3 translationOf(const Mat4& a) { return {a.m[12], a.m[13], a.m[14]}; }
 
 inline Mat4 scale(Vec3 s) {

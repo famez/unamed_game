@@ -79,6 +79,7 @@ int main(int argc, char** argv) {
     game.init();
     OrbitCamera cam;
     cam.target = game.hero().body.pos + Vec3{0, 1.0f, 0};
+    Vec3 camVel;  // velocidad del muelle de la cámara
     DrawFlags flags;
     // Modo debug (F12 / º, o --debug al arrancar): solo esqueletos y cajas en alambre.
     bool debugView = false;
@@ -88,6 +89,7 @@ int main(int argc, char** argv) {
     float camYaw0 = 0;  // --camyaw: orientación inicial de la cámara (radianes)
     const char* shotPath = nullptr;
     double shotTime = 0;
+    int shotCount = 1, shotIndex = 0;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--debug") == 0) debugView = true;
         if (std::strcmp(argv[i], "--autoplay") == 0) autoplay = true;
@@ -96,6 +98,7 @@ int main(int argc, char** argv) {
             shotPath = argv[i + 1];
             shotTime = std::atof(argv[i + 2]);
             i += 2;
+            if (i + 1 < argc && argv[i + 1][0] != '-') shotCount = std::atoi(argv[++i]);  // frames seguidos
         }
     }
     cam.yaw = camYaw0;
@@ -248,11 +251,16 @@ int main(int argc, char** argv) {
             ++steps;
         }
         if (steps == kMaxStepsPerFrame) accumulator = 0;
+        // Fracción del siguiente paso ya transcurrida: se dibuja entre el estado anterior y
+        // el actual, así el movimiento es suave aunque el monitor no vaya a 60 Hz.
+        float alpha = paused ? 1.0f : clampf(float(accumulator / kFixedDt), 0, 1);
 
-        // La cámara sigue al personaje con suavizado exponencial (independiente del fps).
-        // Con un objetivo fijado gira sola para encuadrar a los dos.
-        Vec3 heroPos = game.hero().body.pos;
-        Vec3 desired = heroPos + Vec3{0, 1.1f, 0};
+        // La cámara sigue al personaje con un muelle amortiguado (independiente del fps) y
+        // se adelanta un poco hacia donde corre. Con un objetivo fijado gira sola para
+        // encuadrar a los dos.
+        Vec3 heroPos = game.heroRenderPos(alpha);
+        Vec3 heroVel = game.hero().body.vel;
+        Vec3 desired = heroPos + Vec3{0, 1.1f, 0} + flat(heroVel) * 0.12f;
         Vec3 lockPos;
         if (!paused && game.lockTarget(lockPos)) {
             Vec3 to = flat(lockPos - heroPos);
@@ -262,7 +270,14 @@ int main(int argc, char** argv) {
             }
             desired += (lockPos - heroPos) * 0.2f;
         }
-        cam.target += (desired - cam.target) * (1.0f - std::exp(-12.0f * fd));
+        {
+            const float omega = 11.0f;  // muelle críticamente amortiguado
+            float x = omega * fd, k = 1.0f / (1.0f + x + 0.48f * x * x + 0.235f * x * x * x);
+            Vec3 change = cam.target - desired;
+            Vec3 temp = (camVel + change * omega) * fd;
+            camVel = (camVel - temp * omega) * k;
+            cam.target = desired + (change + temp) * k;
+        }
         OrbitCamera view = cam;
         // La cámara se acerca si hay una pared entre ella y el personaje.
         float clear = game.cameraClear(cam.target, cam.eye());
@@ -275,7 +290,7 @@ int main(int argc, char** argv) {
         }
 
         RenderCamera rc;
-        rc.fovY = 60.0f * kPi / 180.0f;
+        rc.fovY = 60.0f * kPi / 180.0f + game.fovKick();
         rc.aspect = float(w) / float(h > 0 ? h : 1);
         rc.view = view.view();
         rc.proj = perspective(rc.fovY, rc.aspect, rc.zNear, rc.zFar);
@@ -293,7 +308,7 @@ int main(int argc, char** argv) {
 
         // Render. Primero generamos la geometría en CPU y medimos ese tiempo: la primera
         // llamada GL del frame (glClear) puede bloquear esperando al vsync y falsearía la cifra.
-        game.draw(dd, glow, debugView ? nullptr : &renderer, flags, vi);
+        game.draw(dd, glow, debugView ? nullptr : &renderer, flags, vi, alpha);
         game.drawHud(hud, vi, debugView);
         if (menu.open) menu.draw(overlay, w, h);
         if (inventory.open) inventory.draw(overlay, game, w, h);
@@ -322,8 +337,14 @@ int main(int argc, char** argv) {
         overlay.flush(pixels, 3.0f);
         glDisable(GL_BLEND);
         if (shotPath && platform::timeSeconds() - startTime >= shotTime) {
-            saveScreenshot(shotPath, w, h);
-            quit = true;
+            if (shotCount == 1) {
+                saveScreenshot(shotPath, w, h);
+            } else {
+                char name[512];
+                std::snprintf(name, sizeof(name), "%s_%03d.ppm", shotPath, shotIndex);
+                saveScreenshot(name, w, h);
+            }
+            quit = ++shotIndex >= shotCount;
         }
         platform::swapBuffers();
         if (!platform::vsyncEnabled())  // sin vsync, limitamos a ~60 fps para no quemar CPU/GPU

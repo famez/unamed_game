@@ -236,14 +236,15 @@ bool project(const ViewInfo& v, Vec3 p, float& sx, float& sy) {
 
 // --- Escena -------------------------------------------------------------------------------
 
-void Game::draw(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const DrawFlags& f, const ViewInfo& view) const {
-    drawLevel(dd, solid, f);
-    drawHero(dd, solid, f);
-    drawEnemies(dd, glow, solid, f, view);
+void Game::draw(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const DrawFlags& f, const ViewInfo& view,
+                float alpha) const {
+    drawLevel(dd, solid, f, view, alpha);
+    drawHero(dd, solid, f, alpha);
+    drawEnemies(dd, glow, solid, f, view, alpha);
     drawEffects(dd, glow, solid, view);
 }
 
-void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f) const {
+void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const ViewInfo& view, float alpha) const {
     Mat4 id = Mat4::identity();
     if (!solid) {
         // Modo debug: solo alambre (escenario, cajas, cofres) y la cuadrícula.
@@ -259,8 +260,26 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f) const {
     // Césped alrededor y plaza de adoquines.
     solid->box(id, {0, -0.5f, 0}, {200, 0.5f, 200}, rgba(110, 185, 95), Material::Grass);
     solid->box(id, {0, 0.004f, 0}, {16.2f, 0.004f, 16.2f}, rgba(200, 170, 140), Material::Ground);
-    for (const Block& b : blocks_) solid->box(id, b.box.center(), b.box.halfExtents(), b.color, b.material);
+    // Objetos estrechos (farolas, troncos, columnas) que tapan al personaje: no se dibujan,
+    // ni la decoración que llevan encima (copa, lámpara).
+    Vec3 heroChest = hero_.interpolatedPos(alpha) + Vec3{0, 1.0f, 0};
+    std::vector<AABB> hidden;
+    for (const Block& b : blocks_) {
+        Vec3 h = b.box.halfExtents();
+        if (h.x > 0.6f || h.z > 0.6f) continue;
+        AABB grown{b.box.min - Vec3{0.25f, 0, 0.25f}, b.box.max + Vec3{0.25f, 3.0f, 0.25f}};
+        RayHit hit;
+        if (segmentVsAABB(view.eye, heroChest, grown, hit)) hidden.push_back(b.box);
+    }
+    auto isHidden = [&](Vec3 p) {
+        for (const AABB& a : hidden)
+            if (std::fabs(p.x - a.center().x) < 1.8f && std::fabs(p.z - a.center().z) < 1.8f && p.y > a.min.y) return true;
+        return false;
+    };
+    for (const Block& b : blocks_)
+        if (!isHidden(b.box.center())) solid->box(id, b.box.center(), b.box.halfExtents(), b.color, b.material);
     for (const Decor& d : decor_) {
+        if (!hidden.empty() && isHidden(translationOf(d.transform) + d.center)) continue;
         if (d.sphere)
             solid->ellipsoid(d.transform, d.center, d.half, d.color, d.material);
         else
@@ -300,15 +319,20 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f) const {
     }
 }
 
-void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f) const {
-    const Mat4* j = hero_.joints;
+void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float alpha) const {
+    Mat4 j[JointCount];
+    hero_.interpolatedJoints(alpha, j);
     const WeaponStats& ws = inv_.weaponStats();
     bool blink = heroInvuln_ > 0 && heroFlash_ <= 0 && hero_.downTimer < 0 && std::fmod(time_, 0.16f) < 0.05f;
     if (!solid) {
         uint32_t col = heroFlash_ > 0 ? rgba(255, 255, 255) : rgba(80, 220, 200);
         drawSkeleton(dd, kSkeleton, JointCount, j, f, col);
-        dd.line(transformPoint(j[WristR], kGripLocal), bladeTip(), rgba(255, 240, 150));  // arma
-        Vec3 base = hero_.body.pos + Vec3{0, 0.005f, 0};
+        dd.line(transformPoint(j[WristR], kGripLocal),
+                transformPoint(j[WristR], kBladeBase + Vec3{0, 0, ws.length}), rgba(255, 240, 150));  // arma
+        Vec3 rib[Character::kRibbonPoints];
+        hero_.ribbon(alpha, rib);
+        for (int i = 0; i + 1 < Character::kRibbonPoints; ++i) dd.line(rib[i], rib[i + 1], rgba(255, 120, 220));
+        Vec3 base = hero_.interpolatedPos(alpha) + Vec3{0, 0.005f, 0};
         dd.circleXZ(base, hero_.body.radius, 20, rgba(120, 120, 120));
         dd.line(base, base + hero_.forward() * 0.6f, rgba(255, 255, 0));
         if (lastHitAge_ < 0.25f) {  // sector del último golpe
@@ -334,10 +358,15 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f) const {
     const Mat4 head = j[Head] * scale({1.3f, 1.3f, 1.3f});
     for (const Shape& s : kHeroShapes)
         solid->ellipsoid(s.joint == Head ? head : j[s.joint], s.center, s.radii, s.color, s.material, flash);
-    // Pelo de punta.
+    // Pelo de punta: los mechones se inclinan hacia donde se queda atrás el punto con
+    // muelle que sigue a la cabeza (inercia al correr, saltar y girar).
+    Vec3 lagW = hero_.hairLag();
+    const float* hm = j[Head].m;
+    Vec3 lag{hm[0] * lagW.x + hm[1] * lagW.y + hm[2] * lagW.z, hm[4] * lagW.x + hm[5] * lagW.y + hm[6] * lagW.z,
+             hm[8] * lagW.x + hm[9] * lagW.y + hm[10] * lagW.z};
     Vec3 headCenter{0, 0.19f, -0.02f};
     for (Vec3 d : kSpikes) {
-        Vec3 n = normalize(d);
+        Vec3 n = normalize(normalize(d) + lag * 5.0f);
         solid->ellipsoid(head * translate(headCenter + n * 0.11f) * basisY(n), {}, {0.05f, 0.12f, 0.05f}, kHair,
                          Material::Cloth, flash);
     }
@@ -347,22 +376,37 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f) const {
                          Material::Cloth, flash);
     }
     drawWeapon(*solid, j[WristR], ws, time_);
+    // Cinta de la espalda: segmentos alargados entre los puntos de la cadena, que se
+    // estrechan hacia la punta.
+    Vec3 rib[Character::kRibbonPoints];
+    hero_.ribbon(alpha, rib);
+    for (int i = 0; i + 1 < Character::kRibbonPoints; ++i) {
+        Vec3 a = rib[i], b = rib[i + 1], d = b - a;
+        float len = length(d);
+        if (len < 1e-4f) continue;
+        float t = float(i) / float(Character::kRibbonPoints - 1);
+        float wdt = lerpf(0.07f, 0.035f, t);
+        solid->ellipsoid(translate((a + b) * 0.5f) * basisY(d), {}, {wdt, len * 0.62f, 0.012f}, kScarf, Material::Cloth, flash);
+    }
     if (guardFlash_ > 0)
         solid->light(translationOf(j[WristR]) + hero_.forward() * 0.3f,
                      (perfectGuard_ ? Vec3{0.5f, 0.9f, 1.0f} : Vec3{1.0f, 0.95f, 0.8f}) * (guardFlash_ * 12.0f), 3.0f);
 }
 
-void Game::drawEnemies(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const DrawFlags& f, const ViewInfo& view) const {
+void Game::drawEnemies(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const DrawFlags& f, const ViewInfo& view,
+                       float alpha) const {
     for (size_t i = 0; i < enemies_.size(); ++i) {
         const Enemy& e = enemies_[i];
         const EnemyDef& d = e.def();
+        Mat4 joints[kMaxJoints];
+        for (int k = 0; k < d.jointCount; ++k) joints[k] = lerpMat(e.prevJoints[k], e.joints[k], alpha);
         if (!solid) {
             uint32_t col = e.state == AiState::Windup  ? rgba(255, 200, 60)
                            : e.state == AiState::Attack ? rgba(255, 80, 60)
                            : e.hitFlash > 0             ? rgba(255, 255, 255)
                            : e.freeze > 0               ? rgba(120, 220, 255)
                                                         : rgba(200, 120, 255);
-            drawSkeleton(dd, d.rig, d.jointCount, e.joints, f, col);
+            drawSkeleton(dd, d.rig, d.jointCount, joints, f, col);
             dd.circleXZ(e.body.pos + Vec3{0, 0.01f, 0}, e.body.radius, 16, col);
             if (int(i) == lock_) dd.circleXZ(e.body.pos + Vec3{0, 0.02f, 0}, e.body.radius + 0.3f, 24, rgba(255, 220, 60));
             continue;
@@ -381,7 +425,7 @@ void Game::drawEnemies(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Dr
         for (int s = 0; s < d.shapeCount; ++s) {
             const EnemyShape& sh = d.shapes[s];
             uint32_t col = e.freeze > 0 && !sh.glow ? mixRgb(sh.color, rgba(170, 230, 255), 0.55f) : sh.color;
-            solid->ellipsoid(e.joints[sh.joint], sh.center, sh.radii, col, sh.glow ? Material::Glow : Material::Cloth, flash);
+            solid->ellipsoid(joints[sh.joint], sh.center, sh.radii, col, sh.glow ? Material::Glow : Material::Cloth, flash);
         }
         if (e.freeze > 0 && !dying)  // escarcha alrededor
             for (int k = 0; k < 2; ++k)
