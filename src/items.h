@@ -5,7 +5,6 @@
 
 #include <cstdint>
 
-// Los nombres se muestran con la fuente vectorial del HUD: solo ASCII, sin tildes.
 enum class ItemId : int {
     // Consumibles
     Potion, HiPotion, Ether, Elixir,
@@ -57,7 +56,7 @@ public:
     int add(ItemId id, int n = 1);
     bool remove(ItemId id, int n = 1);
 
-    int munny = 0;  // dinero
+    int munny = 0;  // lúmenes (la moneda: luz condensada)
     ItemId weapon = ItemId::WoodenSword;
     ItemId quick[kQuickSlots];
     const WeaponStats& weaponStats() const { return itemDef(weapon).weapon; }

@@ -48,6 +48,7 @@ target_compile_options(game PRIVATE
 )
 target_link_options(game PRIVATE $<$<CONFIG:Debug>:-fsanitize=undefined>)
 target_compile_definitions(game PRIVATE
+    GAME_ASSET_DIR="${CMAKE_SOURCE_DIR}/assets"
     $<$<CONFIG:Debug>:GAME_DEBUG_GL=1 _GLIBCXX_ASSERTIONS>
 )
 

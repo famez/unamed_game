@@ -131,9 +131,9 @@ const EnemyShape kMothShapes[] = {
 #define COUNT(a) int(sizeof(a) / sizeof((a)[0]))
 const EnemyDef kDefs[int(EnemyKind::Count)] = {
 //   nombre          rig        n        formas        n                  vida  vel.  radio alto  aggro alc.  prep. ataque recup. espera daño golpe vuela altura munny
-    {"RASTRERO",     kImpRig,    ImCount, kImpShapes,    COUNT(kImpShapes),    30, 4.2f, 0.35f, 1.0f, 16, 2.6f, 0.45f, 0.40f, 0.60f, 0.9f,  8, 5.0f, false, 0,    3, 6},
-    {"DOMO",          kShroomRig, ShCount, kShroomShapes, COUNT(kShroomShapes), 60, 2.4f, 0.50f, 1.2f, 14, 3.2f, 0.60f, 1.00f, 0.80f, 1.5f, 14, 8.0f, false, 0,    6, 10},
-    {"ECO",          kMothRig,   MoCount, kMothShapes,   COUNT(kMothShapes),   24, 3.2f, 0.40f, 0.6f, 18, 8.0f, 0.70f, 0.30f, 0.80f, 1.6f, 10, 4.0f, true,  2.3f, 4, 8},
+    {"Rastrero",     kImpRig,    ImCount, kImpShapes,    COUNT(kImpShapes),    30, 4.2f, 0.35f, 1.0f, 16, 2.6f, 0.45f, 0.40f, 0.60f, 0.9f,  8, 5.0f, false, 0,    3, 6},
+    {"Domo",          kShroomRig, ShCount, kShroomShapes, COUNT(kShroomShapes), 60, 2.4f, 0.50f, 1.2f, 14, 3.2f, 0.60f, 1.00f, 0.80f, 1.5f, 14, 8.0f, false, 0,    6, 10},
+    {"Eco",          kMothRig,   MoCount, kMothShapes,   COUNT(kMothShapes),   24, 3.2f, 0.40f, 0.6f, 18, 8.0f, 0.70f, 0.30f, 0.80f, 1.6f, 10, 4.0f, true,  2.3f, 4, 8},
 };
 #undef COUNT
 // clang-format on
@@ -317,14 +317,14 @@ void animateMoth(Enemy& e, float time, Vec3* r, Vec3& root) {
 
 const char* aiStateName(AiState s) {
     switch (s) {
-        case AiState::Spawning: return "APARECE";
-        case AiState::Idle: return "VAGA";
-        case AiState::Chase: return "PERSIGUE";
-        case AiState::Windup: return "PREPARA";
-        case AiState::Attack: return "ATACA";
-        case AiState::Recover: return "RECUPERA";
-        case AiState::Stagger: return "TAMBALEA";
-        case AiState::Dying: return "MUERE";
+        case AiState::Spawning: return "aparece";
+        case AiState::Idle: return "vaga";
+        case AiState::Chase: return "persigue";
+        case AiState::Windup: return "prepara";
+        case AiState::Attack: return "ataca";
+        case AiState::Recover: return "recupera";
+        case AiState::Stagger: return "tambalea";
+        case AiState::Dying: return "se disipa";
     }
     return "?";
 }

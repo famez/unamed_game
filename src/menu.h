@@ -2,6 +2,7 @@
 
 #include "debug_draw.h"
 #include "platform.h"
+#include "text.h"
 
 // Menú de pausa: navegable con teclado (W/S o flechas + Enter) y con el ratón.
 class PauseMenu {
@@ -14,7 +15,7 @@ public:
 
     void show();
     Result update(const Input& in, int width, int height);
-    void draw(DebugDraw& hud, int width, int height) const;
+    void draw(UiLayer& ui, int width, int height) const;
 
 private:
     enum Item { Continue, Restart, Sensitivity, QualityItem, Quit, ItemCount };

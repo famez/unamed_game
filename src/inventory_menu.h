@@ -3,6 +3,7 @@
 #include "debug_draw.h"
 #include "items.h"
 #include "platform.h"
+#include "text.h"
 
 #include <string>
 #include <vector>
@@ -18,7 +19,7 @@ public:
     void show();
     // Devuelve true si el menú pide cerrarse.
     bool update(const Input& in, Game& game, int width, int height);
-    void draw(DebugDraw& hud, const Game& game, int width, int height) const;
+    void draw(UiLayer& ui, const Game& game, int width, int height) const;
 
 private:
     enum Tab { Consumables, Materials, Weapons, TabCount };

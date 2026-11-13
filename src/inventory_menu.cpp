@@ -1,7 +1,6 @@
 #include "inventory_menu.h"
 
 #include "game.h"
-#include "text.h"
 
 #include <cstdio>
 
@@ -28,7 +27,7 @@ void gem(DebugDraw& hud, float cx, float cy, float r, uint32_t c) {
     hud.triangle({cx, cy - r, 0}, {cx + r * 0.5f, cy - r * 0.5f, 0}, {cx, cy, 0}, rgba(255, 255, 255, 110));
 }
 
-const char* kTabNames[] = {"OBJETOS", "MATERIALES", "ARMAS"};
+const char* kTabNames[] = {"OBJETOS", "MATERIALES", "PRISMAS"};
 
 }  // namespace
 
@@ -70,16 +69,16 @@ std::vector<ItemId> InventoryMenu::entries(const Inventory& inv) const {
 void InventoryMenu::activate(Game& game, ItemId id) {
     const ItemDef& d = itemDef(id);
     if (d.kind == ItemKind::Weapon) {
-        if (game.equip(id)) message_ = std::string("EQUIPADO: ") + d.name;
+        if (game.equip(id)) message_ = std::string("Equipado: ") + d.name;
     } else if (d.kind == ItemKind::Consumable) {
         if (game.inventory().count(id) <= 0)
-            message_ = "NO TE QUEDA";
+            message_ = "No te queda";
         else if (game.useItem(id))
-            message_ = std::string("USADO: ") + d.name;
+            message_ = std::string("Usado: ") + d.name;
         else
-            message_ = "NO HACE FALTA AHORA";
+            message_ = "Ahora no hace falta";
     } else {
-        message_ = "LOS MATERIALES SE GUARDAN";
+        message_ = "Los materiales se guardan";
     }
     messageTime_ = 2.0f;
 }
@@ -119,99 +118,107 @@ bool InventoryMenu::update(const Input& in, Game& game, int width, int height) {
         for (int s = 0; s < Inventory::kQuickSlots; ++s)
             if (in.wasPressed(slotKeys[s]) && itemDef(id).kind == ItemKind::Consumable) {
                 game.inventory().quick[s] = id;
-                message_ = std::string("ATAJO ") + std::to_string(s + 4) + ": " + itemName(id);
+                message_ = std::string("Atajo ") + std::to_string(s + 4) + ": " + itemName(id);
                 messageTime_ = 2.0f;
             }
     }
     return in.wasPressed(Key::I) || in.wasPressed(Key::Escape) || in.wasPressed(Key::Tab);
 }
 
-void InventoryMenu::draw(DebugDraw& hud, const Game& game, int width, int height) const {
+void InventoryMenu::draw(UiLayer& ui, const Game& game, int width, int height) const {
+    DebugDraw& d = ui.shapes;
     const Inventory& inv = game.inventory();
-    const uint32_t navy = rgba(22, 30, 70, 240), light = rgba(235, 240, 255), dim = rgba(140, 150, 185);
-    const uint32_t gold = rgba(255, 210, 80);
+    const uint32_t navy = rgba(14, 18, 46, 240), light = rgba(240, 245, 255), dim = rgba(150, 165, 210);
+    const uint32_t cyan = rgba(40, 220, 255), amber = rgba(255, 196, 70);
+    TextStyle title;
+    title.face = FontFace::Title;
+    TextStyle right;
+    right.align = Align::Right;
 
-    fillRect(hud, 0, 0, float(width), float(height), rgba(10, 15, 40, 150));
+    fillRect(d, 0, 0, float(width), float(height), rgba(8, 10, 30, 150));
     Rect p = panelRect(width, height);
-    fillRect(hud, p.x0, p.y0, p.x1, p.y1, navy);
-    fillRect(hud, p.x0, p.y0, p.x1, p.y0 + 44, rgba(50, 90, 200, 245));
-    strokeRect(hud, p.x0, p.y0, p.x1, p.y1, rgba(120, 160, 255));
-    drawText(hud, p.x0 + 24, p.y0 + 12, 3.2f, "INVENTARIO", light);
-    char buf[96];
-    std::snprintf(buf, sizeof(buf), "PV %d/%d   PM %d/%d   MUNNY %d", int(std::ceil(game.hp())), int(game.maxHp()),
+    fillRect(d, p.x0, p.y0, p.x1, p.y1, navy);
+    fillRect(d, p.x0, p.y0, p.x1, p.y0 + 44, rgba(24, 34, 84, 250));
+    fillRect(d, p.x0, p.y0 + 44, p.x1, p.y0 + 46, cyan);
+    strokeRect(d, p.x0, p.y0, p.x1, p.y1, rgba(70, 90, 160));
+    title.glow = 0.4f;
+    drawText(ui, p.x0 + 24, p.y0 + 8, 26, "INVENTARIO", light, title);
+    title.glow = 0;
+    char buf[128];
+    std::snprintf(buf, sizeof(buf), "PV %d/%d    PM %d/%d    %d LUM", int(std::ceil(game.hp())), int(game.maxHp()),
                   int(game.mp()), int(game.maxMp()), inv.munny);
-    drawText(hud, p.x1 - 24 - textWidth(buf, 2.0f), p.y0 + 15, 2.0f, buf, gold);
+    TextStyle info = title;
+    info.align = Align::Right;
+    drawText(ui, p.x1 - 24, p.y0 + 13, 16, buf, amber, info);
 
     for (int t = 0; t < TabCount; ++t) {
         Rect r = tabRect(t, width, height);
         bool sel = t == tab_;
-        fillRect(hud, r.x0, r.y0, r.x1, r.y1, sel ? rgba(250, 250, 255, 240) : rgba(40, 55, 110, 230));
-        drawText(hud, (r.x0 + r.x1 - textWidth(kTabNames[t], 2.2f)) * 0.5f, r.y0 + 10, 2.2f, kTabNames[t],
-                 sel ? rgba(30, 40, 90) : dim);
+        fillRect(d, r.x0, r.y0, r.x1, r.y1, sel ? rgba(235, 245, 255, 240) : rgba(30, 40, 90, 230));
+        if (sel) fillRect(d, r.x0, r.y1 - 3, r.x1, r.y1, cyan);
+        TextStyle tc = title;
+        tc.align = Align::Center;
+        drawText(ui, (r.x0 + r.x1) * 0.5f, r.y0 + 8, 16, kTabNames[t], sel ? rgba(20, 30, 70) : dim, tc);
     }
 
     std::vector<ItemId> list = entries(inv);
     int n = std::min(int(list.size()), kMaxRows);
-    if (n == 0) drawText(hud, p.x0 + 40, p.y0 + kListTop + 10, 2.0f, "NADA TODAVIA", dim);
+    if (n == 0) drawText(ui, p.x0 + 40, p.y0 + kListTop + 8, 20, "Nada todavía", dim);
     for (int i = 0; i < n; ++i) {
         ItemId id = list[size_t(i)];
-        const ItemDef& d = itemDef(id);
+        const ItemDef& def = itemDef(id);
         Rect r = rowRect(i, width, height);
         bool sel = i == selected_;
-        fillRect(hud, r.x0, r.y0, r.x1, r.y1, sel ? rgba(250, 250, 255, 235) : rgba(35, 45, 95, 220));
-        if (sel) fillRect(hud, r.x0, r.y0, r.x0 + 6, r.y1, gold);
-        gem(hud, r.x0 + 24, (r.y0 + r.y1) * 0.5f, 9, d.color);
-        uint32_t tc = inv.count(id) > 0 ? (sel ? rgba(30, 40, 90) : light) : rgba(110, 115, 140);
-        drawText(hud, r.x0 + 44, r.y0 + 9, 2.0f, d.name, tc);
-        if (d.kind == ItemKind::Weapon) {
-            if (inv.weapon == id) drawText(hud, r.x1 - 14 - textWidth("EQUIPADA", 1.6f), r.y0 + 10, 1.6f, "EQUIPADA", rgba(70, 170, 90));
+        fillRect(d, r.x0, r.y0, r.x1, r.y1, sel ? rgba(235, 245, 255, 235) : rgba(26, 34, 80, 220));
+        if (sel) fillRect(d, r.x0, r.y0, r.x0 + 5, r.y1, cyan);
+        gem(d, r.x0 + 24, (r.y0 + r.y1) * 0.5f, 9, def.color);
+        uint32_t tc = inv.count(id) > 0 ? (sel ? rgba(20, 30, 70) : light) : rgba(110, 115, 140);
+        drawText(ui, r.x0 + 44, r.y0 + 3, 20, def.name, tc);
+        if (def.kind == ItemKind::Weapon) {
+            if (inv.weapon == id) drawText(ui, r.x1 - 14, r.y0 + 6, 16, "equipado", rgba(60, 200, 130), right);
         } else {
-            std::snprintf(buf, sizeof(buf), "X%d", inv.count(id));
-            drawText(hud, r.x1 - 14 - textWidth(buf, 2.0f), r.y0 + 9, 2.0f, buf, tc);
+            std::snprintf(buf, sizeof(buf), "×%d", inv.count(id));
+            drawText(ui, r.x1 - 14, r.y0 + 4, 19, buf, tc, right);
         }
     }
 
     // Detalle del objeto seleccionado.
     float dx = p.x0 + 470, dy = p.y0 + kListTop;
-    fillRect(hud, dx, dy, p.x1 - 30, p.y1 - 120, rgba(35, 45, 95, 220));
+    fillRect(d, dx, dy, p.x1 - 30, p.y1 - 120, rgba(26, 34, 80, 220));
     if (n > 0) {
         ItemId id = list[size_t(std::min(selected_, n - 1))];
-        const ItemDef& d = itemDef(id);
-        gem(hud, dx + 40, dy + 40, 22, d.color);
-        drawText(hud, dx + 80, dy + 26, 3.0f, d.name, light);
-        drawText(hud, dx + 20, dy + 84, 1.8f, d.description, dim);
-        float y = dy + 120;
-        if (d.kind == ItemKind::Weapon) {
-            const WeaponStats& w = d.weapon;
+        const ItemDef& def = itemDef(id);
+        gem(d, dx + 40, dy + 40, 22, def.color);
+        drawText(ui, dx + 80, dy + 22, 28, def.name, light);
+        drawText(ui, dx + 20, dy + 80, 18, def.description, dim);
+        float y = dy + 118;
+        if (def.kind == ItemKind::Weapon) {
+            const WeaponStats& w = def.weapon;
             const WeaponStats& cur = inv.weaponStats();
             auto stat = [&](const char* name, float v, float now) {
-                std::snprintf(buf, sizeof(buf), "%-8s %4.1f", name, double(v));
-                drawText(hud, dx + 20, y, 2.2f, buf, light);
-                if (v != now) {
-                    const char* arrow = v > now ? "+" : "-";
-                    drawText(hud, dx + 260, y, 2.2f, arrow, v > now ? rgba(110, 255, 140) : rgba(255, 120, 120));
-                }
+                drawText(ui, dx + 20, y, 19, name, light);
+                std::snprintf(buf, sizeof(buf), "%.1f", double(v));
+                drawText(ui, dx + 230, y, 19, buf, light, right);
+                if (v != now) drawText(ui, dx + 250, y, 19, v > now ? "▲" : "▼", v > now ? rgba(110, 255, 140) : rgba(255, 120, 120));
                 y += 30;
             };
-            stat("FUERZA", w.power, cur.power);
-            stat("MAGIA", w.magic, cur.magic);
-            stat("COMBO", float(w.comboHits + 1), float(cur.comboHits + 1));
-            stat("ALCANCE", w.reach, cur.reach);
-            drawText(hud, dx + 20, y + 10, 1.6f, "ENTER: EQUIPAR", gold);
-        } else if (d.kind == ItemKind::Consumable) {
-            drawText(hud, dx + 20, y, 1.6f, "ENTER: USAR    4 / 5 / 6: PONER EN ATAJO", gold);
+            stat("Fuerza", w.power, cur.power);
+            stat("Magia", w.magic, cur.magic);
+            stat("Combo", float(w.comboHits + 1), float(cur.comboHits + 1));
+            stat("Alcance", w.reach, cur.reach);
+            drawText(ui, dx + 20, y + 8, 16, "Enter · equipar", amber);
+        } else if (def.kind == ItemKind::Consumable) {
+            drawText(ui, dx + 20, y, 16, "Enter · usar     4 / 5 / 6 · poner en atajo", amber);
         }
     }
     // Atajos actuales.
-    float qy = p.y1 - 105;
-    drawText(hud, dx, qy, 1.8f, "ATAJOS DEL MENU DE COMANDOS", dim);
+    float qy = p.y1 - 108;
+    drawText(ui, dx, qy, 16, "ATAJOS DEL MENÚ DE COMANDOS", dim, title);
     for (int s = 0; s < Inventory::kQuickSlots; ++s) {
         ItemId id = inv.quick[s];
-        std::snprintf(buf, sizeof(buf), "%d %s X%d", s + 4, itemName(id), inv.count(id));
-        drawText(hud, dx, qy + 24 + float(s) * 22, 1.8f, buf, light);
+        std::snprintf(buf, sizeof(buf), "%d  %s ×%d", s + 4, itemName(id), inv.count(id));
+        drawText(ui, dx, qy + 24 + float(s) * 22, 17, buf, light);
     }
-    if (messageTime_ > 0)
-        drawText(hud, p.x0 + 30, p.y1 - 40, 2.2f, message_.c_str(), rgba(130, 255, 160));
-    const char* hint = "A/D: PESTANA   W/S: ELEGIR   ENTER: USAR/EQUIPAR   I: CERRAR";
-    drawText(hud, p.x0 + 30, p.y1 - 18, 1.4f, hint, dim);
+    if (messageTime_ > 0) drawText(ui, p.x0 + 30, p.y1 - 48, 20, message_.c_str(), rgba(130, 255, 160));
+    drawText(ui, p.x0 + 30, p.y1 - 22, 14, "A/D pestaña · W/S elegir · Enter usar/equipar · I cerrar", dim);
 }

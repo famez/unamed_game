@@ -6,6 +6,7 @@
 #include "models.h"
 #include "platform.h"
 #include "renderer.h"
+#include "text.h"
 #include "vmath.h"
 
 #include <cstdio>
@@ -78,9 +79,12 @@ int main(int argc, char** argv) {
                 (const char*)glGetString(GL_RENDERER), (const char*)glGetString(GL_VERSION),
                 platform::vsyncEnabled() ? "on" : "off", platform::msaaEnabled() ? "on" : "off");
 
-    DebugDraw dd, glow, hud, overlay;  // líneas, efectos aditivos, HUD y menús
+    DebugDraw dd, glow;   // líneas (modo debug) y efectos translúcidos
+    UiLayer hud, overlay;  // HUD y menús (formas + texto)
     Renderer renderer;
     if (!dd.init() || !glow.init() || !hud.init() || !overlay.init() || !renderer.init(quality)) return 1;
+    // Fuentes: carpeta assets junto al directorio de trabajo o la del código fuente.
+    if (!loadFonts("assets") && !loadFonts(GAME_ASSET_DIR)) return 1;
     double modelStart = platform::timeSeconds();
     buildModels(renderer);
     std::printf("modelos generados en %.0f ms\n", 1000.0 * (platform::timeSeconds() - modelStart));
@@ -148,13 +152,22 @@ int main(int argc, char** argv) {
         int w = platform::width(), h = platform::height();
 
         if (!platform::pumpEvents(input)) break;
+        // La interfaz se diseña para 720 px de alto y se escala con la ventana: a 1080p
+        // todo es 1,5 veces mayor. `uw`×`uh` es el tamaño virtual; el ratón se pasa a él.
+        const float uiScale = float(h > 0 ? h : 720) / 720.0f;
+        const int uw = int(float(w) / uiScale + 0.5f), uh = 720;
+        Input uiInput = input;
+        uiInput.mouseX /= uiScale;
+        uiInput.mouseY /= uiScale;
+        uiInput.mouseDX /= uiScale;
+        uiInput.mouseDY /= uiScale;
 
         // Menús: Esc/P abren y cierran la pausa; I el inventario. La pausa también se abre
         // sola si se pierde el ratón (alt-tab), para que el juego no siga sin control.
         bool menuWasOpen = menu.open || inventory.open;
         bool captured = platform::mouseCaptured();
         if (inventory.open) {
-            if (inventory.update(input, game, w, h)) {
+            if (inventory.update(uiInput, game, uw, uh)) {
                 inventory.open = false;
                 platform::setMouseCaptured(true);
             }
@@ -164,7 +177,7 @@ int main(int argc, char** argv) {
             else
                 openMenu();
         } else if (menu.open) {
-            switch (menu.update(input, w, h)) {
+            switch (menu.update(uiInput, uw, uh)) {
                 case PauseMenu::Result::Resume: closeMenu(); break;
                 case PauseMenu::Result::Restart:
                     game = Game{};
@@ -325,9 +338,12 @@ int main(int argc, char** argv) {
         // Render. Primero generamos la geometría en CPU y medimos ese tiempo: la primera
         // llamada GL del frame (glClear) puede bloquear esperando al vsync y falsearía la cifra.
         game.draw(dd, glow, debugView ? nullptr : &renderer, flags, vi, alpha);
-        game.drawHud(hud, vi, debugView);
-        if (menu.open) menu.draw(overlay, w, h);
-        if (inventory.open) inventory.draw(overlay, game, w, h);
+        ViewInfo uiView = vi;
+        uiView.width = uw;
+        uiView.height = uh;
+        game.drawHud(hud, uiView, debugView);
+        if (menu.open) menu.draw(overlay, uw, uh);
+        if (inventory.open) inventory.draw(overlay, game, uw, uh);
         size_t verts = dd.vertexCount() + glow.vertexCount() + hud.vertexCount() + overlay.vertexCount();
         size_t instances = renderer.instanceCount();
         double cpuTime = platform::timeSeconds() - frameStart;
@@ -357,9 +373,9 @@ int main(int argc, char** argv) {
         // HUD y menús: encima de todo, en píxeles y con transparencia.
         glDisable(GL_DEPTH_TEST);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        Mat4 pixels = ortho(0, float(w), float(h), 0, -1, 1);
-        hud.flush(pixels, 3.0f);
-        overlay.flush(pixels, 3.0f);
+        Mat4 pixels = ortho(0, float(uw), float(uh), 0, -1, 1);
+        hud.flush(pixels);
+        overlay.flush(pixels);
         glDisable(GL_BLEND);
         if (shotPath && platform::timeSeconds() - startTime >= shotTime) {
             if (shotCount == 1) {
@@ -393,6 +409,7 @@ int main(int argc, char** argv) {
         }
     }
 
+    unloadFonts();
     overlay.shutdown();
     renderer.shutdown();
     hud.shutdown();

@@ -1,6 +1,5 @@
 #include "menu.h"
 
-#include "text.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -91,35 +90,38 @@ PauseMenu::Result PauseMenu::update(const Input& in, int width, int height) {
     return Result::None;
 }
 
-void PauseMenu::draw(DebugDraw& hud, int width, int height) const {
-    const uint32_t yellow = rgba(255, 220, 80), gray = rgba(170, 170, 180), dim = rgba(110, 110, 120);
-
-    fillRect(hud, 0, 0, float(width), float(height), rgba(0, 0, 0, 140));  // velo sobre la escena
+void PauseMenu::draw(UiLayer& ui, int width, int height) const {
+    DebugDraw& d = ui.shapes;
+    const uint32_t cyan = rgba(40, 220, 255), text = rgba(240, 245, 255), dim = rgba(150, 165, 210);
+    fillRect(d, 0, 0, float(width), float(height), rgba(8, 10, 30, 150));  // velo sobre la escena
     Rect p = panelRect(width, height);
-    fillRect(hud, p.x0, p.y0, p.x1, p.y1, rgba(18, 20, 26, 235));
-    strokeRect(hud, p.x0, p.y0, p.x1, p.y1, dim);
-
-    const char* title = "PAUSA";
-    drawText(hud, (p.x0 + p.x1 - textWidth(title, 6)) * 0.5f, p.y0 + 34, 6, title, rgba(240, 240, 245));
+    fillRect(d, p.x0, p.y0, p.x1, p.y1, rgba(14, 18, 46, 238));
+    fillRect(d, p.x0, p.y0, p.x1, p.y0 + 4, cyan);
+    strokeRect(d, p.x0, p.y0, p.x1, p.y1, rgba(70, 90, 160));
+    TextStyle title;
+    title.face = FontFace::Title;
+    title.align = Align::Center;
+    title.glow = 0.6f;
+    drawText(ui, (p.x0 + p.x1) * 0.5f, p.y0 + 30, 40, "PAUSA", text, title);
 
     char sens[48];
-    std::snprintf(sens, sizeof(sens), "SENSIBILIDAD  < %.2f >", double(sensitivity));
-    const char* qnames[3] = {"BAJA", "MEDIA", "ALTA"};
+    std::snprintf(sens, sizeof(sens), "Sensibilidad   ‹ %.2f ›", double(sensitivity));
+    const char* qnames[3] = {"baja", "media", "alta"};
     char qual[48];
-    std::snprintf(qual, sizeof(qual), "CALIDAD  < %s >", qnames[quality]);
-    const char* labels[ItemCount] = {"CONTINUAR", "REINICIAR NIVEL", sens, qual, "SALIR"};
+    std::snprintf(qual, sizeof(qual), "Calidad gráfica   ‹ %s ›", qnames[quality]);
+    const char* labels[ItemCount] = {"Continuar", "Reiniciar nivel", sens, qual, "Salir"};
     for (int i = 0; i < ItemCount; ++i) {
         Rect r = itemRect(i, width, height);
         bool sel = i == selected_;
         if (sel) {
-            fillRect(hud, r.x0, r.y0, r.x1, r.y1, rgba(255, 220, 80, 35));
-            strokeRect(hud, r.x0, r.y0, r.x1, r.y1, yellow);
+            fillRect(d, r.x0, r.y0, r.x1, r.y1, rgba(40, 220, 255, 40));
+            fillRect(d, r.x0, r.y0, r.x0 + 5, r.y1, cyan);
         }
-        const float scale = 3.0f;
-        drawText(hud, (r.x0 + r.x1 - textWidth(labels[i], scale)) * 0.5f, (r.y0 + r.y1) * 0.5f - 3 * scale,
-                 scale, labels[i], sel ? yellow : gray);
+        TextStyle st;
+        st.align = Align::Center;
+        drawText(ui, (r.x0 + r.x1) * 0.5f, r.y0 + 8, 24, labels[i], sel ? cyan : text, st);
     }
-
-    const char* hint = "W/S: ELEGIR   ENTER: ACEPTAR   A/D: AJUSTAR   ESC: VOLVER";
-    drawText(hud, (p.x0 + p.x1 - textWidth(hint, 1.2f)) * 0.5f, p.y1 - 26, 1.2f, hint, dim);
+    TextStyle hint;
+    hint.align = Align::Center;
+    drawText(ui, (p.x0 + p.x1) * 0.5f, p.y1 - 30, 15, "W/S elegir · Enter aceptar · A/D ajustar · Esc volver", dim, hint);
 }

@@ -23,9 +23,9 @@ const HitParams kHits[int(Move::Count)] = {
     {0,    0,     1,     0,    0,    false},  // Cast
 };
 const SpellDef kSpells[int(Spell::Count)] = {
-    {"FUEGO", 8, rgba(255, 140, 50)},
-    {"HIELO", 10, rgba(120, 220, 255)},
-    {"CURA", 25, rgba(120, 255, 150)},
+    {"Fuego", 8, rgba(255, 140, 50)},
+    {"Hielo", 10, rgba(120, 220, 255)},
+    {"Cura", 25, rgba(120, 255, 150)},
 };
 // Oleadas: duendes, setas, polillas. Después de la última se repite con uno más de cada.
 const int kWaves[][3] = {{3, 0, 0}, {2, 1, 0}, {3, 0, 2}, {2, 2, 2}, {4, 2, 3}};
@@ -502,7 +502,7 @@ void Game::runCommand(int index) {
     }
     ItemId id = inv_.quick[index - 3];
     if (inv_.count(id) <= 0) {
-        notify(std::string("NO TE QUEDA ") + itemName(id), rgba(180, 180, 190));
+        notify(std::string("No te queda: ") + itemName(id), rgba(180, 180, 190));
         return;
     }
     useItem(id);
@@ -511,7 +511,7 @@ void Game::runCommand(int index) {
 bool Game::castSpell(Spell s) {
     const SpellDef& d = spellDef(s);
     if (mp_ < d.cost) {
-        notify("PM INSUFICIENTES", rgba(150, 170, 255));
+        notify("PM insuficientes", rgba(150, 170, 255));
         return false;
     }
     Vec3 dir = hero_.forward();
@@ -1100,9 +1100,9 @@ void Game::collect(Pickup& p) {
         case PickupKind::Item:
             col = itemDef(p.item).color;
             if (inv_.add(p.item) > 0)
-                notify(std::string("OBTENIDO: ") + itemName(p.item), col);
+                notify(std::string("Obtenido: ") + itemName(p.item), col);
             else
-                notify(std::string("NO CABE MAS ") + itemName(p.item), rgba(180, 180, 190));
+                notify(std::string("No cabe más: ") + itemName(p.item), rgba(180, 180, 190));
             break;
     }
     spawnSparks(p.pos, {0, 1, 0}, 4, col, 1.5f);
@@ -1118,7 +1118,7 @@ bool Game::useItem(ItemId id) {
     if (d.kind != ItemKind::Consumable || inv_.count(id) <= 0 || hero_.downTimer >= 0) return false;
     bool useful = (d.heal > 0 && hp_ < maxHp_) || (d.mana > 0 && mp_ < maxMp_);
     if (!useful) {
-        notify("NO HACE FALTA", rgba(180, 180, 190));
+        notify("Ahora no hace falta", rgba(180, 180, 190));
         return false;
     }
     inv_.remove(id);
@@ -1157,9 +1157,9 @@ void Game::tryOpenChest() {
     for (const auto& [id, n] : c.contents) {
         inv_.add(id, n);
         const ItemDef& d = itemDef(id);
-        std::string text = d.kind == ItemKind::Weapon ? std::string("NUEVA ARMA: ") + d.name
-                                                      : std::string("OBTENIDO: ") + d.name;
-        if (n > 1) text += " X" + std::to_string(n);
+        std::string text = d.kind == ItemKind::Weapon ? std::string("Nuevo prisma: ") + d.name
+                                                      : std::string("Obtenido: ") + d.name;
+        if (n > 1) text += " ×" + std::to_string(n);
         notify(text, d.color);
     }
     Vec3 top = c.pos + Vec3{0, 0.8f, 0};

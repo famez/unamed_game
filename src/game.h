@@ -11,6 +11,7 @@
 #include "physics.h"
 #include "renderer.h"
 #include "skeleton.h"
+#include "text.h"
 #include "vmath.h"
 
 #include <cstdint>
@@ -164,7 +165,7 @@ public:
     // `alpha` ∈ [0,1]: punto entre el paso de simulación anterior y el actual (interpolación).
     void draw(DebugDraw& lines, DebugDraw& glow, Renderer* solid, const DrawFlags& flags, const ViewInfo& view,
               float alpha = 1) const;
-    void drawHud(DebugDraw& hud, const ViewInfo& view, bool debug) const;
+    void drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const;
 
     const Character& hero() const { return hero_; }
     float hp() const { return hp_; }

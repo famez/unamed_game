@@ -237,7 +237,7 @@ int main() {
         place(g, {11.5f, 0.9f, 11.4f});
         run(g, 0.2f);
         run(g, 0.2f, press(&Controls::interact));
-        CHECK(g.chests_[1].open && g.inventory().count(ItemId::StarStaff) == 1, "cofre de la terraza: baculo estelar");
+        CHECK(g.chests_[1].open && g.inventory().count(ItemId::StarStaff) == 1, "cofre de la terraza: prisma estelar");
         CHECK(!g.notices_.empty(), "aviso de objeto obtenido (%s)", g.notices_.empty() ? "-" : g.notices_[0].text.c_str());
 
         Game k = fresh();

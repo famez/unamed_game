@@ -184,36 +184,55 @@ void drawWeapon(Renderer& r, const Mat4& w, const WeaponStats& ws, float time) {
 
 // --- HUD: primitivas 2D en píxeles (origen arriba a la izquierda) ---
 
-void fillRect(DebugDraw& hud, float x0, float y0, float x1, float y1, uint32_t c) {
-    hud.quad({x0, y0, 0}, {x1, y0, 0}, {x1, y1, 0}, {x0, y1, 0}, c);
+const uint32_t kUiPanel = rgba(12, 16, 42, 205), kUiCyan = rgba(40, 220, 255), kUiPink = rgba(255, 70, 190);
+const uint32_t kUiText = rgba(240, 245, 255), kUiDim = rgba(150, 165, 210), kUiAmber = rgba(255, 196, 70);
+const uint32_t kUiShadow = rgba(8, 10, 30, 200);
+
+void fillRect(DebugDraw& d, float x0, float y0, float x1, float y1, uint32_t c) {
+    d.quad({x0, y0, 0}, {x1, y0, 0}, {x1, y1, 0}, {x0, y1, 0}, c);
 }
-void fillCircle(DebugDraw& hud, float cx, float cy, float r, uint32_t c, int n = 28) {
+// Paralelogramo: la parte de arriba desplazada `skew` píxeles a la derecha.
+void skewRect(DebugDraw& d, float x0, float y0, float x1, float y1, float skew, uint32_t c) {
+    d.quad({x0 + skew, y0, 0}, {x1 + skew, y0, 0}, {x1, y1, 0}, {x0, y1, 0}, c);
+}
+void fillCircle(DebugDraw& d, float cx, float cy, float r, uint32_t c, int n = 28, float rot = 0) {
     for (int i = 0; i < n; ++i) {
-        float a0 = 2.0f * kPi * float(i) / float(n), a1 = 2.0f * kPi * float(i + 1) / float(n);
-        hud.triangle({cx, cy, 0}, {cx + std::cos(a0) * r, cy + std::sin(a0) * r, 0},
-                     {cx + std::cos(a1) * r, cy + std::sin(a1) * r, 0}, c);
+        float a0 = rot + 2.0f * kPi * float(i) / float(n), a1 = rot + 2.0f * kPi * float(i + 1) / float(n);
+        d.triangle({cx, cy, 0}, {cx + std::cos(a0) * r, cy + std::sin(a0) * r, 0},
+                   {cx + std::cos(a1) * r, cy + std::sin(a1) * r, 0}, c);
     }
 }
-// Barra con extremos redondeados: fondo, "fantasma" (lo que se acaba de perder) y relleno.
-void roundBar(DebugDraw& hud, float xRight, float y, float length, float thick, float frac, float ghost,
-              uint32_t fill, uint32_t ghostCol) {
-    float r = thick * 0.5f, x0 = xRight - length;
-    fillRect(hud, x0 - 3, y - 3, xRight + 3, y + thick + 3, rgba(20, 24, 40, 220));
-    fillCircle(hud, x0 - 3 + r, y + r, r + 3, rgba(20, 24, 40, 220), 14);
+void diamond(DebugDraw& d, float cx, float cy, float r, uint32_t c) {
+    d.quad({cx, cy - r, 0}, {cx + r, cy, 0}, {cx, cy + r, 0}, {cx - r, cy, 0}, c);
+}
+// Barra inclinada y segmentada (cada `segment` unidades una muesca), con lo recién
+// perdido en otro color.
+void segBar(DebugDraw& d, float xRight, float y, float length, float thick, float frac, float ghost, uint32_t fill,
+            uint32_t ghostCol, int segments) {
+    const float skew = thick * 0.6f, x0 = xRight - length;
+    skewRect(d, x0 - 4, y - 3, xRight + 4, y + thick + 3, skew, kUiPanel);
     auto seg = [&](float a, float b, uint32_t c) {
         if (b <= a) return;
-        fillRect(hud, x0 + length * a, y, x0 + length * b, y + thick, c);
+        skewRect(d, x0 + length * a, y, x0 + length * b, y + thick, skew, c);
     };
-    seg(0, 1, rgba(50, 40, 60));
+    seg(0, 1, rgba(40, 36, 70, 230));
     seg(frac, ghost, ghostCol);
     seg(0, frac, fill);
-    // Brillo en la mitad de arriba.
-    if (frac > 0) fillRect(hud, x0, y + 2, x0 + length * frac, y + thick * 0.4f, withAlpha(rgba(255, 255, 255), 0.35f));
+    if (frac > 0) skewRect(d, x0, y, x0 + length * frac, y + thick * 0.35f, skew * 0.35f, withAlpha(rgba(255, 255, 255), 0.3f));
+    for (int i = 1; i < segments; ++i) {  // muescas
+        float x = x0 + length * float(i) / float(segments);
+        d.quad({x + skew - 1, y, 0}, {x + skew + 1, y, 0}, {x + 1, y + thick, 0}, {x - 1, y + thick, 0}, kUiPanel);
+    }
 }
 
-void hudText(DebugDraw& hud, float x, float y, float scale, const char* s, uint32_t c, bool shadow = true) {
-    if (shadow) drawText(hud, x + scale * 0.6f, y + scale * 0.6f, scale, s, rgba(10, 12, 30, 200));
-    drawText(hud, x, y, scale, s, c);
+void uiText(UiLayer& ui, float x, float y, float size, const char* s, uint32_t c, FontFace face = FontFace::Body,
+            Align align = Align::Left, float glow = 0) {
+    TextStyle st;
+    st.face = face;
+    st.align = align;
+    st.glow = glow;
+    st.outline = rgba(8, 10, 30, 190);
+    drawText(ui, x, y, size, s, c, st);
 }
 
 bool project(const ViewInfo& v, Vec3 p, float& sx, float& sy) {
@@ -603,126 +622,148 @@ void Game::drawEffects(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Vi
 
 // --- HUD -------------------------------------------------------------------------------
 
-void Game::drawHud(DebugDraw& hud, const ViewInfo& view, bool debug) const {
+void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
+    DebugDraw& d = ui.shapes;
     const float w = float(view.width), h = float(view.height);
+    char buf[128];
 
-    // Retrato y barras de PV/PM abajo a la derecha (la longitud crece con el máximo).
+    // Vitalidad abajo a la derecha: retrato hexagonal y barras de PV y PM inclinadas y
+    // segmentadas (su longitud crece con el máximo).
     {
-        float cx = w - 78, cy = h - 78;
-        fillCircle(hud, cx, cy, 52, rgba(20, 24, 40, 230));
-        fillCircle(hud, cx, cy, 46, hp_ / maxHp_ < 0.25f ? rgba(200, 60, 70) : rgba(60, 140, 230));
-        fillCircle(hud, cx, cy + 4, 30, rgba(250, 214, 182));  // cara
-        for (int i = 0; i < 5; ++i) {                            // pelo de punta
-            float a = kPi * (1.1f + 0.2f * float(i));
-            float bx = cx + std::cos(a) * 22, by = cy + std::sin(a) * 22 - 4;
-            hud.triangle({bx - 12, by + 6, 0}, {bx + 12, by + 6, 0}, {cx + std::cos(a) * 46, cy + std::sin(a) * 46, 0},
-                         rgba(128, 74, 42));
+        float cx = w - 86, cy = h - 86;
+        fillCircle(d, cx, cy, 58, kUiPanel, 6, kPi / 6);
+        fillCircle(d, cx, cy, 52, hp_ / maxHp_ < 0.25f ? rgba(255, 60, 90) : kUiCyan, 6, kPi / 6);
+        fillCircle(d, cx, cy, 47, rgba(20, 26, 64), 6, kPi / 6);
+        fillCircle(d, cx, cy + 8, 26, rgba(250, 214, 188));  // cara
+        fillCircle(d, cx, cy - 10, 27, rgba(232, 78, 176), 20);  // pelo
+        for (int i = 0; i < 5; ++i) {
+            float a = kPi * (1.05f + 0.22f * float(i));
+            d.triangle({cx + std::cos(a) * 16 - 9, cy + std::sin(a) * 16 - 6, 0}, {cx + std::cos(a) * 16 + 9, cy + std::sin(a) * 16 - 6, 0},
+                       {cx + std::cos(a) * 44, cy + std::sin(a) * 40 - 4, 0}, rgba(232, 78, 176));
         }
-        fillCircle(hud, cx, cy - 16, 26, rgba(128, 74, 42), 20);
-        fillRect(hud, cx - 26, cy - 14, cx + 26, cy - 6, rgba(128, 74, 42));
-        fillCircle(hud, cx - 10, cy + 4, 4, rgba(40, 70, 160), 10);
-        fillCircle(hud, cx + 10, cy + 4, 4, rgba(40, 70, 160), 10);
-        if (heroFlash_ > 0) fillCircle(hud, cx, cy, 46, withAlpha(rgba(255, 80, 80), heroFlash_ * 2.0f));
+        fillRect(d, cx - 24, cy - 6, cx + 24, cy + 1, rgba(232, 78, 176));
+        fillCircle(d, cx - 10, cy + 8, 5, kUiCyan, 10);
+        fillCircle(d, cx + 10, cy + 8, 5, kUiCyan, 10);
+        if (heroFlash_ > 0) fillCircle(d, cx, cy, 52, withAlpha(rgba(255, 60, 90), heroFlash_ * 2.5f), 6, kPi / 6);
 
-        float right = cx - 58;
-        roundBar(hud, right, cy - 30, maxHp_ * 2.6f, 18, hp_ / maxHp_, hpGhost_ / maxHp_, rgba(90, 230, 90),
-                 rgba(230, 60, 60));
-        roundBar(hud, right, cy - 4, maxMp_ * 3.4f, 11, mp_ / maxMp_, mp_ / maxMp_, rgba(80, 150, 255), 0);
-        char buf[32];
-        std::snprintf(buf, sizeof(buf), "%d/%d", int(std::ceil(hp_)), int(maxHp_));
-        hudText(hud, right - textWidth(buf, 1.6f) - 6, cy - 50, 1.6f, buf, rgba(220, 255, 220));
-        std::snprintf(buf, sizeof(buf), "PM %d", int(mp_));
-        hudText(hud, right - maxMp_ * 3.4f - textWidth(buf, 1.4f) - 16, cy - 4, 1.4f, buf, rgba(200, 220, 255));
-        // Dinero.
-        fillCircle(hud, w - 170, cy + 50 - 2, 8, rgba(255, 210, 60), 14);
-        fillCircle(hud, w - 170, cy + 50 - 2, 4, rgba(255, 240, 160), 10);
+        float right = cx - 66;
+        uiText(ui, right - maxHp_ * 2.6f - 6, cy - 64, 15, "PV", kUiCyan, FontFace::Title);
+        std::snprintf(buf, sizeof(buf), "%d / %d", int(std::ceil(hp_)), int(maxHp_));
+        uiText(ui, right, cy - 66, 18, buf, kUiText, FontFace::Title, Align::Right);
+        segBar(d, right, cy - 40, maxHp_ * 2.6f, 18, hp_ / maxHp_, hpGhost_ / maxHp_, rgba(70, 245, 190),
+               rgba(255, 60, 120), int(maxHp_ / 10));
+        segBar(d, right - 14, cy - 12, maxMp_ * 3.2f, 10, mp_ / maxMp_, mp_ / maxMp_, kUiPink, 0, int(maxMp_ / 5));
+        uiText(ui, right - 14 - maxMp_ * 3.2f - 12, cy - 16, 14, "PM", kUiPink, FontFace::Title, Align::Right);
+        // Lúmenes.
+        diamond(d, w - 196, cy + 46, 9, kUiAmber);
+        diamond(d, w - 196, cy + 46, 4, rgba(255, 250, 210));
         std::snprintf(buf, sizeof(buf), "%d", inv_.munny);
-        hudText(hud, w - 156, cy + 42, 2.2f, buf, rgba(255, 225, 110));
+        uiText(ui, w - 180, cy + 34, 22, buf, kUiAmber, FontFace::Title);
+        uiText(ui, w - 180 + textWidth(buf, 22, FontFace::Title) + 8, cy + 40, 14, "LUM", kUiDim, FontFace::Title);
     }
 
     // Menú de comandos abajo a la izquierda: magias (1-3) y atajos de objetos (4-6).
     {
-        const float x = 24, rowH = 30, width = 270;
-        float y0 = h - 24 - rowH * float(kCommandCount) - 34;
-        fillRect(hud, x, y0, x + 150, y0 + 26, rgba(40, 70, 160, 230));
-        hudText(hud, x + 10, y0 + 7, 2.0f, "COMANDOS", rgba(255, 255, 255));
+        const float x = 28, rowH = 34, width = 300;
+        float y0 = h - 30 - rowH * float(kCommandCount) - 40;
+        skewRect(d, x, y0, x + 170, y0 + 30, 10, rgba(40, 220, 255, 230));
+        uiText(ui, x + 16, y0 + 6, 17, "COMANDOS", rgba(10, 20, 50), FontFace::Title);
         for (int i = 0; i < kCommandCount; ++i) {
-            float y = y0 + 30 + float(i) * rowH;
+            float y = y0 + 36 + float(i) * rowH;
             bool sel = i == commandSel_;
-            char label[64];
+            char name[64], value[32];
             bool usable;
+            uint32_t accent;
             if (i < 3) {
                 const SpellDef& s = spellDef(Spell(i));
-                std::snprintf(label, sizeof(label), "%d %-6s %2d PM", i + 1, s.name, int(s.cost));
+                std::snprintf(name, sizeof(name), "%s", s.name);
+                std::snprintf(value, sizeof(value), "%d PM", int(s.cost));
                 usable = mp_ >= s.cost;
+                accent = s.color;
             } else {
                 ItemId id = inv_.quick[i - 3];
-                std::snprintf(label, sizeof(label), "%d %-13s X%d", i + 1, itemName(id), inv_.count(id));
+                std::snprintf(name, sizeof(name), "%s", itemName(id));
+                std::snprintf(value, sizeof(value), "×%d", inv_.count(id));
                 usable = inv_.count(id) > 0;
+                accent = itemDef(id).color;
             }
-            float x0 = x + (sel ? 14.0f : 0.0f);
-            fillRect(hud, x0, y, x0 + width, y + rowH - 4, sel ? rgba(250, 250, 255, 235) : rgba(20, 26, 50, 210));
-            if (sel) {
-                fillRect(hud, x0, y, x0 + 6, y + rowH - 4, rgba(255, 200, 60));
-                hud.triangle({x0 - 12, y + 4, 0}, {x0 - 12, y + rowH - 8, 0}, {x0 - 3, y + (rowH - 4) * 0.5f, 0},
-                             rgba(255, 200, 60));
-            }
-            uint32_t tc = !usable ? rgba(120, 120, 135) : sel ? rgba(30, 40, 90) : rgba(235, 240, 255);
-            if (i < 3 && usable) tc = sel ? scaleRgb(spellDef(Spell(i)).color, 0.6f) : spellDef(Spell(i)).color;
-            drawText(hud, x0 + 14, y + 7, 2.0f, label, tc);
+            float x0 = x + (sel ? 16.0f : 0.0f);
+            skewRect(d, x0, y, x0 + width, y + rowH - 5, 8, sel ? rgba(235, 245, 255, 240) : kUiPanel);
+            skewRect(d, x0, y, x0 + 6, y + rowH - 5, 8, usable ? accent : rgba(90, 95, 120));
+            if (sel) d.triangle({x0 - 14, y + 5, 0}, {x0 - 14, y + rowH - 10, 0}, {x0 - 4, y + (rowH - 5) * 0.5f, 0}, kUiCyan);
+            char key[4];
+            std::snprintf(key, sizeof(key), "%d", i + 1);
+            uint32_t tc = !usable ? rgba(120, 125, 150) : sel ? rgba(20, 30, 70) : kUiText;
+            uiText(ui, x0 + 18, y + 6, 15, key, sel ? rgba(40, 120, 170) : kUiCyan, FontFace::Title);
+            uiText(ui, x0 + 40, y + 4, 19, name, tc);
+            uiText(ui, x0 + width - 10, y + 6, 15, value, sel ? rgba(60, 70, 110) : kUiDim, FontFace::Title, Align::Right);
         }
-        hudText(hud, x, h - 26, 1.3f, "RUEDA: ELEGIR   E: USAR   CLIC: ATACAR   I: INVENTARIO", rgba(200, 210, 240));
+        skewRect(d, x - 6, h - 30, x + 400, h - 8, 6, kUiPanel);
+        uiText(ui, x, h - 28, 14, "Rueda · elegir    E · usar    Clic · atacar    I · inventario", kUiDim);
     }
 
-    // Objetivo arriba a la derecha: nombre y vida del fijado.
+    // Objetivo fijado arriba a la derecha.
     if (lock_ >= 0) {
         const Enemy& e = enemies_[size_t(lock_)];
-        const EnemyDef& d = e.def();
-        float right = w - 30, len = 220;
-        hudText(hud, right - textWidth(d.name, 2.2f), 24, 2.2f, d.name, rgba(255, 230, 150));
-        roundBar(hud, right, 48, len, 12, std::max(0.0f, e.health) / d.maxHealth, std::max(0.0f, e.health) / d.maxHealth,
-                 rgba(255, 190, 60), 0);
+        const EnemyDef& ed = e.def();
+        float right = w - 34;
+        uiText(ui, right, 22, 22, ed.name, kUiPink, FontFace::Title, Align::Right, 0.5f);
+        float f = std::max(0.0f, e.health) / ed.maxHealth;
+        segBar(d, right, 56, 240, 12, f, f, kUiPink, 0, 10);
     }
 
-    // Avisos de objetos obtenidos (a la derecha, se desvanecen).
+    // Avisos de objetos obtenidos (a la derecha, entran deslizándose y se desvanecen).
     for (size_t i = 0; i < notices_.size(); ++i) {
         const Notice& n = notices_[i];
         float a = clampf(std::min(n.age / 0.15f, (4.0f - n.age) / 0.6f), 0, 1);
-        float slide = (1.0f - smoothstep01(n.age / 0.25f)) * 60.0f;
-        float tw = textWidth(n.text.c_str(), 2.0f);
-        float y = 90 + float(i) * 34, x1 = w - 30 + slide, x0 = x1 - tw - 30;
-        fillRect(hud, x0, y, x1, y + 28, withAlpha(rgba(20, 26, 50), 0.85f * a));
-        fillRect(hud, x0, y, x0 + 5, y + 28, withAlpha(n.color, a));
-        drawText(hud, x0 + 16, y + 8, 2.0f, n.text.c_str(), withAlpha(n.color, a));
+        float slide = (1.0f - smoothstep01(n.age / 0.25f)) * 80.0f;
+        float tw = textWidth(n.text.c_str(), 19);
+        float y = 96 + float(i) * 40, x1 = w - 30 + slide, x0 = x1 - tw - 52;
+        skewRect(d, x0, y, x1, y + 32, 8, withAlpha(rgba(12, 16, 42), 0.85f * a));
+        diamond(d, x0 + 22, y + 16, 8, withAlpha(n.color, a));
+        uiText(ui, x0 + 38, y + 5, 19, n.text.c_str(), withAlpha(n.color, a));
     }
 
-    // Oleada y derrotados arriba a la izquierda; cartel grande al empezar cada oleada.
+    // Oleada arriba a la izquierda; cartel grande al empezar cada una.
     {
-        char buf[64];
-        std::snprintf(buf, sizeof(buf), "OLEADA %d   DERROTADOS %d", wave_, kills_);
-        hudText(hud, 24, 24, 2.0f, buf, rgba(255, 255, 255));
+        skewRect(d, 18, 14, 250, 72, 10, kUiPanel);
+        fillRect(d, 18, 14, 22, 72, kUiCyan);
+        std::snprintf(buf, sizeof(buf), "OLEADA %d", wave_);
+        uiText(ui, 30, 18, 20, buf, kUiText, FontFace::Title);
+        std::snprintf(buf, sizeof(buf), "Grises disipados: %d", kills_);
+        uiText(ui, 28, 48, 16, buf, kUiDim);
+        float by = h * 0.2f;
         if (waveBanner_ > 0) {
             float a = clampf(std::min((2.5f - waveBanner_) / 0.3f, waveBanner_ / 0.5f), 0, 1);
             std::snprintf(buf, sizeof(buf), "OLEADA %d", wave_);
-            float tw = textWidth(buf, 7);
-            fillRect(hud, 0, h * 0.22f - 20, w, h * 0.22f + 62, withAlpha(rgba(30, 50, 120), 0.55f * a));
-            hudText(hud, (w - tw) * 0.5f, h * 0.22f, 7, buf, withAlpha(rgba(255, 230, 120), a));
+            float tw = textWidth(buf, 64, FontFace::Title);
+            fillRect(d, 0, by - 14, w, by + 108, withAlpha(rgba(12, 16, 42), 0.55f * a));
+            fillRect(d, w * 0.5f - tw * 0.5f - 160, by + 40, w * 0.5f - tw * 0.5f - 30, by + 42, withAlpha(kUiCyan, a));
+            fillRect(d, w * 0.5f + tw * 0.5f + 30, by + 40, w * 0.5f + tw * 0.5f + 160, by + 42, withAlpha(kUiCyan, a));
+            uiText(ui, w * 0.5f, by, 64, buf, withAlpha(kUiText, a), FontFace::Title, Align::Center, 0.8f * a);
+            uiText(ui, w * 0.5f, by + 76, 20, "Los Grises se acercan", withAlpha(kUiDim, a), FontFace::Body, Align::Center);
         } else if (enemies_.empty() && wave_ > 0) {
-            const char* msg = "OLEADA SUPERADA";
-            hudText(hud, (w - textWidth(msg, 4)) * 0.5f, h * 0.22f, 4, msg, rgba(160, 255, 180));
+            fillRect(d, 0, by, w, by + 58, withAlpha(rgba(12, 16, 42), 0.5f));
+            uiText(ui, w * 0.5f, by + 10, 34, "OLEADA SUPERADA", rgba(110, 255, 190), FontFace::Title, Align::Center, 0.6f);
         }
     }
 
     int chest = nearbyChest();
     if (chest >= 0 && hero_.downTimer < 0) {
-        const char* msg = "F: ABRIR COFRE";
-        float tw = textWidth(msg, 2.6f);
-        fillRect(hud, (w - tw) * 0.5f - 16, h * 0.68f - 10, (w + tw) * 0.5f + 16, h * 0.68f + 26, rgba(20, 26, 50, 200));
-        hudText(hud, (w - tw) * 0.5f, h * 0.68f, 2.6f, msg, rgba(255, 230, 120));
+        const char* msg = "Abrir cápsula";
+        float tw = textWidth(msg, 22) + 50;
+        float x0 = (w - tw) * 0.5f, y0 = h * 0.7f;
+        skewRect(d, x0, y0, x0 + tw, y0 + 38, 10, kUiPanel);
+        fillRect(d, x0 + 12, y0 + 7, x0 + 36, y0 + 31, kUiCyan);
+        uiText(ui, x0 + 24, y0 + 8, 18, "F", rgba(10, 20, 50), FontFace::Title, Align::Center);
+        uiText(ui, x0 + 46, y0 + 7, 22, msg, kUiText);
     }
     if (hero_.downTimer >= 0) {
-        const char* msg = "HAS CAIDO...";
-        hudText(hud, (w - textWidth(msg, 6)) * 0.5f, h * 0.4f, 6, msg, rgba(255, 120, 120));
+        float a = clampf(hero_.downTimer / 0.8f, 0, 1);
+        fillRect(d, 0, 0, w, h, withAlpha(rgba(20, 10, 40), 0.45f * a));
+        uiText(ui, w * 0.5f, h * 0.38f, 56, "SEÑAL PERDIDA", withAlpha(kUiPink, a), FontFace::Title, Align::Center, a);
+        uiText(ui, w * 0.5f, h * 0.38f + 72, 22, "Reconstruyendo el prisma...", withAlpha(kUiDim, a), FontFace::Body,
+               Align::Center);
     }
 
     // Modo debug: estado de la IA y vida encima de cada enemigo, y recuentos.
@@ -730,14 +771,12 @@ void Game::drawHud(DebugDraw& hud, const ViewInfo& view, bool debug) const {
         for (const Enemy& e : enemies_) {
             float sx, sy;
             if (!project(view, e.center() + Vec3{0, e.def().height * 0.5f + 0.3f, 0}, sx, sy)) continue;
-            char buf[64];
             std::snprintf(buf, sizeof(buf), "%s %.0f", aiStateName(e.state), double(std::max(0.0f, e.health)));
-            drawText(hud, sx - textWidth(buf, 1.4f) * 0.5f, sy, 1.4f, buf, rgba(255, 230, 120));
+            uiText(ui, sx, sy, 15, buf, kUiAmber, FontFace::Body, Align::Center);
         }
-        char buf[128];
-        std::snprintf(buf, sizeof(buf), "DEBUG  ENEMIGOS %zu  BOTIN %zu  PARTICULAS %zu  PROYECTILES %zu",
+        std::snprintf(buf, sizeof(buf), "DEBUG · enemigos %zu · botín %zu · partículas %zu · proyectiles %zu",
                       enemies_.size(), pickups_.size(), particles_.size(), projectiles_.size());
-        drawText(hud, 24, 50, 1.5f, buf, rgba(120, 255, 160));
-        drawText(hud, 24, 66, 1.5f, "F1 HUESOS  F2 ARTICULACIONES  F3 CAJAS  F4 REJILLA", rgba(120, 200, 160));
+        uiText(ui, 28, 74, 15, buf, rgba(120, 255, 160));
+        uiText(ui, 28, 94, 15, "F1 huesos · F2 articulaciones · F3 cajas · F4 rejilla", rgba(120, 200, 160));
     }
 }
