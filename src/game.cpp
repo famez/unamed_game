@@ -40,6 +40,11 @@ constexpr float kHpOrb = 8, kMpOrb = 6;
 constexpr float kArena = 15.4f;         // los enemigos no salen de |x|, |z| < esto
 constexpr size_t kMaxParticles = 900;
 
+uint32_t scaleColor(uint32_t c, float k) {
+    auto ch = [&](int shift) { return uint32_t(clampf(float((c >> shift) & 0xFF) * k, 0, 255)) << shift; };
+    return ch(0) | ch(8) | ch(16) | (c & 0xFF000000u);
+}
+
 uint32_t enemyColor(EnemyKind k) {
     switch (k) {
         case EnemyKind::Imp: return rgba(220, 150, 255);
@@ -67,106 +72,148 @@ void Game::buildLevel() {
         decor_.push_back({t, c, h, col, m, sphere});
     };
     const Mat4 id = Mat4::identity();
-    const uint32_t warmWindow = rgba(255, 210, 120), door = rgba(120, 75, 50), frame = rgba(250, 245, 235);
+    // Paleta: arquitectura blanca y nacarada; el color lo ponen los neones, las plantas y
+    // los hologramas.
+    const uint32_t white = rgba(226, 230, 240), glass = rgba(40, 92, 130), cyan = rgba(40, 220, 255);
+    const uint32_t magenta = rgba(255, 70, 190), amber = rgba(255, 190, 60), lime = rgba(120, 255, 140);
+    const uint32_t neons[] = {cyan, magenta, amber, lime};
+    // Contorno luminoso de la cara superior de un bloque (cuatro tiras finas).
+    auto rim = [&](Vec3 c, float hx, float hz, uint32_t col) {
+        const float t = 0.025f;
+        deco(id, c + Vec3{0, 0, hz}, {hx + t, t, t}, col, Material::Glow, false);
+        deco(id, c - Vec3{0, 0, hz}, {hx + t, t, t}, col, Material::Glow, false);
+        deco(id, c + Vec3{hx, 0, 0}, {t, t, hz + t}, col, Material::Glow, false);
+        deco(id, c - Vec3{hx, 0, 0}, {t, t, hz + t}, col, Material::Glow, false);
+    };
 
-    // Casa: bloque de paredes, tejado a dos aguas (un prisma girado 45°), puerta y
-    // ventanas iluminadas en la fachada que da a la plaza (`in` apunta hacia dentro).
-    auto house = [&](float cx, float cz, float hx, float hz, float height, Vec3 in, uint32_t wall, uint32_t roof) {
-        block({cx, height * 0.5f, cz}, {hx, height * 0.5f, hz}, wall);
+    // Edificio: bloque blanco con cornisa, franja de neón en lo alto, cristaleras con marco
+    // luminoso, puerta en arco de luz y un cartel holográfico (`in` apunta hacia la plaza).
+    auto building = [&](float cx, float cz, float hx, float hz, float height, Vec3 in, uint32_t tint, uint32_t neon) {
+        block({cx, height * 0.5f, cz}, {hx, height * 0.5f, hz}, tint);
+        deco(id, {cx, height + 0.12f, cz}, {hx + 0.15f, 0.12f, hz + 0.15f}, white, Material::Stone, false);  // cornisa
+        deco(id, {cx, height + 0.02f, cz}, {hx + 0.16f, 0.035f, hz + 0.16f}, neon, Material::Glow, false);
         bool longX = hx > hz;
         float shortHalf = longX ? hz : hx, longHalf = longX ? hx : hz;
-        float a = (shortHalf + 0.35f) / std::sqrt(2.0f);
-        Mat4 roofT = translate({cx, height, cz}) * (longX ? rotateX(kPi * 0.25f) : rotateZ(kPi * 0.25f));
-        deco(roofT, {}, longX ? Vec3{longHalf + 0.3f, a, a} : Vec3{a, a, longHalf + 0.3f}, roof, Material::Cloth, false);
         Vec3 along = longX ? Vec3{1, 0, 0} : Vec3{0, 0, 1};
         Vec3 face = Vec3{cx, 0, cz} + in * (shortHalf + 0.03f);
-        auto panel = [&](Vec3 c, float w, float h, uint32_t col, Material m) {
-            Vec3 half = longX ? Vec3{w, h, 0.05f} : Vec3{0.05f, h, w};
-            deco(id, c, half, col, m, false);
+        auto panel = [&](Vec3 c, float w, float h, uint32_t col, Material m, float depth = 0.05f) {
+            deco(id, c, longX ? Vec3{w, h, depth} : Vec3{depth, h, w}, col, m, false);
         };
-        panel(face + Vec3{0, 1.1f, 0}, 0.62f, 1.1f, door, Material::Cloth);
-        panel(face + Vec3{0, 2.35f, 0} + in * 0.02f, 0.75f, 0.08f, frame, Material::Cloth);  // dintel
+        // Cúpula o antena en el tejado.
+        if (int(cx * 3 + cz) % 2 == 0)
+            deco(id, {cx + along.x * longHalf * 0.4f, height + 0.25f, cz + along.z * longHalf * 0.4f}, {1.2f, 0.9f, 1.2f},
+                 white, Material::Stone, true);
+        else {
+            Vec3 a{cx - along.x * longHalf * 0.5f, height, cz - along.z * longHalf * 0.5f};
+            deco(id, a + Vec3{0, 1.0f, 0}, {0.06f, 1.0f, 0.06f}, white, Material::Metal, false);
+            deco(id, a + Vec3{0, 2.05f, 0}, {0.12f, 0.12f, 0.12f}, neon, Material::Glow, true);
+        }
+        // Puerta: arco de luz.
+        panel(face + Vec3{0, 1.15f, 0}, 0.7f, 1.15f, rgba(30, 40, 70), Material::Metal);
+        panel(face + Vec3{0, 2.32f, 0} + in * 0.01f, 0.78f, 0.04f, neon, Material::Glow);
+        panel(face + Vec3{0, 1.15f, 0} + along * 0.74f + in * 0.01f, 0.04f, 1.15f, neon, Material::Glow);
+        panel(face + Vec3{0, 1.15f, 0} - along * 0.74f + in * 0.01f, 0.04f, 1.15f, neon, Material::Glow);
+        // Cartel holográfico encima de la puerta.
+        panel(face + Vec3{0, 3.0f, 0} + in * 0.35f, 0.9f, 0.28f, neons[int(cx + cz + 8) & 3], Material::Glow, 0.015f);
         for (float side : {-1.0f, 1.0f}) {
-            for (float y : {1.6f, height > 5.0f ? 3.9f : -1.0f}) {
+            for (float y : {1.7f, height > 5.0f ? 4.0f : -1.0f}) {
                 if (y < 0) continue;
                 Vec3 w = face + along * (side * longHalf * 0.55f) + Vec3{0, y, 0};
-                panel(w, 0.68f, 0.62f, frame, Material::Cloth);
-                panel(w + in * 0.03f, 0.52f, 0.48f, warmWindow, Material::Glow);
+                panel(w, 0.9f, 0.7f, glass, Material::Metal);
+                panel(w + Vec3{0, -0.72f, 0} + in * 0.02f, 0.9f, 0.025f, neon, Material::Glow);  // repisa luminosa
             }
-            // Jardinera con flores bajo las ventanas.
-            Vec3 box = face + along * (side * longHalf * 0.55f) + in * 0.25f + Vec3{0, 0.25f, 0};
-            deco(id, box, longX ? Vec3{0.8f, 0.25f, 0.22f} : Vec3{0.22f, 0.25f, 0.8f}, rgba(150, 95, 60), Material::Cloth, false);
-            const uint32_t flowers[] = {rgba(255, 110, 150), rgba(255, 220, 80), rgba(160, 120, 255), rgba(255, 255, 255)};
+            // Jardinera blanca con plantas y flores de colores.
+            Vec3 box = face + along * (side * longHalf * 0.55f) + in * 0.3f + Vec3{0, 0.3f, 0};
+            deco(id, box, longX ? Vec3{0.9f, 0.3f, 0.25f} : Vec3{0.25f, 0.3f, 0.9f}, white, Material::Stone, false);
             for (int i = 0; i < 5; ++i) {
-                Vec3 p = box + along * (-0.6f + 0.3f * float(i)) + Vec3{0, 0.3f, 0};
-                deco(id, p, {0.13f, 0.1f, 0.13f}, rgba(80, 170, 70), Material::Cloth, true);
-                deco(id, p + Vec3{0, 0.1f, 0}, {0.07f, 0.06f, 0.07f}, flowers[(i + int(cx + cz)) & 3], Material::Glow, true);
+                Vec3 p = box + along * (-0.68f + 0.34f * float(i)) + Vec3{0, 0.36f, 0};
+                deco(id, p, {0.16f, 0.13f, 0.16f}, rgba(70, 190, 120), Material::Cloth, true);
+                deco(id, p + Vec3{0, 0.12f, 0}, {0.06f, 0.05f, 0.06f}, neons[(i + int(cx)) & 3], Material::Glow, true);
             }
         }
     };
-    const uint32_t walls[] = {rgba(255, 228, 196), rgba(190, 230, 210), rgba(200, 220, 255), rgba(255, 205, 210),
-                              rgba(250, 240, 180), rgba(220, 205, 245)};
-    const uint32_t roofs[] = {rgba(220, 90, 70), rgba(60, 150, 170), rgba(110, 90, 200), rgba(235, 140, 60)};
+    const uint32_t tints[] = {rgba(226, 230, 240), rgba(205, 212, 250), rgba(200, 238, 222), rgba(250, 210, 228),
+                              rgba(250, 226, 196), rgba(222, 208, 250)};
     int k = 0;
     for (float x : {-11.0f, 0.0f, 11.0f}) {
-        house(x, 19, 5.0f, 3.0f, 4.5f + float(k % 3) * 0.9f, {0, 0, -1}, walls[k % 6], roofs[k % 4]); ++k;
-        house(x, -19, 5.0f, 3.0f, 4.5f + float(k % 3) * 0.9f, {0, 0, 1}, walls[k % 6], roofs[k % 4]); ++k;
-        house(19, x, 3.0f, 5.0f, 4.5f + float(k % 3) * 0.9f, {-1, 0, 0}, walls[k % 6], roofs[k % 4]); ++k;
-        house(-19, x, 3.0f, 5.0f, 4.5f + float(k % 3) * 0.9f, {1, 0, 0}, walls[k % 6], roofs[k % 4]); ++k;
+        building(x, 19, 5.0f, 3.0f, 4.6f + float(k % 3) * 1.0f, {0, 0, -1}, tints[k % 6], neons[k & 3]); ++k;
+        building(x, -19, 5.0f, 3.0f, 4.6f + float(k % 3) * 1.0f, {0, 0, 1}, tints[k % 6], neons[k & 3]); ++k;
+        building(19, x, 3.0f, 5.0f, 4.6f + float(k % 3) * 1.0f, {-1, 0, 0}, tints[k % 6], neons[k & 3]); ++k;
+        building(-19, x, 3.0f, 5.0f, 4.6f + float(k % 3) * 1.0f, {1, 0, 0}, tints[k % 6], neons[k & 3]); ++k;
     }
-    // Torres en las esquinas con cúpula y setos altos entre casas: la plaza queda cerrada.
+    // Torres en las esquinas con anillos de luz y faro arriba; entre edificios, jardineras
+    // altas: la plaza queda cerrada.
     for (float sx : {-1.0f, 1.0f})
         for (float sz : {-1.0f, 1.0f}) {
-            block({sx * 18.5f, 4.0f, sz * 18.5f}, {2.6f, 4.0f, 2.6f}, rgba(245, 235, 220));
-            deco(id, {sx * 18.5f, 8.0f, sz * 18.5f}, {2.9f, 2.2f, 2.9f}, rgba(80, 170, 200), Material::Cloth, true);
-            deco(id, {sx * 18.5f, 10.4f, sz * 18.5f}, {0.25f, 0.4f, 0.25f}, rgba(255, 220, 90), Material::Glow, true);
+            Vec3 c{sx * 18.5f, 0, sz * 18.5f};
+            block(c + Vec3{0, 4.5f, 0}, {2.6f, 4.5f, 2.6f}, white);
+            for (int r = 0; r < 3; ++r)
+                deco(id, c + Vec3{0, 2.5f + 2.5f * float(r), 0}, {2.68f, 0.06f, 2.68f}, neons[(r + int(sx + 2 * sz + 3)) & 3],
+                     Material::Glow, false);
+            deco(id, c + Vec3{0, 9.0f, 0}, {2.4f, 1.4f, 2.4f}, white, Material::Stone, true);
+            deco(id, c + Vec3{0, 10.6f, 0}, {0.3f, 0.3f, 0.3f}, cyan, Material::Glow, true);
         }
     for (float g : {-5.5f, 5.5f}) {
         for (Vec3 c : {Vec3{g, 1.0f, 17.0f}, Vec3{g, 1.0f, -17.0f}, Vec3{17.0f, 1.0f, g}, Vec3{-17.0f, 1.0f, g}}) {
-            block(c, {std::fabs(c.x) > 16 ? 1.3f : 0.6f, 1.0f, std::fabs(c.z) > 16 ? 1.3f : 0.6f}, rgba(70, 150, 75), Material::Cloth);
-            deco(id, c + Vec3{0, 1.0f, 0}, {0.75f, 0.35f, 0.75f}, rgba(85, 170, 85), Material::Cloth, true);
+            Vec3 half{std::fabs(c.x) > 16 ? 1.3f : 0.6f, 1.0f, std::fabs(c.z) > 16 ? 1.3f : 0.6f};
+            block(c, half, white);
+            deco(id, c + Vec3{0, 1.0f, 0}, half + Vec3{0.02f, 0.04f, 0.02f}, magenta, Material::Glow, false);
+            deco(id, c + Vec3{0, 1.35f, 0}, {half.x * 1.1f, 0.45f, half.z * 1.1f}, rgba(70, 200, 120), Material::Cloth, true);
         }
     }
 
-    // Fuente central: pilón (hay que saltar para subir), columna, taza y un cristal que brilla.
-    const uint32_t stone = rgba(235, 225, 210);
-    block({0, 0.35f, 0}, {2.4f, 0.35f, 2.4f}, stone);
-    block({0, 1.0f, 0}, {0.4f, 1.0f, 0.4f}, stone);
-    block({0, 2.05f, 0}, {1.0f, 0.12f, 1.0f}, stone);
-    deco(id, {0, 0.66f, 0}, {2.15f, 0.05f, 2.15f}, rgba(80, 190, 235), Material::Water, false);
-    deco(id, {0, 2.19f, 0}, {0.88f, 0.03f, 0.88f}, rgba(80, 190, 235), Material::Water, false);
-    deco(id, {0, 2.75f, 0}, {0.28f, 0.45f, 0.28f}, rgba(170, 240, 255), Material::Glow, true);
-    lamps_.push_back({0, 2.75f, 0});
+    // Fuente de luz: pilón blanco (hay que saltar), agua luminosa, columna con espiral de
+    // neón y un prisma que flota y gira encima (se dibuja aparte, ver drawLevel).
+    block({0, 0.35f, 0}, {2.4f, 0.35f, 2.4f}, white);
+    block({0, 1.0f, 0}, {0.4f, 1.0f, 0.4f}, white);
+    block({0, 2.05f, 0}, {1.0f, 0.12f, 1.0f}, white);
+    deco(id, {0, 0.66f, 0}, {2.15f, 0.05f, 2.15f}, rgba(40, 125, 185), Material::Water, false);
+    deco(id, {0, 2.19f, 0}, {0.88f, 0.03f, 0.88f}, rgba(40, 125, 185), Material::Water, false);
+    rim({0, 0.70f, 0}, 2.4f, 2.4f, cyan);  // borde del pilón
+    for (int i = 0; i < 10; ++i) {
+        float a = float(i) * 0.9f, y = 0.2f + 0.18f * float(i);
+        deco(translate({0, y, 0}) * rotateY(a), {0.41f, 0, 0}, {0.02f, 0.05f, 0.12f}, magenta, Material::Glow, false);
+    }
+    lamps_.push_back({0, 3.0f, 0});
 
     // Terraza al noreste con dos escalones (se suben andando) y un árbol.
-    block({10.5f, 0.45f, 10.5f}, {3.5f, 0.45f, 3.5f}, rgba(225, 200, 170));
-    block({10.5f, 0.15f, 6.1f}, {1.5f, 0.15f, 0.3f}, rgba(225, 200, 170));
-    block({10.5f, 0.30f, 6.7f}, {1.5f, 0.30f, 0.3f}, rgba(225, 200, 170));
-    // Plataforma alta al noroeste: se llega saltando por dos bloques.
-    block({-6.5f, 0.45f, 7.0f}, {0.8f, 0.45f, 0.8f}, rgba(200, 185, 230));
-    block({-8.7f, 1.6f, 9.0f}, {0.8f, 0.15f, 0.8f}, rgba(200, 185, 230));
-    block({-11.5f, 2.4f, 11.5f}, {2.2f, 0.2f, 2.2f}, rgba(200, 185, 230));
-    block({-11.5f, 1.1f, 11.5f}, {0.35f, 1.1f, 0.35f}, rgba(170, 155, 205));
+    block({10.5f, 0.45f, 10.5f}, {3.5f, 0.45f, 3.5f}, rgba(214, 222, 240));
+    block({10.5f, 0.15f, 6.1f}, {1.5f, 0.15f, 0.3f}, rgba(214, 222, 240));
+    block({10.5f, 0.30f, 6.7f}, {1.5f, 0.30f, 0.3f}, rgba(214, 222, 240));
+    rim({10.5f, 0.9f, 10.5f}, 3.5f, 3.5f, cyan);
+    // Plataforma alta al noroeste: se llega saltando por dos bloques; bajos luminosos.
+    block({-6.5f, 0.45f, 7.0f}, {0.8f, 0.45f, 0.8f}, white);
+    block({-8.7f, 1.6f, 9.0f}, {0.8f, 0.15f, 0.8f}, white);
+    block({-11.5f, 2.4f, 11.5f}, {2.2f, 0.2f, 2.2f}, white);
+    block({-11.5f, 1.1f, 11.5f}, {0.35f, 1.1f, 0.35f}, white);
+    rim({-8.7f, 1.75f, 9.0f}, 0.8f, 0.8f, magenta);
+    rim({-11.5f, 2.6f, 11.5f}, 2.2f, 2.2f, magenta);
+    rim({-6.5f, 0.9f, 7.0f}, 0.8f, 0.8f, magenta);
 
-    // Árboles: tronco sólido, copa de tres esferas.
-    auto tree = [&](Vec3 base, float size) {
-        block(base + Vec3{0, 1.1f * size, 0}, {0.22f * size, 1.1f * size, 0.22f * size}, rgba(140, 95, 60), Material::Cloth);
-        Vec3 top = base + Vec3{0, 2.4f * size, 0};
-        deco(id, top, Vec3{1.3f, 1.1f, 1.3f} * size, rgba(90, 185, 90), Material::Cloth, true);
-        deco(id, top + Vec3{0.5f, 0.6f, 0.2f} * size, Vec3{0.9f, 0.8f, 0.9f} * size, rgba(120, 205, 100), Material::Cloth, true);
-        deco(id, top + Vec3{-0.4f, 0.4f, -0.4f} * size, Vec3{0.9f, 0.8f, 0.9f} * size, rgba(75, 165, 85), Material::Cloth, true);
+    // Árboles: tronco blanco y copa de colores vivos con frutos de luz.
+    auto tree = [&](Vec3 base, float size, uint32_t leaves) {
+        block(base + Vec3{0, 1.1f * size, 0}, {0.2f * size, 1.1f * size, 0.2f * size}, white, Material::Stone);
+        Vec3 top = base + Vec3{0, 2.5f * size, 0};
+        deco(id, top, Vec3{1.3f, 1.0f, 1.3f} * size, leaves, Material::Cloth, true);
+        deco(id, top + Vec3{0.5f, 0.6f, 0.2f} * size, Vec3{0.9f, 0.75f, 0.9f} * size, scaleColor(leaves, 1.12f), Material::Cloth, true);
+        deco(id, top + Vec3{-0.45f, 0.4f, -0.4f} * size, Vec3{0.9f, 0.75f, 0.9f} * size, scaleColor(leaves, 0.88f), Material::Cloth, true);
+        for (int i = 0; i < 5; ++i) {
+            float a = float(i) * 1.26f;
+            deco(id, top + Vec3{std::cos(a) * 1.1f, -0.45f + 0.2f * float(i % 2), std::sin(a) * 1.1f} * size,
+                 {0.08f, 0.08f, 0.08f}, rgba(255, 245, 160), Material::Glow, true);
+        }
     };
-    tree({12.0f, 0.9f, 12.5f}, 1.0f);
-    tree({-13.0f, 0, -4.0f}, 1.2f);
-    tree({13.0f, 0, -5.0f}, 1.1f);
-    tree({-4.0f, 0, -13.5f}, 1.0f);
-    tree({4.5f, 0, 13.5f}, 1.1f);
+    tree({12.0f, 0.9f, 12.5f}, 1.0f, rgba(255, 110, 200));
+    tree({-13.0f, 0, -4.0f}, 1.2f, rgba(170, 110, 255));
+    tree({13.0f, 0, -5.0f}, 1.1f, rgba(255, 120, 170));
+    tree({-4.0f, 0, -13.5f}, 1.0f, rgba(90, 210, 255));
+    tree({4.5f, 0, 13.5f}, 1.1f, rgba(255, 150, 90));
 
-    // Farolas.
+    // Farolas: poste blanco fino y esfera de luz.
     for (Vec3 p : {Vec3{5.5f, 0, -5.5f}, Vec3{-5.5f, 0, -5.5f}, Vec3{5.5f, 0, 5.0f}, Vec3{-4.0f, 0, 4.0f}}) {
-        block(p + Vec3{0, 1.6f, 0}, {0.1f, 1.6f, 0.1f}, rgba(60, 70, 90), Material::Metal);
-        deco(id, p + Vec3{0, 3.35f, 0}, {0.22f, 0.26f, 0.22f}, rgba(255, 220, 140), Material::Glow, true);
-        deco(id, p + Vec3{0, 3.65f, 0}, {0.26f, 0.06f, 0.26f}, rgba(60, 70, 90), Material::Metal, false);
+        block(p + Vec3{0, 1.6f, 0}, {0.08f, 1.6f, 0.08f}, white, Material::Metal);
+        deco(id, p + Vec3{0, 3.35f, 0}, {0.2f, 0.2f, 0.2f}, cyan, Material::Glow, true);
+        deco(id, p + Vec3{0, 3.1f, 0}, {0.16f, 0.03f, 0.16f}, white, Material::Metal, false);
         lamps_.push_back(p + Vec3{0, 3.35f, 0});
     }
 

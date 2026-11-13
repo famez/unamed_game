@@ -19,6 +19,11 @@
 #include <cstdint>
 #include <vector>
 
+// Calidad gráfica: baja (sin MSAA, sombras 1024², bloom corto), media (MSAA 4x, sombras
+// 2048²) y alta (MSAA 8x, sombras 4096², bloom más amplio) para equipos más potentes.
+enum class Quality { Low, Medium, High };
+const char* qualityName(Quality q);
+
 enum class Material : int {
     Cloth = 0,  // personajes: difuso + contorno
     Stone = 1,  // plataformas: bisel ancho en las aristas
@@ -48,8 +53,21 @@ struct RenderCamera {
 
 class Renderer {
 public:
-    bool init();
+    bool init(Quality q = Quality::Medium);
     void shutdown();
+    void setQuality(Quality q);
+    Quality quality() const { return quality_; }
+
+    // Fotograma con post-proceso: beginFrame activa el buffer de la escena (todo lo que se
+    // dibuje después va ahí, también las capas de líneas y efectos) y endFrame lo resuelve,
+    // añade el bloom y lo compone en la pantalla. El canal alfa de la escena es la máscara
+    // de brillo: lo emisivo y los efectos escriben alfa y "sangran" luz alrededor.
+    // La escena se dibuja a una resolución interna escalada (según la calidad) y se
+    // reescala al componerla: la GPU sombrea menos píxeles y el HUD sigue nítido.
+    void beginFrame(int width, int height);
+    void endFrame();
+    int sceneWidth() const { return sceneW_; }
+    int sceneHeight() const { return sceneH_; }
 
     // Caja con semiejes `half` centrada en `center`, en el espacio de `transform`.
     // `flash` (0..1) la blanquea (impactos).
@@ -135,6 +153,22 @@ private:
     std::vector<SkinDraw> skinDraws_;
     GLuint skinProgram_ = 0, skinShadowProgram_ = 0;
     void drawSkinned(GLuint prog, bool outlinePass);
+
+    // Post-proceso.
+    static constexpr int kBloomLevels = 6;
+    Quality quality_ = Quality::Medium;
+    int shadowSize_ = 0, msaa_ = 4, bloomLevels_ = 5;
+    GLuint targetFbo_ = 0;  // donde dibuja render(): el buffer de la escena
+    GLuint sceneFbo_ = 0, sceneColorRb_ = 0, sceneDepthRb_ = 0, resolveFbo_ = 0, resolveTex_ = 0;
+    int sceneW_ = 0, sceneH_ = 0, sceneSamples_ = -1;
+    int windowW_ = 0, windowH_ = 0;
+    float renderScale_ = 0.75f;
+    GLuint bloomFbo_[kBloomLevels] = {}, bloomTex_[kBloomLevels] = {};
+    int bloomW_[kBloomLevels] = {}, bloomH_[kBloomLevels] = {};
+    GLuint brightProgram_ = 0, downProgram_ = 0, upProgram_ = 0, finalProgram_ = 0;
+    void ensureSceneTargets(int width, int height);
+    void releaseSceneTargets();
+    void createShadowMap();
 
     Batch boxes_, spheres_, highlightBoxes_, highlightSpheres_;
     std::vector<FxInstance> smoke_;

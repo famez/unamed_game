@@ -8,6 +8,7 @@
 // Los detalles que deben verse nítidos o brillar (ojos, líneas de neón, núcleo del pecho,
 // mechones con inercia) siguen siendo piezas rígidas aparte (ver game_draw.cpp).
 
+#include "enemy.h"
 #include "renderer.h"
 #include "skeleton.h"
 #include "vmath.h"
@@ -42,7 +43,11 @@ struct BuiltModel {
 // Genera la malla en la CPU (lógica pura; también la usan los tests).
 void buildSkinnedMesh(const ModelDef& def, std::vector<SkinVertex>& verts, std::vector<uint32_t>& indices);
 
-enum class ModelId { Hero, Count };
+enum class ModelId { Hero, Imp, Shroom, Moth, Count };
+// Modelo del cuerpo de un enemigo.
+ModelId enemyModel(int enemyKind);
+// Formas de un enemigo que no van en su malla (brillan o son demasiado finas) y se dibujan aparte.
+bool enemyShapeIsRigid(const EnemyShape& s);
 const ModelDef& modelDef(ModelId id);
 
 // Genera y sube todos los modelos (al arrancar).

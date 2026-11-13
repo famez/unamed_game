@@ -2,11 +2,12 @@
 
 #include "text.h"
 
+#include <algorithm>
 #include <cstdio>
 
 namespace {
 
-constexpr float kPanelW = 520, kPanelH = 360;
+constexpr float kPanelW = 520, kPanelH = 414;
 constexpr float kItemH = 42, kItemGap = 12, kItemsTop = 110;
 constexpr float kMinSensitivity = 0.25f, kMaxSensitivity = 3.0f, kSensitivityStep = 0.25f;
 
@@ -66,6 +67,20 @@ PauseMenu::Result PauseMenu::update(const Input& in, int width, int height) {
         return Result::None;
     }
 
+    if (selected_ == QualityItem) {
+        int dir = in.wasPressed(Key::A) || in.wasPressed(Key::Left) ? -1 : in.wasPressed(Key::D) || in.wasPressed(Key::Right) ? 1 : 0;
+        if (clicked) {
+            Rect r = itemRect(QualityItem, width, height);
+            dir = in.mouseX < (r.x0 + r.x1) * 0.5f ? -1 : 1;
+        }
+        int q = std::max(0, std::min(2, quality + dir));
+        if (q != quality) {
+            quality = q;
+            return Result::QualityChanged;
+        }
+        return Result::None;
+    }
+
     if (clicked || in.wasPressed(Key::Enter) || in.wasPressed(Key::Space)) {
         switch (selected_) {
             case Continue: return Result::Resume;
@@ -89,7 +104,10 @@ void PauseMenu::draw(DebugDraw& hud, int width, int height) const {
 
     char sens[48];
     std::snprintf(sens, sizeof(sens), "SENSIBILIDAD  < %.2f >", double(sensitivity));
-    const char* labels[ItemCount] = {"CONTINUAR", "REINICIAR NIVEL", sens, "SALIR"};
+    const char* qnames[3] = {"BAJA", "MEDIA", "ALTA"};
+    char qual[48];
+    std::snprintf(qual, sizeof(qual), "CALIDAD  < %s >", qnames[quality]);
+    const char* labels[ItemCount] = {"CONTINUAR", "REINICIAR NIVEL", sens, qual, "SALIR"};
     for (int i = 0; i < ItemCount; ++i) {
         Rect r = itemRect(i, width, height);
         bool sel = i == selected_;

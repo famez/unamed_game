@@ -7,19 +7,18 @@
 
 namespace {
 
-constexpr int kShadowSize = 2048;
 constexpr float kShadowExtent = 30.0f;  // semilado (m) del área con sombras alrededor del jugador
 const Vec3 kSunDir = normalize(Vec3{0.45f, 0.8f, 0.35f});  // hacia el sol
 
 // Constantes y funciones comunes a los shaders de color (en espacio lineal).
 const char* kCommonGlsl = R"(
 // Paleta luminosa y saturada, de tarde soleada.
-const vec3 kSunColor = vec3(1.0, 0.92, 0.78) * 1.8;
+const vec3 kSunColor = vec3(1.0, 0.93, 0.82) * 1.35;
 const vec3 kFillColor = vec3(0.55, 0.65, 0.95) * 0.45;  // relleno frío opuesto al sol
-const vec3 kZenith   = vec3(0.10, 0.32, 0.85);
-const vec3 kHorizon  = vec3(0.62, 0.80, 0.98);
+const vec3 kZenith   = vec3(0.06, 0.24, 0.85);
+const vec3 kHorizon  = vec3(0.85, 0.62, 0.80);  // horizonte rosado: cielo de ciudad luminosa
 const vec3 kBounce   = vec3(0.30, 0.26, 0.18);
-const float kFogDensity = 0.008;
+const float kFogDensity = 0.006;
 
 vec3 toLinear(vec3 c) { return pow(c, vec3(2.2)); }
 
@@ -117,24 +116,29 @@ float gridLine(vec2 p) {
 
 void main() {
     if (uOutlineColor.a > 0.0) {
-        fragColor = vec4(uOutlineColor.rgb, 1.0);
+        fragColor = vec4(uOutlineColor.rgb, 0.0);
         return;
     }
     int material = int(vParams.x + 0.5);
     vec3 n = normalize(vNormal);
     vec3 base = toLinear(vColor.rgb);
+    float seamGlow = 0.0;  // juntas luminosas del suelo (emisión que alimenta el bloom)
 
-    if (material == 3) {  // plaza: adoquines de 0,8 m en hileras desplazadas, cada uno de un tono
-        vec2 w = vWorldPos.xz / 0.8;
-        w.x += 0.5 * mod(floor(w.y), 2.0);
+    if (material == 3) {  // plaza: losas de 2 m nacaradas, juntas finas y cada 6 m una línea de luz
+        vec2 w = vWorldPos.xz / 2.0;
         vec2 cell = floor(w), f = fract(w);
-        float tone = hash(cell);
-        base *= mix(0.86, 1.08, tone);
-        vec2 e = min(f, 1.0 - f) / fwidth(w);  // junta antialiasada
-        base *= mix(0.72, 1.0, clamp(min(e.x, e.y) * 0.5, 0.0, 1.0));
-        // Rosetón de piedra más clara alrededor de la fuente.
+        base *= mix(0.94, 1.04, hash(cell));
+        vec2 e = min(f, 1.0 - f) / fwidth(w);
+        base *= mix(0.82, 1.0, clamp(min(e.x, e.y) * 0.7, 0.0, 1.0));
+        vec3 neon = toLinear(vec3(0.16, 0.86, 1.0));
+        float far = 1.0 - smoothstep(8.0, 28.0, length(uCameraPos - vWorldPos));
+        float lineA = gridLine(vWorldPos.xz / 6.0 + 0.5) * far;
+        // Anillo luminoso alrededor de la fuente que late despacio.
         float r = length(vWorldPos.xz);
-        base *= 1.0 + 0.12 * (1.0 - smoothstep(3.6, 3.8, r)) * step(2.4, r);
+        float ring = (1.0 - smoothstep(0.0, 0.06, abs(r - 3.6))) * (0.7 + 0.3 * sin(uTime * 2.0));
+        float g = max(lineA * 0.6, ring);
+        base = mix(base, neon * 1.2, g);
+        seamGlow = g * 0.5;
     } else if (material == 5) {  // césped: manchas de ruido en dos tonos
         // Dos lecturas de ruido (no fbm): el césped ocupa media pantalla y es barato así.
         float n = 0.65 * noise(vWorldPos.xz * 0.35) + 0.35 * noise(vWorldPos.xz * 1.3);
@@ -144,11 +148,12 @@ void main() {
     if (material == 4) {  // emisivo: el color es luz propia, sin sombras
         vec3 Ve = normalize(uCameraPos - vWorldPos);
         float rimE = pow(1.0 - max(dot(n, Ve), 0.0), 2.0);
-        vec3 glow = base * (1.6 + 0.8 * rimE) + vec3(0.25) * rimE;
+        // Poco más que su color: el halo lo pone el bloom, así el neón conserva el tono.
+        vec3 glow = base * (1.05 + 0.35 * rimE);
         glow = mix(glow, vec3(2.0), vParams.y);
         float distE = length(uCameraPos - vWorldPos);
         glow = mix(glow, kHorizon, 1.0 - exp(-pow(distE * kFogDensity, 2.0)));
-        fragColor = vec4(finish(glow), 1.0);
+        fragColor = vec4(finish(glow), 1.0);  // alfa = máscara de bloom: brilla
         return;
     }
     if (material == 6) {  // agua: ondas que se mueven y reflejo del cielo según el ángulo
@@ -191,7 +196,7 @@ void main() {
     // Ambiente hemisférico (cielo arriba, rebote cálido del suelo abajo) + relleno suave
     // desde el lado contrario al sol, para que las caras en sombra no queden planas.
     vec3 skyAmbient = mix(kHorizon, kZenith, 0.35) * 1.3;
-    vec3 ambient = mix(kBounce * 1.6, skyAmbient, n.y * 0.5 + 0.5) * 0.62;
+    vec3 ambient = mix(kBounce * 1.6, skyAmbient, n.y * 0.5 + 0.5) * 0.5;
     vec3 fillDir = normalize(vec3(-uSunDir.x, 0.3, -uSunDir.z));
     ambient += kFillColor * max(dot(n, fillDir), 0.0);
     float specPower = material == 2 ? 80.0 : 20.0;
@@ -225,7 +230,8 @@ void main() {
     float dist = length(uCameraPos - vWorldPos);
     float fog = 1.0 - exp(-pow(dist * kFogDensity, 2.0));
     color = mix(color, kHorizon, fog);
-    fragColor = vec4(finish(color), 1.0);
+    // Alfa = máscara de bloom: los destellos de golpe y las juntas del suelo brillan.
+    fragColor = vec4(finish(color), clamp(vParams.y * 0.6 + seamGlow * (1.0 - fog), 0.0, 1.0));
 }
 )";
 
@@ -318,7 +324,7 @@ void main() {
     }
     float sun = max(dot(dir, uSunDir), 0.0);
     color += kSunColor * (pow(sun, 600.0) * 4.0 + pow(sun, 12.0) * 0.08);  // disco + halo
-    fragColor = vec4(finish(color), 1.0);
+    fragColor = vec4(finish(color), clamp(pow(sun, 300.0) * 2.0, 0.0, 1.0));  // el sol brilla
 }
 )";
 
@@ -519,6 +525,77 @@ out vec4 fragColor;
 void main() { fragColor = texture(uFx, vUv); }
 )";
 
+// Bloom: extracción de lo brillante (color × máscara alfa) a media resolución, cadena de
+// reducciones con filtro de 5 muestras y vuelta hacia arriba sumando cada nivel con un
+// filtro de tienda (el "dual filter" de los motores actuales: barato y sin escalones).
+const char* kBrightFs = R"(
+in vec2 vUv;
+uniform sampler2D uSrc;
+uniform vec2 uTexel;  // tamaño de un texel de la fuente
+out vec4 fragColor;
+void main() {
+    vec3 c = vec3(0.0);
+    for (int i = 0; i < 4; ++i) {
+        vec2 o = vec2((i & 1) == 0 ? -1.0 : 1.0, (i & 2) == 0 ? -1.0 : 1.0) * uTexel;
+        vec4 s = texture(uSrc, vUv + o);
+        c += s.rgb * s.a;
+    }
+    fragColor = vec4(c * 0.25, 1.0);
+}
+)";
+
+const char* kDownFs = R"(
+in vec2 vUv;
+uniform sampler2D uSrc;
+uniform vec2 uTexel;
+out vec4 fragColor;
+void main() {
+    vec3 c = texture(uSrc, vUv).rgb * 4.0;
+    c += texture(uSrc, vUv + vec2(-1.0, -1.0) * uTexel).rgb;
+    c += texture(uSrc, vUv + vec2( 1.0, -1.0) * uTexel).rgb;
+    c += texture(uSrc, vUv + vec2(-1.0,  1.0) * uTexel).rgb;
+    c += texture(uSrc, vUv + vec2( 1.0,  1.0) * uTexel).rgb;
+    fragColor = vec4(c / 8.0, 1.0);
+}
+)";
+
+const char* kUpFs = R"(
+in vec2 vUv;
+uniform sampler2D uSrc;
+uniform vec2 uTexel;
+out vec4 fragColor;
+void main() {
+    vec3 c = vec3(0.0);
+    c += texture(uSrc, vUv + vec2(-1.0, -1.0) * uTexel).rgb;
+    c += texture(uSrc, vUv + vec2( 0.0, -1.0) * uTexel).rgb * 2.0;
+    c += texture(uSrc, vUv + vec2( 1.0, -1.0) * uTexel).rgb;
+    c += texture(uSrc, vUv + vec2(-1.0,  0.0) * uTexel).rgb * 2.0;
+    c += texture(uSrc, vUv).rgb * 4.0;
+    c += texture(uSrc, vUv + vec2( 1.0,  0.0) * uTexel).rgb * 2.0;
+    c += texture(uSrc, vUv + vec2(-1.0,  1.0) * uTexel).rgb;
+    c += texture(uSrc, vUv + vec2( 0.0,  1.0) * uTexel).rgb * 2.0;
+    c += texture(uSrc, vUv + vec2( 1.0,  1.0) * uTexel).rgb;
+    fragColor = vec4(c / 16.0, 1.0);
+}
+)";
+
+// Composición final: escena + bloom, un poco más de saturación y viñeta suave.
+const char* kFinalFs = R"(
+in vec2 vUv;
+uniform sampler2D uScene;
+uniform sampler2D uBloom;
+uniform float uBloomStrength;
+out vec4 fragColor;
+void main() {
+    vec3 c = texture(uScene, vUv).rgb + texture(uBloom, vUv).rgb * uBloomStrength;
+    float l = dot(c, vec3(0.299, 0.587, 0.114));
+    c = mix(vec3(l), c, 1.12);
+    vec2 d = vUv - 0.5;
+    c *= 1.0 - 0.28 * dot(d, d);
+    fragColor = vec4(c, 1.0);
+}
+)";
+
 // Ruido de valor 3D periódico (para que la textura se repita sin costuras).
 float latticeHash(int x, int y, int z, int period) {
     uint32_t h = uint32_t(x & (period - 1)) * 73856093u ^ uint32_t(y & (period - 1)) * 19349663u ^
@@ -617,7 +694,7 @@ struct CubeVertex {
 
 }  // namespace
 
-bool Renderer::init() {
+bool Renderer::init(Quality q) {
     meshProgram_ = link(kMeshVs, kMeshFs, true);
     skinProgram_ = link(kSkinVs, kMeshFs, true);
     skinShadowProgram_ = link(kSkinShadowVs, kShadowFs, false);
@@ -627,6 +704,11 @@ bool Renderer::init() {
     fxProgram_ = link(kSmokeVs, kSmokeFs, true);
     volumeProgram_ = link(kVolumeVs, kVolumeFs, true);
     compositeProgram_ = link(kCompositeVs, kCompositeFs, false);
+    brightProgram_ = link(kCompositeVs, kBrightFs, false);
+    downProgram_ = link(kCompositeVs, kDownFs, false);
+    upProgram_ = link(kCompositeVs, kUpFs, false);
+    finalProgram_ = link(kCompositeVs, kFinalFs, false);
+    if (!brightProgram_ || !downProgram_ || !upProgram_ || !finalProgram_) return false;
     if (!meshProgram_ || !shadowProgram_ || !skyProgram_ || !fxProgram_ || !volumeProgram_ || !compositeProgram_)
         return false;
 
@@ -711,31 +793,8 @@ bool Renderer::init() {
     }
     glBindVertexArray(0);
 
-    // Mapa de sombras: textura de profundidad con comparación por hardware.
-    glGenTextures(1, &shadowTex_);
-    glBindTexture(GL_TEXTURE_2D, shadowTex_);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, kShadowSize, kShadowSize, 0, GL_DEPTH_COMPONENT,
-                 GL_UNSIGNED_INT, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    const float border[4] = {1, 1, 1, 1};  // fuera del mapa: iluminado
-    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, border);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
-
-    glGenFramebuffers(1, &shadowFbo_);
-    glBindFramebuffer(GL_FRAMEBUFFER, shadowFbo_);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowTex_, 0);
-    glDrawBuffer(GL_NONE);
-    glReadBuffer(GL_NONE);
-    bool complete = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    if (!complete) {
-        std::fprintf(stderr, "El framebuffer de sombras no está completo\n");
-        return false;
-    }
+    setQuality(q);
+    if (!shadowTex_) return false;
     boxes_.items.reserve(512);
     spheres_.items.reserve(512);
     return true;
@@ -751,6 +810,11 @@ void Renderer::shutdown() {
     }
     glDeleteVertexArrays(1, &emptyVao_);
     glDeleteProgram(meshProgram_);
+    glDeleteProgram(brightProgram_);
+    glDeleteProgram(downProgram_);
+    glDeleteProgram(upProgram_);
+    glDeleteProgram(finalProgram_);
+    releaseSceneTargets();
     glDeleteProgram(skinProgram_);
     glDeleteProgram(skinShadowProgram_);
     for (SkinMesh& m : skinMeshes_) {
@@ -965,6 +1029,181 @@ void Renderer::ellipsoid(const Mat4& transform, Vec3 center, Vec3 radii, uint32_
     addInstance(transform * translate(center) * scale(radii * 2.0f), color, m, flash, true);
 }
 
+const char* qualityName(Quality q) {
+    switch (q) {
+        case Quality::Low: return "BAJA";
+        case Quality::Medium: return "MEDIA";
+        case Quality::High: return "ALTA";
+    }
+    return "?";
+}
+
+void Renderer::setQuality(Quality q) {
+    quality_ = q;
+    int shadow = q == Quality::Low ? 1024 : q == Quality::Medium ? 2048 : 4096;
+    msaa_ = q == Quality::Low ? 0 : q == Quality::Medium ? 4 : 8;
+    bloomLevels_ = q == Quality::Low ? 4 : q == Quality::Medium ? 5 : 6;
+    renderScale_ = q == Quality::Low ? 0.6f : q == Quality::Medium ? 0.7f : 1.0f;
+    if (shadow != shadowSize_ || !shadowTex_) {
+        shadowSize_ = shadow;
+        createShadowMap();
+    }
+    sceneSamples_ = -1;  // se recrean en el siguiente beginFrame
+}
+
+// Mapa de sombras: textura de profundidad con comparación por hardware.
+void Renderer::createShadowMap() {
+    glDeleteFramebuffers(1, &shadowFbo_);
+    glDeleteTextures(1, &shadowTex_);
+    glGenTextures(1, &shadowTex_);
+    glBindTexture(GL_TEXTURE_2D, shadowTex_);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, shadowSize_, shadowSize_, 0, GL_DEPTH_COMPONENT,
+                 GL_UNSIGNED_INT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    const float border[4] = {1, 1, 1, 1};  // fuera del mapa: iluminado
+    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, border);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+    glGenFramebuffers(1, &shadowFbo_);
+    glBindFramebuffer(GL_FRAMEBUFFER, shadowFbo_);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowTex_, 0);
+    glDrawBuffer(GL_NONE);
+    glReadBuffer(GL_NONE);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        std::fprintf(stderr, "El framebuffer de sombras no está completo\n");
+        glDeleteTextures(1, &shadowTex_);
+        shadowTex_ = 0;
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void Renderer::releaseSceneTargets() {
+    glDeleteFramebuffers(1, &sceneFbo_);
+    glDeleteRenderbuffers(1, &sceneColorRb_);
+    glDeleteRenderbuffers(1, &sceneDepthRb_);
+    glDeleteFramebuffers(1, &resolveFbo_);
+    glDeleteTextures(1, &resolveTex_);
+    glDeleteFramebuffers(kBloomLevels, bloomFbo_);
+    glDeleteTextures(kBloomLevels, bloomTex_);
+    sceneFbo_ = sceneColorRb_ = sceneDepthRb_ = resolveFbo_ = resolveTex_ = 0;
+    for (int i = 0; i < kBloomLevels; ++i) bloomFbo_[i] = bloomTex_[i] = 0;
+}
+
+// Buffer de la escena (con MSAA según la calidad), su versión resuelta en textura y la
+// cadena de texturas del bloom (media resolución, un cuarto...). Se recrean si cambia el
+// tamaño de la ventana o la calidad.
+void Renderer::ensureSceneTargets(int width, int height) {
+    if (width == sceneW_ && height == sceneH_ && sceneSamples_ == msaa_ && sceneFbo_) return;
+    releaseSceneTargets();
+    sceneW_ = width;
+    sceneH_ = height;
+    sceneSamples_ = msaa_;
+    glGenRenderbuffers(1, &sceneColorRb_);
+    glBindRenderbuffer(GL_RENDERBUFFER, sceneColorRb_);
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, msaa_, GL_RGBA8, width, height);
+    glGenRenderbuffers(1, &sceneDepthRb_);
+    glBindRenderbuffer(GL_RENDERBUFFER, sceneDepthRb_);
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, msaa_, GL_DEPTH24_STENCIL8, width, height);
+    glGenFramebuffers(1, &sceneFbo_);
+    glBindFramebuffer(GL_FRAMEBUFFER, sceneFbo_);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, sceneColorRb_);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, sceneDepthRb_);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        std::fprintf(stderr, "El framebuffer de la escena no está completo\n");
+    auto makeTex = [](GLuint& tex, GLenum fmt, int w, int h) {
+        glGenTextures(1, &tex);
+        glBindTexture(GL_TEXTURE_2D, tex);
+        glTexImage2D(GL_TEXTURE_2D, 0, fmt, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    };
+    makeTex(resolveTex_, GL_RGBA8, width, height);
+    glGenFramebuffers(1, &resolveFbo_);
+    glBindFramebuffer(GL_FRAMEBUFFER, resolveFbo_);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, resolveTex_, 0);
+    int w = width, h = height;
+    for (int i = 0; i < kBloomLevels; ++i) {
+        w = std::max(1, w / 2);
+        h = std::max(1, h / 2);
+        bloomW_[i] = w;
+        bloomH_[i] = h;
+        makeTex(bloomTex_[i], GL_R11F_G11F_B10F, w, h);
+        glGenFramebuffers(1, &bloomFbo_[i]);
+        glBindFramebuffer(GL_FRAMEBUFFER, bloomFbo_[i]);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bloomTex_[i], 0);
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void Renderer::beginFrame(int windowWidth, int windowHeight) {
+    windowW_ = windowWidth;
+    windowH_ = windowHeight;
+    int width = std::max(1, int(float(windowWidth) * renderScale_ + 0.5f));
+    int height = std::max(1, int(float(windowHeight) * renderScale_ + 0.5f));
+    ensureSceneTargets(width, height);
+    targetFbo_ = sceneFbo_;
+    glBindFramebuffer(GL_FRAMEBUFFER, sceneFbo_);
+    glViewport(0, 0, width, height);
+    if (msaa_ > 0)
+        glEnable(GL_MULTISAMPLE);
+    else
+        glDisable(GL_MULTISAMPLE);
+    glClearColor(0, 0, 0, 0);  // alfa 0: nada brilla salvo lo que lo escriba
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+}
+
+void Renderer::endFrame() {
+    // Resolver el MSAA a textura.
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, sceneFbo_);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, resolveFbo_);
+    glBlitFramebuffer(0, 0, sceneW_, sceneH_, 0, 0, sceneW_, sceneH_, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
+    glDisable(GL_CULL_FACE);
+    glBindVertexArray(emptyVao_);
+    glActiveTexture(GL_TEXTURE0);
+    auto pass = [&](GLuint prog, GLuint fbo, int w, int h, GLuint src, float srcW, float srcH) {
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        glViewport(0, 0, w, h);
+        glUseProgram(prog);
+        glBindTexture(GL_TEXTURE_2D, src);
+        glUniform1i(glGetUniformLocation(prog, "uSrc"), 0);
+        glUniform2f(glGetUniformLocation(prog, "uTexel"), 1.0f / srcW, 1.0f / srcH);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+    };
+    int levels = bloomLevels_;
+    pass(brightProgram_, bloomFbo_[0], bloomW_[0], bloomH_[0], resolveTex_, float(sceneW_), float(sceneH_));
+    for (int i = 1; i < levels; ++i)
+        pass(downProgram_, bloomFbo_[i], bloomW_[i], bloomH_[i], bloomTex_[i - 1], float(bloomW_[i - 1]),
+             float(bloomH_[i - 1]));
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_ONE, GL_ONE);
+    for (int i = levels - 1; i > 0; --i)
+        pass(upProgram_, bloomFbo_[i - 1], bloomW_[i - 1], bloomH_[i - 1], bloomTex_[i], float(bloomW_[i]),
+             float(bloomH_[i]));
+    glDisable(GL_BLEND);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, windowW_, windowH_);
+    glUseProgram(finalProgram_);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, resolveTex_);
+    glUniform1i(glGetUniformLocation(finalProgram_, "uScene"), 0);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, bloomTex_[0]);
+    glUniform1i(glGetUniformLocation(finalProgram_, "uBloom"), 1);
+    glUniform1f(glGetUniformLocation(finalProgram_, "uBloomStrength"), 0.75f);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glActiveTexture(GL_TEXTURE0);
+    glBindVertexArray(0);
+    targetFbo_ = 0;
+}
+
 int Renderer::createSkinnedMesh(const std::vector<SkinVertex>& verts, const std::vector<uint32_t>& indices) {
     SkinMesh m;
     glGenVertexArrays(1, &m.vao);
@@ -1030,7 +1269,7 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
     // que las sombras no "tiemblen" al moverse el jugador.
     Mat4 lightView = lookAt(kSunDir * 100.0f, {0, 0, 0}, {0, 1, 0});
     Vec3 c = transformPoint(lightView, shadowCenter);
-    float texel = 2.0f * kShadowExtent / float(kShadowSize);
+    float texel = 2.0f * kShadowExtent / float(shadowSize_);
     c.x = std::floor(c.x / texel) * texel;
     c.y = std::floor(c.y / texel) * texel;
     Mat4 lightProj = ortho(c.x - kShadowExtent, c.x + kShadowExtent, c.y - kShadowExtent, c.y + kShadowExtent,
@@ -1048,7 +1287,7 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
     // 1) Sombras: profundidad desde el sol. Se dibujan las caras traseras y con offset
     //    de polígono para evitar el "acné" (auto-sombreado por falta de precisión).
     glBindFramebuffer(GL_FRAMEBUFFER, shadowFbo_);
-    glViewport(0, 0, kShadowSize, kShadowSize);
+    glViewport(0, 0, shadowSize_, shadowSize_);
     glClear(GL_DEPTH_BUFFER_BIT);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
@@ -1066,7 +1305,7 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
         drawSkinned(skinShadowProgram_, false);
     }
     glDisable(GL_POLYGON_OFFSET_FILL);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, targetFbo_);
     glViewport(0, 0, width, height);
 
     // 2) Cielo, detrás de todo (sin escribir profundidad).
@@ -1185,7 +1424,7 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
         // para que el filtrado bilineal de la composición no lea restos de otro frame.
         glEnable(GL_SCISSOR_TEST);
         glScissor(sx0, sy0, sx1 - sx0, sy1 - sy0);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, targetFbo_);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, depthFbo_);
         glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
         glBindFramebuffer(GL_FRAMEBUFFER, fxFbo_);
@@ -1240,7 +1479,7 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
         glActiveTexture(GL_TEXTURE0);
 
         // Composición sobre la imagen de la ventana.
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, targetFbo_);
         glViewport(0, 0, width, height);
         glScissor(sx0, sy0, sx1 - sx0, sy1 - sy0);
         glUseProgram(compositeProgram_);

@@ -59,6 +59,16 @@ void saveScreenshot(const char* path, int w, int h) {
 int main(int argc, char** argv) {
     WindowDesc desc;
     desc.title = "unamed_game";
+    desc.msaaSamples = 0;  // el antialiasing lo hace el buffer de la escena (según la calidad)
+    // Calidad gráfica (--calidad baja|media|alta); se puede cambiar en el menú de pausa.
+    Quality quality = Quality::Medium;
+    for (int i = 1; i + 1 < argc; ++i)
+        if (std::strcmp(argv[i], "--resolucion") == 0) std::sscanf(argv[i + 1], "%dx%d", &desc.width, &desc.height);
+    for (int i = 1; i + 1 < argc; ++i)
+        if (std::strcmp(argv[i], "--calidad") == 0)
+            quality = std::strcmp(argv[i + 1], "baja") == 0   ? Quality::Low
+                      : std::strcmp(argv[i + 1], "alta") == 0 ? Quality::High
+                                                              : Quality::Medium;
 #ifdef GAME_DEBUG_GL
     desc.debugContext = true;
 #endif
@@ -70,7 +80,7 @@ int main(int argc, char** argv) {
 
     DebugDraw dd, glow, hud, overlay;  // líneas, efectos aditivos, HUD y menús
     Renderer renderer;
-    if (!dd.init() || !glow.init() || !hud.init() || !overlay.init() || !renderer.init()) return 1;
+    if (!dd.init() || !glow.init() || !hud.init() || !overlay.init() || !renderer.init(quality)) return 1;
     double modelStart = platform::timeSeconds();
     buildModels(renderer);
     std::printf("modelos generados en %.0f ms\n", 1000.0 * (platform::timeSeconds() - modelStart));
@@ -109,6 +119,7 @@ int main(int argc, char** argv) {
     const double startTime = platform::timeSeconds();
     int botStep = 0;
     PauseMenu menu;
+    menu.quality = int(quality);
     InventoryMenu inventory;
     Input input;
     PendingInput pending;
@@ -163,6 +174,7 @@ int main(int argc, char** argv) {
                     closeMenu();
                     break;
                 case PauseMenu::Result::Quit: quit = true; break;
+                case PauseMenu::Result::QualityChanged: renderer.setQuality(Quality(menu.quality)); break;
                 case PauseMenu::Result::None: break;
             }
         } else if (input.wasPressed(Key::I)) {
@@ -321,8 +333,13 @@ int main(int argc, char** argv) {
         double cpuTime = platform::timeSeconds() - frameStart;
 
         glViewport(0, 0, w, h);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-        if (!debugView) renderer.render(rc, heroPos, w, h, game.time());
+        if (debugView) {
+            glClearColor(0.08f, 0.09f, 0.11f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+        } else {
+            renderer.beginFrame(w, h);
+            renderer.render(rc, heroPos, renderer.sceneWidth(), renderer.sceneHeight(), game.time());
+        }
         glEnable(GL_DEPTH_TEST);
         dd.flush(vi.viewProj, 6.0f);  // en modo normal: casi nada; en debug, toda la escena
         // Efectos translúcidos (estelas, destellos, halos): prueban la profundidad pero no
@@ -330,9 +347,13 @@ int main(int argc, char** argv) {
         // un escenario claro la suma satura a blanco y se pierde el color.
         glDepthMask(GL_FALSE);
         glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        // El alfa se acumula aparte: es la máscara de bloom (los efectos brillan).
+        glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
         glow.flush(vi.viewProj, 4.0f);
         glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);
+        if (!debugView) renderer.endFrame();  // resolver, bloom y componer en pantalla
+        glEnable(GL_BLEND);
         // HUD y menús: encima de todo, en píxeles y con transparencia.
         glDisable(GL_DEPTH_TEST);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

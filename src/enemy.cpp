@@ -6,7 +6,7 @@ constexpr uint32_t rgb(uint8_t r, uint8_t g, uint8_t b) {
     return uint32_t(r) | uint32_t(g) << 8 | uint32_t(b) << 16 | 0xFF000000u;
 }
 
-// --- Duende: pequeño, cabezón, orejas largas; corre a saltitos y se lanza con las garras.
+// --- Rastrero: pequeño, cabezón, orejas largas; corre a saltitos y se lanza con las garras.
 enum ImpJoint { ImPelvis, ImBody, ImHead, ImEarL, ImEarR, ImArmL, ImHandL, ImArmR, ImHandR, ImLegL, ImFootL,
                 ImLegR, ImFootR, ImTail, ImCount };
 // clang-format off
@@ -27,8 +27,9 @@ const JointDef kImpRig[ImCount] = {
     {"foot_r",  ImLegR,  {0.00f, -0.30f, 0.00f},   {0, -0.03f, 0.05f},    {0.07f, 0.04f, 0.11f}},
     {"tail",    ImPelvis,{0.00f, 0.00f, -0.14f},   {0, 0, -0.15f},        {0.03f, 0.03f, 0.15f}},
 };
-const uint32_t kImpSkin = rgb(150, 80, 205), kImpBelly = rgb(225, 185, 245), kImpDark = rgb(70, 40, 110);
-const uint32_t kImpEye = rgb(255, 235, 90), kImpPink = rgb(255, 120, 190);
+// Los Grises: cuerpo sin color (gris y carbón) y, como única luz, el color que han robado.
+const uint32_t kImpSkin = rgb(150, 152, 166), kImpBelly = rgb(96, 98, 112), kImpDark = rgb(56, 58, 70);
+const uint32_t kImpEye = rgb(255, 70, 190), kImpPink = rgb(255, 70, 190);
 const EnemyShape kImpShapes[] = {
     {ImPelvis, {0, 0, 0},             {0.17f, 0.12f, 0.14f},  kImpSkin, false},
     {ImBody,   {0, 0.14f, 0},         {0.21f, 0.20f, 0.18f},  kImpSkin, false},
@@ -53,7 +54,7 @@ const EnemyShape kImpShapes[] = {
     {ImTail,   {0, 0, -0.32f},        {0.06f, 0.06f, 0.06f},  kImpPink, true},
 };
 
-// --- Seta saltarina: sombrero enorme; salta y cae aplastando (onda alrededor).
+// --- Domo: cúpula enorme sobre patas cortas; salta y cae aplastando (onda alrededor).
 enum ShroomJoint { ShRoot, ShStem, ShCap, ShArmL, ShArmR, ShLegL, ShFootL, ShLegR, ShFootR, ShCount };
 const JointDef kShroomRig[ShCount] = {
     {"root",    -1,      {0.00f, 0.32f, 0.00f},    {0, 0, 0},             {0.20f, 0.10f, 0.18f}},
@@ -66,8 +67,8 @@ const JointDef kShroomRig[ShCount] = {
     {"leg_r",   ShRoot,  {-0.11f, -0.04f, 0.00f},  {0, -0.11f, 0},        {0.06f, 0.11f, 0.06f}},
     {"foot_r",  ShLegR,  {0.00f, -0.22f, 0.00f},   {0, -0.03f, 0.04f},    {0.08f, 0.05f, 0.11f}},
 };
-const uint32_t kShroomStem = rgb(250, 235, 205), kShroomCap = rgb(40, 190, 185), kShroomSpot = rgb(255, 230, 90);
-const uint32_t kShroomGill = rgb(250, 210, 180), kShroomDark = rgb(50, 40, 60), kShroomShoe = rgb(230, 110, 80);
+const uint32_t kShroomStem = rgb(172, 174, 186), kShroomCap = rgb(78, 80, 96), kShroomSpot = rgb(255, 185, 50);
+const uint32_t kShroomGill = rgb(120, 122, 136), kShroomDark = rgb(40, 42, 52), kShroomShoe = rgb(60, 62, 74);
 const EnemyShape kShroomShapes[] = {
     {ShRoot,  {0, 0, 0},               {0.20f, 0.13f, 0.18f},  kShroomStem, false},
     {ShStem,  {0, 0.20f, 0},           {0.25f, 0.30f, 0.23f},  kShroomStem, false},
@@ -75,7 +76,7 @@ const EnemyShape kShroomShapes[] = {
     {ShStem,  {-0.08f, 0.28f, 0.20f},  {0.045f, 0.065f, 0.03f}, kShroomDark, false},
     {ShStem,  {0.09f, 0.30f, 0.225f},  {0.015f, 0.018f, 0.01f}, rgb(255, 255, 255), true},  // brillo
     {ShStem,  {-0.07f, 0.30f, 0.225f}, {0.015f, 0.018f, 0.01f}, rgb(255, 255, 255), true},
-    {ShStem,  {0, 0.19f, 0.215f},      {0.05f, 0.025f, 0.02f}, rgb(240, 120, 130), false},  // boca
+    {ShStem,  {0, 0.19f, 0.215f},      {0.05f, 0.025f, 0.02f}, kShroomSpot, true},  // boca
     {ShCap,   {0, 0.00f, 0},           {0.46f, 0.07f, 0.46f},  kShroomGill, false},
     {ShCap,   {0, 0.10f, 0},           {0.56f, 0.25f, 0.56f},  kShroomCap, false},
     {ShCap,   {0.0f, 0.33f, 0.0f},     {0.10f, 0.04f, 0.10f},  kShroomSpot, true},
@@ -92,7 +93,7 @@ const EnemyShape kShroomShapes[] = {
     {ShFootR, {0, -0.03f, 0.04f},      {0.09f, 0.06f, 0.12f},  kShroomShoe, false},
 };
 
-// --- Polilla lunar: vuela en círculos a distancia y dispara orbes de luz.
+// --- Eco: vuela en círculos a distancia y dispara orbes de luz robada.
 enum MothJoint { MoThorax, MoHead, MoAntL, MoAntR, MoWingL, MoWingR, MoWingL2, MoWingR2, MoAbdomen, MoCount };
 const JointDef kMothRig[MoCount] = {
     {"thorax",  -1,       {0.00f, 0.30f, 0.00f},   {0, 0, 0},             {0.12f, 0.12f, 0.14f}},
@@ -105,8 +106,8 @@ const JointDef kMothRig[MoCount] = {
     {"wing_r2", MoThorax, {-0.08f, -0.02f, -0.08f},{-0.20f, 0, -0.10f},   {0.20f, 0.01f, 0.14f}},
     {"abdomen", MoThorax, {0.00f, -0.02f, -0.14f}, {0, -0.02f, -0.15f},   {0.10f, 0.10f, 0.18f}},
 };
-const uint32_t kMothFur = rgb(235, 240, 255), kMothBody = rgb(90, 120, 220), kMothWing = rgb(255, 175, 225);
-const uint32_t kMothWing2 = rgb(255, 225, 140), kMothEye = rgb(110, 255, 230);
+const uint32_t kMothFur = rgb(196, 198, 210), kMothBody = rgb(80, 84, 100), kMothWing = rgb(140, 142, 158);
+const uint32_t kMothWing2 = rgb(110, 112, 128), kMothEye = rgb(40, 225, 255);
 const EnemyShape kMothShapes[] = {
     {MoThorax,  {0, 0, 0},               {0.14f, 0.14f, 0.16f},  kMothFur, false},
     {MoHead,    {0, 0, 0.02f},           {0.12f, 0.11f, 0.11f},  kMothBody, false},
@@ -117,9 +118,9 @@ const EnemyShape kMothShapes[] = {
     {MoAntR,    {0, 0.12f, 0.03f},       {0.015f, 0.12f, 0.015f}, kMothBody, false},
     {MoAntR,    {0, 0.25f, 0.05f},       {0.04f, 0.04f, 0.04f},  kMothEye, true},
     {MoWingL,   {0.32f, 0, 0},           {0.33f, 0.012f, 0.23f}, kMothWing, false},
-    {MoWingL,   {0.42f, 0.006f, 0.04f},  {0.08f, 0.01f, 0.08f},  kMothWing2, true},
+    {MoWingL,   {0.42f, 0.006f, 0.04f},  {0.08f, 0.01f, 0.08f},  kMothEye, true},
     {MoWingR,   {-0.32f, 0, 0},          {0.33f, 0.012f, 0.23f}, kMothWing, false},
-    {MoWingR,   {-0.42f, 0.006f, 0.04f}, {0.08f, 0.01f, 0.08f},  kMothWing2, true},
+    {MoWingR,   {-0.42f, 0.006f, 0.04f}, {0.08f, 0.01f, 0.08f},  kMothEye, true},
     {MoWingL2,  {0.20f, 0, -0.10f},      {0.21f, 0.012f, 0.15f}, kMothWing2, false},
     {MoWingR2,  {-0.20f, 0, -0.10f},     {0.21f, 0.012f, 0.15f}, kMothWing2, false},
     {MoAbdomen, {0, -0.02f, -0.15f},     {0.11f, 0.11f, 0.19f},  kMothBody, false},
@@ -130,9 +131,9 @@ const EnemyShape kMothShapes[] = {
 #define COUNT(a) int(sizeof(a) / sizeof((a)[0]))
 const EnemyDef kDefs[int(EnemyKind::Count)] = {
 //   nombre          rig        n        formas        n                  vida  vel.  radio alto  aggro alc.  prep. ataque recup. espera daño golpe vuela altura munny
-    {"DUENDE",       kImpRig,    ImCount, kImpShapes,    COUNT(kImpShapes),    30, 4.2f, 0.35f, 1.0f, 16, 2.6f, 0.45f, 0.40f, 0.60f, 0.9f,  8, 5.0f, false, 0,    3, 6},
-    {"SETA SALTARINA",kShroomRig, ShCount, kShroomShapes, COUNT(kShroomShapes), 60, 2.4f, 0.50f, 1.2f, 14, 3.2f, 0.60f, 1.00f, 0.80f, 1.5f, 14, 8.0f, false, 0,    6, 10},
-    {"POLILLA LUNAR",kMothRig,   MoCount, kMothShapes,   COUNT(kMothShapes),   24, 3.2f, 0.40f, 0.6f, 18, 8.0f, 0.70f, 0.30f, 0.80f, 1.6f, 10, 4.0f, true,  2.3f, 4, 8},
+    {"RASTRERO",     kImpRig,    ImCount, kImpShapes,    COUNT(kImpShapes),    30, 4.2f, 0.35f, 1.0f, 16, 2.6f, 0.45f, 0.40f, 0.60f, 0.9f,  8, 5.0f, false, 0,    3, 6},
+    {"DOMO",          kShroomRig, ShCount, kShroomShapes, COUNT(kShroomShapes), 60, 2.4f, 0.50f, 1.2f, 14, 3.2f, 0.60f, 1.00f, 0.80f, 1.5f, 14, 8.0f, false, 0,    6, 10},
+    {"ECO",          kMothRig,   MoCount, kMothShapes,   COUNT(kMothShapes),   24, 3.2f, 0.40f, 0.6f, 18, 8.0f, 0.70f, 0.30f, 0.80f, 1.6f, 10, 4.0f, true,  2.3f, 4, 8},
 };
 #undef COUNT
 // clang-format on

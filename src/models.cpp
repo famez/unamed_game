@@ -1,6 +1,7 @@
 #include "models.h"
 
 #include "debug_draw.h"
+#include "enemy.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -263,18 +264,38 @@ const BodyPrim kHeroPrims[] = {
 #undef E
 #undef C
 
-const ModelDef kModels[int(ModelId::Count)] = {
+ModelDef kModels[int(ModelId::Count)] = {
     {kSkeleton, JointCount, kHeroPrims, int(sizeof(kHeroPrims) / sizeof(kHeroPrims[0])), 0.011f},
 };
+std::vector<BodyPrim> gEnemyPrims[3];
+
+// Los enemigos reutilizan sus formas (enemy.cpp): las opacas y gruesas forman la malla.
+void defineEnemyModels() {
+    for (int k = 0; k < 3; ++k) {
+        const EnemyDef& d = enemyDef(EnemyKind(k));
+        std::vector<BodyPrim>& prims = gEnemyPrims[k];
+        prims.clear();
+        for (int i = 0; i < d.shapeCount; ++i) {
+            const EnemyShape& sh = d.shapes[i];
+            if (enemyShapeIsRigid(sh)) continue;
+            prims.push_back({sh.joint, false, sh.center, {}, sh.radii, sh.color, 0.03f});
+        }
+        kModels[1 + k] = {d.rig, d.jointCount, prims.data(), int(prims.size()), k == 1 ? 0.017f : 0.012f};
+    }
+}
 
 BuiltModel gModels[int(ModelId::Count)];
 
 }  // namespace
 
+bool enemyShapeIsRigid(const EnemyShape& s) { return s.glow || std::min(s.radii.x, std::min(s.radii.y, s.radii.z)) < 0.025f; }
+ModelId enemyModel(int enemyKind) { return ModelId(1 + enemyKind); }
+
 const ModelDef& modelDef(ModelId id) { return kModels[int(id)]; }
 const BuiltModel& model(ModelId id) { return gModels[int(id)]; }
 
 void buildModels(Renderer& r) {
+    defineEnemyModels();
     for (int i = 0; i < int(ModelId::Count); ++i) {
         const ModelDef& def = kModels[i];
         std::vector<SkinVertex> verts;

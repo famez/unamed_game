@@ -253,8 +253,25 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
         return;
     }
     // Césped alrededor y plaza de adoquines.
-    solid->box(id, {0, -0.5f, 0}, {200, 0.5f, 200}, rgba(110, 185, 95), Material::Grass);
-    solid->box(id, {0, 0.004f, 0}, {16.2f, 0.004f, 16.2f}, rgba(200, 170, 140), Material::Ground);
+    solid->box(id, {0, -0.5f, 0}, {200, 0.5f, 200}, rgba(80, 200, 140), Material::Grass);
+    solid->box(id, {0, 0.004f, 0}, {16.2f, 0.004f, 16.2f}, rgba(205, 210, 226), Material::Ground);
+    // Prisma de la fuente: flota, gira y proyecta luz cambiante.
+    {
+        float bob = 0.12f * std::sin(time_ * 1.3f);
+        Mat4 m = translate({0, 3.0f + bob, 0}) * rotateY(time_ * 0.8f);
+        solid->box(m * rotateX(kPi * 0.25f) * rotateZ(kPi * 0.25f), {}, {0.32f, 0.32f, 0.32f}, rgba(255, 120, 220), Material::Glow);
+        for (int i = 0; i < 3; ++i) {  // anillos que orbitan
+            Mat4 r = translate({0, 3.0f + bob, 0}) * rotateY(time_ * (0.9f + 0.4f * float(i)) + float(i)) *
+                     rotateX(0.5f + 0.4f * float(i));
+            for (int k = 0; k < 14; ++k) {
+                float a = 2.0f * kPi * float(k) / 14.0f;
+                solid->box(r * rotateY(a), {0.75f + 0.12f * float(i), 0, 0}, {0.03f, 0.03f, 0.13f},
+                           i == 1 ? rgba(40, 220, 255) : rgba(255, 190, 60), Material::Glow);
+            }
+        }
+        Vec3 hue{0.6f + 0.4f * std::sin(time_), 0.5f + 0.4f * std::sin(time_ + 2.1f), 0.8f + 0.2f * std::sin(time_ + 4.2f)};
+        solid->light({0, 3.0f, 0}, hue * 2.5f, 7.0f);
+    }
     // Objetos estrechos (farolas, troncos, columnas) que tapan al personaje: no se dibujan,
     // ni la decoración que llevan encima (copa, lámpara).
     Vec3 heroChest = hero_.interpolatedPos(alpha) + Vec3{0, 1.0f, 0};
@@ -281,34 +298,37 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
             solid->box(d.transform, d.center, d.half, d.color, d.material);
     }
     // Solo las farolas cercanas: cada luz cuesta en todos los píxeles de la escena.
-    for (Vec3 l : lamps_)
-        if (length(flat(l - hero_.body.pos)) < 14.0f) solid->light(l, Vec3{1.0f, 0.8f, 0.5f} * 1.2f, 5.0f);
+    for (size_t i = 1; i < lamps_.size(); ++i)
+        if (length(flat(lamps_[i] - hero_.body.pos)) < 14.0f) solid->light(lamps_[i], Vec3{0.3f, 0.85f, 1.0f} * 1.3f, 5.0f);
 
     for (const Crate& c : crates_) {
         if (c.broken) continue;
         Vec3 ctr = c.box.center(), h = c.box.halfExtents();
         float flash = c.hitFlash > 0 ? 0.6f : 0;
-        solid->box(id, ctr, h, rgba(215, 160, 95), Material::Stone, flash);
-        for (float s : {-1.0f, 1.0f}) {  // listones
-            solid->box(id, ctr + Vec3{0, 0, s * (h.z + 0.005f)}, {h.x * 0.95f, 0.05f, 0.005f}, rgba(160, 105, 60), Material::Cloth, flash);
-            solid->box(id, ctr + Vec3{s * (h.x + 0.005f), 0, 0}, {0.005f, 0.05f, h.z * 0.95f}, rgba(160, 105, 60), Material::Cloth, flash);
+        // Célula de energía: caja blanca con franjas de luz que laten.
+        solid->box(id, ctr, h, rgba(240, 242, 250), Material::Stone, flash);
+        uint32_t band = rgba(255, 190, 60);
+        for (float s : {-1.0f, 1.0f}) {
+            solid->box(id, ctr + Vec3{0, 0, s * (h.z + 0.005f)}, {h.x * 0.8f, 0.05f, 0.005f}, band, Material::Glow, flash);
+            solid->box(id, ctr + Vec3{s * (h.x + 0.005f), 0, 0}, {0.005f, 0.05f, h.z * 0.8f}, band, Material::Glow, flash);
         }
     }
     // Cofres: caja con remaches dorados; la tapa gira sobre la bisagra de atrás al abrirse.
     for (const TreasureChest& c : chests_) {
         Mat4 m = translate(c.pos) * rotateY(c.yaw);
-        const uint32_t wood = rgba(70, 120, 210), gold = rgba(255, 210, 80);
+        const uint32_t wood = rgba(244, 246, 252), gold = rgba(255, 70, 190);
         solid->box(m, {0, 0.22f, 0}, {0.45f, 0.22f, 0.3f}, wood, Material::Cloth);
-        solid->box(m, {0, 0.22f, 0.302f}, {0.47f, 0.04f, 0.004f}, gold, Material::Metal);
+        solid->box(m, {0, 0.22f, 0.302f}, {0.47f, 0.04f, 0.004f}, gold, Material::Glow);
         float open = c.open ? smoothstep01(c.openTime / 0.4f) : 0.0f;
         Mat4 lid = m * translate({0, 0.44f, -0.3f}) * rotateX(-open * 1.9f);
         solid->box(lid, {0, 0.1f, 0.3f}, {0.46f, 0.1f, 0.31f}, wood, Material::Cloth);
-        solid->box(lid, {0, 0.1f, 0.3f}, {0.08f, 0.105f, 0.315f}, gold, Material::Metal);
-        solid->box(lid, {0, 0.06f, 0.615f}, {0.06f, 0.06f, 0.01f}, gold, Material::Metal);  // cerradura
-        if (!c.open) {
+        solid->box(lid, {0, 0.1f, 0.3f}, {0.08f, 0.105f, 0.315f}, gold, Material::Glow);
+        solid->box(lid, {0, 0.06f, 0.615f}, {0.06f, 0.06f, 0.01f}, rgba(40, 220, 255), Material::Glow);  // cerradura
+        bool near = length(flat(c.pos - hero_.body.pos)) < 12.0f;
+        if (!c.open && near) {
             float pulse = 0.6f + 0.4f * std::sin(time_ * 3.0f);
             solid->light(c.pos + Vec3{0, 0.9f, 0}, Vec3{1.0f, 0.85f, 0.4f} * pulse, 2.5f);
-        } else if (c.openTime < 1.5f) {
+        } else if (c.open && c.openTime < 1.5f) {
             solid->light(c.pos + Vec3{0, 0.8f, 0}, Vec3{1.0f, 0.9f, 0.5f} * (3.0f * (1.0f - c.openTime / 1.5f)), 4.0f);
         }
     }
@@ -422,10 +442,23 @@ void Game::drawEnemies(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Dr
         float flash = dying ? 0.4f + 0.6f * smoothstep01(e.stateTime / 0.3f) : e.hitFlash > 0 ? 0.75f : 0.0f;
         // Aviso del ataque: parpadeo cálido durante la preparación.
         if (e.state == AiState::Windup && std::fmod(e.stateTime, 0.16f) < 0.06f) flash = std::max(flash, 0.35f);
+        // Interferencia: al recibir un golpe (y de vez en cuando) el cuerpo salta de sitio
+        // un instante, como una señal que se corta.
+        float glitchPhase = std::fmod(time_ * 0.7f + e.seed, 1.0f);
+        if (!dying && (e.hitFlash > 0 || glitchPhase < 0.025f)) {
+            float jx = std::sin(time_ * 97.0f + e.seed * 13.0f), jy = std::sin(time_ * 71.0f + e.seed * 7.0f);
+            Mat4 jitter = translate(view.right * (0.07f * jx) + view.up * (0.03f * jy));
+            for (int k = 0; k < d.jointCount; ++k) joints[k] = jitter * joints[k];
+        }
+        const BuiltModel& body = model(enemyModel(int(e.kind)));
+        Mat4 skin[kMaxJoints];
+        skinMatrices(body, joints, skin);
+        // Congelado: algo de destello blanco azulado; el resto lo ponen las estrellas de escarcha.
+        solid->skinned(body.mesh, skin, body.jointCount, std::max(flash, e.freeze > 0 ? 0.25f : 0.0f), rgba(20, 20, 30));
         for (int s = 0; s < d.shapeCount; ++s) {
             const EnemyShape& sh = d.shapes[s];
-            uint32_t col = e.freeze > 0 && !sh.glow ? mixRgb(sh.color, rgba(170, 230, 255), 0.55f) : sh.color;
-            solid->ellipsoid(joints[sh.joint], sh.center, sh.radii, col, sh.glow ? Material::Glow : Material::Cloth, flash);
+            if (!enemyShapeIsRigid(sh)) continue;
+            solid->ellipsoid(joints[sh.joint], sh.center, sh.radii, sh.color, sh.glow ? Material::Glow : Material::Cloth, flash);
         }
         if (e.freeze > 0 && !dying)  // escarcha alrededor
             for (int k = 0; k < 2; ++k)
