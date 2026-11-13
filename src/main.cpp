@@ -1,3 +1,4 @@
+#include "audio.h"
 #include "debug_draw.h"
 #include "game.h"
 #include "gl.h"
@@ -12,6 +13,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <vector>
 
 namespace {
@@ -90,6 +92,14 @@ int main(int argc, char** argv) {
     if (FILE* f = std::fopen("assets/story/capitulo1.txt", "r")) std::fclose(f);
     else assetDir = GAME_ASSET_DIR;
     if (!loadFonts(assetDir)) return 1;
+    // Audio: música y efectos sintetizados; la música se guarda en ~/.cache/unamed_game.
+    Audio audio;
+    {
+        const char* xdg = std::getenv("XDG_CACHE_HOME");
+        const char* home = std::getenv("HOME");
+        std::string cache = xdg && *xdg ? std::string(xdg) : std::string(home ? home : ".") + "/.cache";
+        audio.init(cache + "/unamed_game");
+    }
     double modelStart = platform::timeSeconds();
     buildModels(renderer);
     std::printf("modelos generados en %.0f ms\n", 1000.0 * (platform::timeSeconds() - modelStart));
@@ -416,6 +426,36 @@ int main(int argc, char** argv) {
         if (!platform::vsyncEnabled())  // sin vsync, limitamos a ~60 fps para no quemar CPU/GPU
             platform::sleepSeconds(kFixedDt - (platform::timeSeconds() - frameStart));
 
+        // Sonido: los efectos que ha emitido el juego, con panorámica y distancia desde la
+        // cámara; y el volumen de cada capa de la música según cómo va la partida.
+        for (const SoundEvent& e : game.takeSounds()) {
+            float gain = e.gain, pan = 0;
+            if (e.positional) {
+                Vec3 rel = e.pos - rc.position;
+                float dist = length(rel);
+                pan = dist > 0.1f ? dot(rel * (1.0f / dist), rc.right) * 0.8f : 0.0f;
+                gain /= 1.0f + 0.06f * dist;
+            }
+            audio.play(e.id, gain, pan, e.pitch);
+        }
+        if (menu.open || inventory.open) {
+            if (input.wasPressed(Key::W) || input.wasPressed(Key::S) || input.wasPressed(Key::Up) ||
+                input.wasPressed(Key::Down) || input.wasPressed(Key::A) || input.wasPressed(Key::D))
+                audio.play(Sfx::MenuMove, 0.5f);
+            if (input.wasPressed(Key::Enter) || input.mouseLeftPressed) audio.play(Sfx::MenuOk, 0.5f);
+        }
+        {
+            float croma = game.croma();
+            bool memory = game.dialogue().memory();
+            float stems[int(Stem::Count)];
+            stems[int(Stem::Pad)] = 0.85f;
+            stems[int(Stem::Melody)] = memory ? 0.0f : smoothstep01((croma - 0.2f) / 0.15f) * 0.9f;
+            stems[int(Stem::Pulse)] = game.inCombat() && !game.dialogueBlocking() ? 0.8f : 0.0f;
+            stems[int(Stem::Shimmer)] = memory ? 0.3f : smoothstep01((croma - 0.55f) / 0.2f) * 0.75f;
+            audio.setStemGains(stems);
+            audio.setMasterVolume(paused ? 0.35f : 0.8f);
+        }
+
         // Estadísticas en el título de la ventana cada medio segundo.
         statsTimer += frameDt;
         cpuTimeSum += cpuTime;
@@ -434,6 +474,7 @@ int main(int argc, char** argv) {
         }
     }
 
+    audio.shutdown();
     unloadFonts();
     overlay.shutdown();
     renderer.shutdown();

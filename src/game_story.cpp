@@ -28,8 +28,8 @@ void Game::storyCommand(const StoryLine& cmd) {
         if (sp != std::string::npos) names_[cmd.text.substr(0, sp)] = cmd.text.substr(sp + 1);
     } else if (c == "oleadas") {
         wavesEnabled_ = true;
-        waveTimer_ = 1.5f;
         chapterBanner_ = 5.0f;
+        waveTimer_ = chapterBanner_ + 0.5f;  // la primera oleada, cuando se va el cartel
     } else if (c == "eco_activa") {
         int n = std::atoi(cmd.text.c_str()) - 1;
         if (n >= 0 && n < int(echoes_.size())) {

@@ -6,6 +6,32 @@ flotante. El protagonista, un *Prismero*, lleva un arma de luz sólida que cambi
 forma; cada Gris que disipa devuelve su color al mundo, y la ciudad pasa del gris a los
 neones a medida que se limpian oleadas.
 
+## Historia
+
+Capítulo 1, *La primera luz*: el Prismero despierta junto a la fuente sin recordar su
+nombre. Le acompaña **Brizna**, una chispa de luz que parece saber más de lo que dice.
+Los Grises fueron personas; al disiparlos su color vuelve al mundo. Tres **ecos de
+memoria** escondidos por la plaza dejan pistas sobre el origen del protagonista.
+
+Los guiones son ficheros de texto en `assets/story/` (formato explicado en `src/story.h`):
+escenas que detienen el juego, avisos que pasan como subtítulos, recuerdos y órdenes
+(`!levantarse`, `!nombre`, `!oleadas`, `!eco_activa`, `!fin_capitulo`). Las escenas se
+disparan una sola vez: el despertar, el primer Gris disipado, la primera aparición de cada
+especie, la primera oleada, el croma, la primera caída y los ecos.
+
+## Música y sonido
+
+Todo está sintetizado por código (`src/synth.cpp`), sin ficheros de audio en el
+repositorio. La música (Si menor / Re mayor, 84 BPM, 16 compases en bucle) son cuatro capas
+sincronizadas cuyo volumen decide el juego: el **colchón** siempre, la **melodía** cuando
+vuelve el color, el **pulso** (bajo y percusión) en combate y el **brillo** (arpegio) cuando
+la ciudad ya brilla. Se genera la primera vez en segundo plano (~2 s) y se guarda en
+`~/.cache/unamed_game/`. Los 26 efectos (golpes de cristal, látigo, martillo, guardia,
+magias, botín, ecos, el "tecleo" de los diálogos...) se generan al arrancar.
+
+La salida usa PulseAudio/PipeWire cargado con `dlopen` en tiempo de ejecución: no hace falta
+ninguna cabecera para compilar y, si no está, el juego va en silencio.
+
 ## Compilar y ejecutar
 
 ```bash
@@ -45,6 +71,7 @@ Opciones de desarrollo: `--autoplay` (un bot combate solo, sin capturar el rató
 | F12 / º | Modo debug: solo esqueletos y cajas en alambre |
 | F1 / F2 / F3 / F4 | (en modo debug) Huesos / articulaciones / cajas / cuadrícula |
 | Esc / P | Pausa: continuar, reiniciar, sensibilidad, **calidad gráfica**, salir |
+| Clic / E / Espacio / Enter | En las escenas: pasar el diálogo |
 
 ## Jugabilidad
 
@@ -122,6 +149,11 @@ src/
   enemy.h/.cpp                   Especies de enemigos: esqueletos, formas, animación
   items.h/.cpp                   Objetos, armas e inventario
   game.h/.cpp                    Escenario, oleadas, IA, combate, magias, botín, cofres
+  game_story.cpp                 Escenas del guion, órdenes, Brizna y ecos de memoria
+  story.h/.cpp                   Formato de guion y reproductor de diálogos (UTF-8)
+  synth.h/.cpp                   Síntesis de la música (capas) y los efectos; WAV
+  audio.h/.cpp                   Salida (PulseAudio con dlopen) y mezclador en un hilo
+  sfx.h                          Lista de efectos y eventos de sonido de la lógica
   game_draw.cpp                  Dibujado del mundo, efectos y HUD (y su versión debug)
   inventory_menu.h/.cpp          Menú de inventario
   text.h/.cpp                    Fuentes SDF (Orbitron, Exo 2) con stb_truetype: HUD y menús
@@ -132,6 +164,7 @@ src/
 tests/
   logic_test.cpp                 Tests de la lógica sin ventana (combate, IA, botín, croma...)
 assets/fonts/                    Orbitron y Exo 2 (licencia SIL OFL, ver OFL-*.txt)
+assets/story/                    Guiones de la historia
 third_party/stb/                 stb_truetype.h (dominio público)
 ```
 
@@ -151,7 +184,7 @@ cuerpo son elipsoides pegados a una articulación (*skinning rígido*).
 
 ## Próximos pasos sugeridos
 
-1. Historia: diálogos con texto, misterio sobre el origen del Prismero, escenas.
-2. Música y sonido.
-3. Más escenarios y enemigos; un jefe con varias fases.
+1. Capítulo 2: el puente y la luz encendida al otro lado; más especies de Grises.
+2. Un jefe con varias fases y su propia variación de la música.
+3. Retratos animados en los diálogos y escenas con cámara guionizada.
 4. Síntesis de mejoras para el prisma con los materiales.

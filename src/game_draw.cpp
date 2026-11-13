@@ -722,7 +722,7 @@ void Game::drawStoryHud(UiLayer& ui, const ViewInfo& view) const {
     if (chapterBanner_ > 0) {
         float total = chapterEnded_ ? 7.0f : 5.0f;
         float a = clampf(std::min((total - chapterBanner_) / 0.8f, chapterBanner_ / 1.0f), 0, 1);
-        float y = h * 0.3f;
+        float y = h * 0.4f;
         fillRect(d, 0, y - 20, w, y + 110, withAlpha(rgba(8, 10, 30), 0.55f * a));
         uiText(ui, w * 0.5f, y, 22, chapterEnded_ ? "FIN DEL CAPÍTULO 1" : "CAPÍTULO 1", withAlpha(kUiCyan, a), FontFace::Title,
                Align::Center, 0.5f * a);

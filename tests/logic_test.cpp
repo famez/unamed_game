@@ -4,6 +4,7 @@
 #define private public  // solo para el test: acceso al estado interno
 #include "game.h"
 #undef private
+#include "synth.h"
 #include <cstdio>
 
 const float dt = 1.0f / 60;
@@ -349,14 +350,28 @@ int main() {
             run(g, 0.05f);
         }
         CHECK(!g.dialogueBlocking() && g.speakerName("brizna") == "Brizna", "tras leer la intro, Brizna tiene nombre");
-        run(g, 2.0f);
-        CHECK(g.wave_ == 1 && g.hero_.lying == 0, "empiezan las oleadas y el Prismero esta de pie");
+        run(g, 6.0f);
+        CHECK(g.wave_ == 1 && g.hero_.lying == 0, "tras el cartel del capitulo empiezan las oleadas y el Prismero esta de pie");
         // Eco de memoria: aparece con su orden y se recoge al pasar.
         g.storyCommand({true, "eco_activa", "1"});
         g.hero_.body.pos = g.echoes_[0].pos - Vec3{0, 0.9f, 0};
         g.update(dt, {});
         g.update(dt, {});
         CHECK(g.echoes_[0].taken && g.dialogue().memory(), "el eco de memoria lanza su recuerdo");
+    }
+    {  // Sonido sintetizado: todos los efectos suenan, sin saturar, y el WAV va y vuelve
+        bool allOk = true;
+        for (int i = 0; i < int(Sfx::Count); ++i) {
+            StereoBuffer b = renderSfx(Sfx(i));
+            int peak = 0;
+            for (int16_t v : b.data) peak = std::max(peak, std::abs(int(v)));
+            if (b.frames() < 100 || peak < 500 || peak >= 32000) allOk = false;
+        }
+        CHECK(allOk, "%d efectos de sonido con contenido y sin recortar", int(Sfx::Count));
+        StereoBuffer a = renderSfx(Sfx::Chest), b;
+        std::string path = "/tmp/unamed_game_test.wav";
+        CHECK(saveWav(path, a) && loadWav(path, b) && a.data == b.data, "WAV: se guarda y se lee identico");
+        std::remove(path.c_str());
     }
     {  // Derrota y vuelta a empezar
         Game g = fresh();

@@ -15,6 +15,7 @@ option(GAME_NATIVE "Optimizar para la CPU de esta máquina (-march=native)" ON)
 # Sin dependencias externas: libOpenGL (glvnd) + GLX + Xlib, ya presentes en el sistema.
 find_package(OpenGL REQUIRED COMPONENTS OpenGL GLX)
 find_package(X11 REQUIRED)
+find_package(Threads REQUIRED)  # el audio mezcla en su propio hilo
 
 # Lógica pura (sin GL ni X11): la comparten el juego y los tests.
 set(LOGIC_SOURCES
@@ -26,6 +27,7 @@ set(LOGIC_SOURCES
     src/game.cpp
     src/game_story.cpp
     src/story.cpp
+    src/synth.cpp
 )
 
 add_executable(game
@@ -38,10 +40,12 @@ add_executable(game
     src/menu.cpp
     src/inventory_menu.cpp
     src/models.cpp
+    src/audio.cpp
     src/renderer.cpp
 )
 
-target_link_libraries(game PRIVATE OpenGL::OpenGL OpenGL::GLX X11::X11 X11::Xi)
+# ${CMAKE_DL_LIBS}: dlopen de PulseAudio en tiempo de ejecución (sin cabeceras al compilar).
+target_link_libraries(game PRIVATE OpenGL::OpenGL OpenGL::GLX X11::X11 X11::Xi Threads::Threads ${CMAKE_DL_LIBS})
 
 target_compile_options(game PRIVATE
     -Wall -Wextra -Wpedantic -Wshadow
