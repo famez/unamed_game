@@ -238,7 +238,7 @@ void main() {
     ambient += kFillColor * max(dot(n, fillDir), 0.0);
     float specPower = material == 2 ? 80.0 : 20.0;
     // La tela de los cuerpos redondeados (normales suaves) brilla menos que la de las cajas.
-    float specAmount = material == 2 ? 1.2 : (material == 6 ? 2.0 : (material == 3 || material == 5 ? 0.04 : (vParams.z > 0.5 ? 0.12 : 0.15)));
+    float specAmount = material == 2 ? 1.2 : (material == 6 ? 2.0 : (material == 3 || material == 5 ? 0.04 : (vParams.z > 0.5 ? 0.05 : 0.15)));
     if (material == 6) specPower = 120.0;
     vec3 H = normalize(uSunDir + V);
     float spec = pow(max(dot(n, H), 0.0), specPower) * specAmount * step(0.0, dot(n, uSunDir));
@@ -255,7 +255,7 @@ void main() {
     }
     if (material == 0 || material == 2) {  // luz de contorno: separa la silueta del fondo
         float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0);
-        color += rim * kHorizon * (vParams.z > 0.5 ? 0.8 : 0.5);
+        color += rim * kHorizon * (vParams.z > 0.5 ? 0.35 : 0.5);
     }
     if (material == 6) {  // reflejo del cielo (Fresnel)
         float fr = pow(1.0 - max(dot(n, V), 0.0), 4.0);

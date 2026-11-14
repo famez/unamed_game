@@ -179,6 +179,7 @@ int main(int argc, char** argv) {
     // Opciones de desarrollo: --autoplay (un bot juega solo, sin capturar el ratón) y
     // --screenshot fichero.ppm segundos (guarda un frame en ese instante y sale).
     bool autoplay = false;
+    bool portrait = false;  // --retrato: cámara frente a la cara del protagonista (para modelarlo)
     float camYaw0 = 0;  // --camyaw: orientación inicial de la cámara (radianes)
     const char* shotPath = nullptr;
     double shotTime = 0;
@@ -186,6 +187,7 @@ int main(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--debug") == 0) debugView = true;
         if (std::strcmp(argv[i], "--autoplay") == 0) autoplay = true;
+        if (std::strcmp(argv[i], "--retrato") == 0) portrait = true;
         if (std::strcmp(argv[i], "--camyaw") == 0 && i + 1 < argc) camYaw0 = float(std::atof(argv[++i]));
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 2 < argc) {
             shotPath = argv[i + 1];
@@ -471,6 +473,12 @@ int main(int argc, char** argv) {
             eye = eye + (cineEye - eye) * k;
             look = look + (cineFocus - look) * k;
         }
+        if (portrait) {
+            Vec3 f = game.hero().forward(), side{f.z, 0, -f.x};
+            look = translationOf(game.hero().joints[Head]) + Vec3{0, 0.11f, 0};
+            float turn = 0.3f + 0.5f * std::sin(game.time() * 0.4f);  // gira despacio para verla de lado
+            eye = look + f * 0.95f + side * turn + Vec3{0, 0.02f, 0};
+        }
         rc.view = lookAt(eye, look, {0, 1, 0});
         rc.proj = perspective(rc.fovY, rc.aspect, rc.zNear, rc.zFar);
         rc.position = eye;
@@ -491,7 +499,7 @@ int main(int argc, char** argv) {
         ViewInfo uiView = vi;
         uiView.width = uw;
         uiView.height = uh;
-        game.drawHud(hud, uiView, debugView);
+        if (!portrait) game.drawHud(hud, uiView, debugView);
         if (menu.open) menu.draw(overlay, uw, uh);
         if (inventory.open) inventory.draw(overlay, game, uw, uh);
         size_t verts = dd.vertexCount() + glow.vertexCount() + hud.vertexCount() + overlay.vertexCount();

@@ -21,7 +21,8 @@ struct BodyPrim {
     bool capsule;    // false: elipsoide con centro `a` y radios `r`; true: cápsula a→b de radio r.x
     Vec3 a, b, r;
     uint32_t color;
-    float blend;     // radio de la unión suave con lo anterior (m)
+    float blend;     // radio de la unión suave con lo anterior (m); negativo: talla (resta suave)
+    bool paint = false;  // solo pinta (sombreado pintado en los colores), no cambia la forma
 };
 
 struct ModelDef {
@@ -34,6 +35,9 @@ struct ModelDef {
     // separar las partes que no deben fundirse: brazos abiertos y piernas algo separadas
     // (postura en A); si no, la unión suave pega las manos a la cadera.
     const Pose* bindPose = nullptr;
+    // > 0: los colores de las primitivas se mezclan en esta distancia (m) en lugar de cortarse
+    // en seco (piel, barba y labios de una cara); 0: bordes limpios (prendas).
+    float colorBlend = 0;
 };
 
 // Malla generada + la inversa de la pose de reposo de cada hueso (para el skinning).
@@ -49,7 +53,7 @@ void bindMatrices(const ModelDef& def, Mat4* out);
 // Genera la malla en la CPU (lógica pura; también la usan los tests).
 void buildSkinnedMesh(const ModelDef& def, std::vector<SkinVertex>& verts, std::vector<uint32_t>& indices);
 
-enum class ModelId { Hero, Dazzled, Brute, Watcher, Hound, Ilse, Count };  // enemigos: 1 + EnemyKind
+enum class ModelId { Hero, Dazzled, Brute, Watcher, Hound, Ilse, HeroHead, Count };  // enemigos: 1 + EnemyKind
 // Modelo del cuerpo de un enemigo.
 ModelId enemyModel(int enemyKind);
 // Formas de un enemigo que no van en su malla (brillan o son demasiado finas) y se dibujan aparte.
