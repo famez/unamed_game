@@ -19,6 +19,7 @@
 struct BodyPrim {
     int joint;
     bool capsule;    // false: elipsoide con centro `a` y radios `r`; true: cápsula a→b de radio r.x
+                     // (si r.y ≠ r.x, cono redondeado: radio r.x en `a` y r.y en `b`)
     Vec3 a, b, r;
     uint32_t color;
     float blend;     // radio de la unión suave con lo anterior (m); negativo: talla (resta suave)
@@ -59,6 +60,10 @@ ModelId enemyModel(int enemyKind);
 // Formas de un enemigo que no van en su malla (brillan o son demasiado finas) y se dibujan aparte.
 bool enemyShapeIsRigid(const EnemyShape& s);
 const ModelDef& modelDef(ModelId id);
+
+// Punto de la superficie de la cabeza del protagonista delante de (x, y), en espacio de la
+// cabeza (para pegar los rasgos dibujados aparte).
+Vec3 headSurface(float x, float y);
 
 // Genera y sube todos los modelos (al arrancar).
 void buildModels(Renderer& r);

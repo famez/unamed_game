@@ -90,64 +90,56 @@ const NeonLine kNeonLines[] = {
     {Neck,   {0.03f, 0.06f, 0.03f},   {0.003f, 0.03f, 0.003f}},
 };
 // clang-format on
-// Grietas de luz del lado izquierdo de la cara (como cerámica reparada con oro): bajan del
-// pómulo a la mandíbula y siguen por el cuello. Puntos sobre la piel, en espacio de la cabeza.
-const Vec3 kCrackFace[] = {{0.072f, 0.106f, 0.1f}, {0.083f, 0.092f, 0.088f}, {0.081f, 0.078f, 0.09f},
-                           {0.088f, 0.062f, 0.072f}, {0.087f, 0.045f, 0.064f}, {0.093f, 0.03f, 0.034f}};
-const Vec3 kCrackBranch[] = {{0.083f, 0.092f, 0.088f}, {0.096f, 0.098f, 0.062f}, {0.104f, 0.093f, 0.038f}};
-
-// Rostro y pelo del protagonista sobre la malla de la cabeza: ojos de dos colores (ámbar,
-// el de la luz; gris violáceo, el de la sombra) que parpadean y se desvían de vez en cuando,
-// cejas con una cicatriz que corta la izquierda, las grietas de luz y un flequillo que le cae
-// sobre el ojo derecho y se mueve con la inercia.
-void drawHeroFace(Renderer& r, const Mat4* j, Vec3 lag, float flash, uint32_t crack, bool crackGlow, float time) {
-    // Misma escala que la malla de la cabeza (models.cpp): más estrecha y menos profunda.
-    const Mat4 h = j[Head] * scale({0.8f, 1.0f, 0.9f});
-    // Parpadeo cada 3-5 s y mirada que se escapa a un lado un momento.
+// Rostro del protagonista, estilo de animación: ojos grandes pintados sobre la cara (blanco,
+// iris de color con su brillo y una línea de pestañas marcada), de dos colores (ámbar, el de
+// la luz; violeta, el de la sombra); parpadean y la mirada se escapa a veces. Cejas finas,
+// una boca pequeña con media sonrisa y, bajo el ojo izquierdo, una veta de luz como una
+// lágrima que brilla con la Luz (violeta en modo sombra).
+void drawHeroFace(Renderer& r, const Mat4* j, Vec3 /*lag*/, float flash, uint32_t vein, bool veinGlow, float time) {
+    const Mat4& h = j[Head];
     float bp = std::fmod(time + 1.3f * std::sin(time * 0.17f), 4.1f);
     float blink = bp < 0.14f ? std::sin(bp / 0.14f * kPi) : 0.0f;
-    float glance = std::sin(time * 0.31f) > 0.93f ? 0.003f : std::sin(time * 0.53f) > 0.95f ? -0.003f : 0.0f;
-    const uint32_t lid = rgba(190, 166, 150), brow = rgba(52, 50, 54);
+    float glance = std::sin(time * 0.31f) > 0.93f ? 0.0035f : std::sin(time * 0.53f) > 0.95f ? -0.0035f : 0.0f;
+    const uint32_t skin = rgba(238, 204, 178), lash = rgba(38, 30, 36);
+    // Dónde está la piel delante de cada rasgo (se calcula una vez sobre la forma de la cabeza).
+    static const Vec3 eyeAt[2] = {headSurface(0.038f, 0.118f), headSurface(-0.038f, 0.118f)};
+    static const Vec3 browAt[2] = {headSurface(0.04f, 0.155f), headSurface(-0.04f, 0.155f)};
+    static const Vec3 mouthAt = headSurface(0.0f, 0.063f);
+    static const Vec3 tear[3] = {headSurface(0.05f, 0.094f), headSurface(0.054f, 0.082f), headSurface(0.05f, 0.071f)};
     for (float sx : {1.0f, -1.0f}) {
-        Vec3 c{0.036f * sx, 0.122f, 0.104f};
-        r.ellipsoid(h, c, {0.0135f, 0.0102f, 0.009f}, rgba(176, 168, 158), Material::Cloth, flash);
-        uint32_t iris = sx > 0 ? rgba(196, 140, 62) : rgba(118, 106, 150);
-        r.ellipsoid(h, c + Vec3{glance, -0.0005f, 0.0085f}, {0.0062f, 0.0062f, 0.0025f}, iris, Material::Cloth, flash);
-        r.ellipsoid(h, c + Vec3{glance, -0.0005f, 0.0098f}, {0.0026f, 0.0026f, 0.0012f}, rgba(16, 14, 14), Material::Cloth, flash);
-        // Párpado superior caído (cansado) que baja al parpadear, e inferior marcado.
-        r.ellipsoid(h, c + Vec3{0, 0.0068f - 0.0068f * blink, 0.0035f}, {0.0158f, 0.0052f + 0.0058f * blink, 0.0098f}, lid,
+        int side = sx > 0 ? 0 : 1;
+        Mat4 e = h * translate(eyeAt[side] - Vec3{0, 0, 0.0025f}) * rotateY(0.34f * sx) * rotateX(-0.08f);
+        r.ellipsoid(e, {}, {0.0205f, 0.0245f, 0.0062f}, rgba(246, 242, 236), Material::Cloth, flash);
+        uint32_t iris = sx > 0 ? rgba(226, 164, 66) : rgba(150, 126, 206);
+        Vec3 io{glance - 0.002f * sx, -0.003f, 0.0012f};
+        r.ellipsoid(e, io, {0.0135f, 0.0175f, 0.0062f}, iris, Material::Cloth, flash);
+        r.ellipsoid(e, io + Vec3{0, 0.004f, 0.0006f}, {0.0128f, 0.0075f, 0.0062f}, mixRgb(iris, rgba(40, 30, 40), 0.35f),
+                    Material::Cloth, flash);  // sombra del párpado sobre el iris
+        r.ellipsoid(e, io + Vec3{0, -0.001f, 0.0012f}, {0.0062f, 0.0088f, 0.0062f}, rgba(24, 18, 26), Material::Cloth, flash);
+        r.ellipsoid(e, io + Vec3{0.0045f * sx, 0.0065f, 0.0022f}, {0.0042f, 0.0052f, 0.006f}, rgba(255, 255, 255), Material::Glow, flash);
+        // Párpado al parpadear y línea de pestañas (más gruesa hacia fuera).
+        if (blink > 0.01f)
+            r.ellipsoid(e, {0, 0.024f * (1.0f - blink), 0.0012f}, {0.0222f, 0.026f * blink + 0.002f, 0.0068f}, skin, Material::Cloth, flash);
+        float ly = 0.0215f - 0.042f * blink;
+        r.ellipsoid(e * translate({0.002f * sx, ly, 0.0012f}) * rotateZ(-0.18f * sx), {}, {0.0235f, 0.0042f, 0.0068f}, lash,
                     Material::Cloth, flash);
-        r.ellipsoid(h, c + Vec3{0, -0.0086f, 0.0032f}, {0.0145f, 0.0028f, 0.0085f}, lid, Material::Cloth, flash);
+        r.ellipsoid(e * translate({0.0215f * sx, ly - 0.004f, 0.0012f}) * rotateZ(-0.6f * sx), {}, {0.007f, 0.0026f, 0.0066f}, lash,
+                    Material::Cloth, flash);
+        // Ceja fina, algo arqueada.
+        r.ellipsoid(h * translate(browAt[side] - Vec3{0, 0, 0.002f}) * rotateY(0.34f * sx) * rotateZ(0.12f * sx), {},
+                    {0.021f, 0.0034f, 0.0045f}, rgba(50, 44, 52), Material::Cloth, flash);
     }
-    // Cejas: rectas y algo bajas; la izquierda cortada por la cicatriz.
-    r.ellipsoid(h * translate({-0.04f, 0.1405f, 0.1165f}) * rotateZ(-0.1f), {}, {0.021f, 0.0042f, 0.0062f}, brow, Material::Cloth, flash);
-    r.ellipsoid(h * translate({0.03f, 0.1395f, 0.1185f}) * rotateZ(0.06f), {}, {0.0105f, 0.0042f, 0.0062f}, brow, Material::Cloth, flash);
-    r.ellipsoid(h * translate({0.056f, 0.1425f, 0.112f}) * rotateZ(0.2f), {}, {0.0075f, 0.0038f, 0.006f}, brow, Material::Cloth, flash);
-    r.box(h * translate({0.0445f, 0.136f, 0.1175f}) * rotateZ(-0.15f), {}, {0.0016f, 0.0125f, 0.0022f}, rgba(220, 196, 184),
-          Material::Cloth, flash);  // la cicatriz
-    // Grietas de luz.
-    auto seg = [&](Vec3 a, Vec3 b) {
-        Vec3 d = b - a;
-        r.box(h * translate((a + b) * 0.5f) * basisY(normalize(d)), {}, {0.0016f, length(d) * 0.5f + 0.001f, 0.0016f}, crack,
-              crackGlow ? Material::Glow : Material::Cloth, flash);
-    };
-    for (size_t i = 0; i + 1 < sizeof(kCrackFace) / sizeof(kCrackFace[0]); ++i) seg(kCrackFace[i], kCrackFace[i + 1]);
-    for (size_t i = 0; i + 1 < sizeof(kCrackBranch) / sizeof(kCrackBranch[0]); ++i) seg(kCrackBranch[i], kCrackBranch[i + 1]);
-    // Flequillo: mechones que caen hacia el ojo derecho, y un par barridos hacia ese lado.
-    const uint32_t hair = kHair;
-    struct Lock {
-        Vec3 root, dir;
-        Vec3 size;
-    };
-    const Lock locks[] = {
-        {{-0.02f, 0.2f, 0.1f}, {-0.45f, -1.0f, 0.3f}, {0.016f, 0.034f, 0.007f}},
-        {{-0.045f, 0.196f, 0.098f}, {-0.35f, -1.0f, 0.25f}, {0.015f, 0.04f, 0.007f}},
-        {{-0.07f, 0.186f, 0.085f}, {-0.3f, -1.0f, 0.15f}, {0.013f, 0.032f, 0.007f}},
-        {{0.03f, 0.226f, 0.06f}, {-1.0f, -0.1f, 0.45f}, {0.018f, 0.04f, 0.009f}},
-    };
-    for (const Lock& l : locks) {
-        Vec3 n = normalize(normalize(l.dir) + lag * 2.5f);
-        r.ellipsoid(h * translate(l.root + n * l.size.y) * basisY(n), {}, l.size, hair, Material::Cloth, flash);
+    // Boca pequeña con media sonrisa.
+    r.ellipsoid(h * translate(mouthAt + Vec3{-0.002f, 0, -0.0018f}), {}, {0.0105f, 0.0016f, 0.0035f}, rgba(150, 92, 92),
+                Material::Cloth, flash);
+    r.ellipsoid(h * translate(mouthAt + Vec3{0.0095f, 0.0015f, -0.0025f}) * rotateZ(0.5f), {}, {0.0035f, 0.0014f, 0.0034f},
+                rgba(150, 92, 92), Material::Cloth, flash);
+    // La veta de luz bajo el ojo izquierdo.
+    uint32_t tearCol = mixRgb(vein, skin, 0.35f);  // tenue: que no se convierta en un destello
+    for (int i = 0; i < 2; ++i) {
+        Vec3 d = tear[i + 1] - tear[i];
+        r.box(h * translate((tear[i] + tear[i + 1]) * 0.5f) * basisY(normalize(d)), {}, {0.0012f, length(d) * 0.5f + 0.001f, 0.0015f},
+              tearCol, veinGlow ? Material::Glow : Material::Cloth, flash);
     }
 }
 // clang-format on

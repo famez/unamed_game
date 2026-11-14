@@ -23,6 +23,20 @@ float sdCapsule(Vec3 p, Vec3 a, Vec3 b, float r) {
     return length(pa - ba * h) - r;
 }
 
+// Cono redondeado: de radio r1 en `a` a r2 en `b` (mechones de pelo que se afilan).
+float sdRoundCone(Vec3 p, Vec3 a, Vec3 b, float r1, float r2) {
+    Vec3 ba = b - a;
+    float l2 = dot(ba, ba), rr = r1 - r2, a2 = l2 - rr * rr, il2 = 1.0f / std::max(l2, 1e-10f);
+    Vec3 pa = p - a;
+    float y = dot(pa, ba), z = y - l2;
+    Vec3 xv = pa * l2 - ba * y;
+    float x2 = dot(xv, xv), y2 = y * y * l2, z2 = z * z * l2;
+    float k = (rr > 0 ? 1.0f : rr < 0 ? -1.0f : 0.0f) * rr * rr * x2;
+    if ((z > 0 ? 1.0f : -1.0f) * a2 * z2 > k) return std::sqrt(x2 + z2) * il2 - r2;
+    if ((y > 0 ? 1.0f : -1.0f) * a2 * y2 < k) return std::sqrt(x2 + y2) * il2 - r1;
+    return (std::sqrt(x2 * a2 * il2) + y * rr) * il2 - r1;
+}
+
 // Unión suave polinómica: funde dos superficies en una franja de ancho k.
 float smin(float a, float b, float k) {
     if (k <= 0) return std::min(a, b);
@@ -59,7 +73,9 @@ struct Field {
 
     float primDist(const PlacedPrim& p, Vec3 q) const {
         Vec3 l = transformPoint(p.toLocal, q);
-        return p.capsule ? sdCapsule(l, p.a, p.b, p.r.x) : sdEllipsoid(l - p.a, p.r);
+        if (p.capsule)  // r.y distinto de r.x: cono redondeado
+            return p.r.y != p.r.x ? sdRoundCone(l, p.a, p.b, p.r.x, p.r.y) : sdCapsule(l, p.a, p.b, p.r.x);
+        return sdEllipsoid(l - p.a, p.r);
     }
     float eval(Vec3 q) const {
         float d = 1e9f;
@@ -98,7 +114,8 @@ void buildSkinnedMesh(const ModelDef& def, std::vector<SkinVertex>& verts, std::
         const BodyPrim& bp = def.prims[i];
         PlacedPrim p{bp.joint, bp.capsule, bp.a, bp.b, bp.r, bp.color, bp.blend, bp.paint, rigidInverse(bind[bp.joint]), {}, {}};
         // Caja envolvente local → las 8 esquinas al espacio del modelo.
-        Vec3 ext = bp.capsule ? Vec3{bp.r.x, bp.r.x, bp.r.x} : bp.r;
+        float cr = std::max(bp.r.x, bp.r.y);
+        Vec3 ext = bp.capsule ? Vec3{cr, cr, cr} : bp.r;
         Vec3 lmin = bp.a, lmax = bp.a;
         if (bp.capsule) {
             lmin = {std::min(bp.a.x, bp.b.x), std::min(bp.a.y, bp.b.y), std::min(bp.a.z, bp.b.z)};
@@ -259,96 +276,79 @@ void buildSkinnedMesh(const ModelDef& def, std::vector<SkinVertex>& verts, std::
 // vetas finas bajo la piel (ver game_draw.cpp) que brillan según la Luz que lleva.
 namespace {
 const uint32_t kCoat = rgba(44, 45, 52), kCoatDark = rgba(30, 30, 36), kUnder = rgba(62, 62, 66);
-const uint32_t kSkinC = rgba(206, 182, 164), kHairC = rgba(74, 72, 76), kBoot = rgba(58, 50, 44);
+const uint32_t kSkinC = rgba(238, 204, 178), kHairC = rgba(74, 72, 76), kBoot = rgba(92, 64, 48);
 const uint32_t kScarf = rgba(104, 58, 50), kGlove = rgba(36, 34, 36);
 #define E(j, cx, cy, cz, rx, ry, rz, col, k) {j, false, {cx, cy, cz}, {}, {rx, ry, rz}, col, k}
 #define C(j, ax, ay, az, bx, by, bz, rad, col, k) {j, true, {ax, ay, az}, {bx, by, bz}, {rad, rad, rad}, col, k}
 #define P(j, cx, cy, cz, rx, ry, rz, col) {j, false, {cx, cy, cz}, {}, {rx, ry, rz}, col, 0, true}
+#define K(j, ax, ay, az, bx, by, bz, r1, r2, col, k) {j, true, {ax, ay, az}, {bx, by, bz}, {r1, r2, r1}, col, k}
 // clang-format off
 const BodyPrim kHeroPrims[] = {
     // tronco: abrigo cruzado con cuello alto y faldón hasta las rodillas
-    E(Pelvis,    0, -0.01f, 0,        0.165f, 0.11f, 0.125f,  kCoat, 0.0f),
-    E(Spine,     0, 0.08f, 0,         0.15f, 0.14f, 0.11f,    kCoat, 0.04f),
-    E(Chest,     0, 0.10f, 0.0f,      0.18f, 0.155f, 0.12f,   kCoat, 0.04f),
+    E(Pelvis,    0, -0.01f, 0,        0.148f, 0.105f, 0.115f, kCoat, 0.0f),
+    E(Spine,     0, 0.08f, 0,         0.13f, 0.135f, 0.1f,    kCoat, 0.04f),
+    E(Chest,     0, 0.10f, 0.0f,      0.162f, 0.15f, 0.108f,  kCoat, 0.04f),
     E(Chest,     0.04f, 0.07f, 0.105f, 0.045f, 0.12f, 0.022f, kCoatDark, 0.01f), // solapa cruzada
     E(Chest,     0, 0.215f, -0.025f,  0.115f, 0.07f, 0.1f,    kCoat, 0.03f),     // cuello alto
     E(Chest,     0, 0.235f, 0.01f,    0.095f, 0.045f, 0.09f,  kScarf, 0.015f),   // bufanda
-    E(Pelvis,    0, -0.2f, -0.015f,   0.185f, 0.24f, 0.145f,  kCoat, 0.03f),     // faldón
-    E(Pelvis,    0, 0.045f, 0,        0.168f, 0.025f, 0.128f, kCoatDark, 0.01f), // cinturón
+    E(Pelvis,    0, -0.2f, -0.015f,   0.168f, 0.24f, 0.13f,   kCoat, 0.03f),     // faldón
+    E(Pelvis,    0, 0.045f, 0,        0.152f, 0.025f, 0.118f, kCoatDark, 0.01f), // cinturón
     C(Neck,      0, 0, 0,  0, 0.07f, 0,               0.038f, kSkinC, 0.02f),  // la cabeza va en su propia malla
     // brazos: mangas del abrigo, puño oscuro, guantes
-    E(ShoulderL, 0.0f, -0.02f, 0,     0.058f, 0.055f, 0.06f,  kCoat, 0.03f),
-    C(ShoulderL, 0, -0.02f, 0,  0, -0.27f, 0,         0.056f, kCoat, 0.03f),
-    C(ElbowL,    0, 0, 0,  0, -0.2f, 0,               0.049f, kCoat, 0.03f),
+    E(ShoulderL, 0.0f, -0.02f, 0,     0.05f, 0.05f, 0.052f,   kCoat, 0.03f),
+    C(ShoulderL, 0, -0.02f, 0,  0, -0.27f, 0,         0.047f, kCoat, 0.03f),
+    C(ElbowL,    0, 0, 0,  0, -0.2f, 0,               0.042f, kCoat, 0.03f),
     E(ElbowL,    0, -0.205f, 0,       0.055f, 0.03f, 0.055f,  kCoatDark, 0.01f),
-    E(WristL,    0, -0.06f, 0.006f,   0.044f, 0.068f, 0.054f, kGlove, 0.03f),
-    E(ShoulderR, 0.0f, -0.02f, 0,     0.058f, 0.055f, 0.06f,  kCoat, 0.03f),
-    C(ShoulderR, 0, -0.02f, 0,  0, -0.27f, 0,         0.056f, kCoat, 0.03f),
-    C(ElbowR,    0, 0, 0,  0, -0.2f, 0,               0.049f, kCoat, 0.03f),
+    E(WristL,    0, -0.065f, 0.008f,  0.052f, 0.078f, 0.062f, kGlove, 0.03f),  // guantes grandes
+    E(ShoulderR, 0.0f, -0.02f, 0,     0.05f, 0.05f, 0.052f,   kCoat, 0.03f),
+    C(ShoulderR, 0, -0.02f, 0,  0, -0.27f, 0,         0.047f, kCoat, 0.03f),
+    C(ElbowR,    0, 0, 0,  0, -0.2f, 0,               0.042f, kCoat, 0.03f),
     E(ElbowR,    0, -0.205f, 0,       0.055f, 0.03f, 0.055f,  kCoatDark, 0.01f),
-    E(WristR,    0, -0.06f, 0.006f,   0.044f, 0.068f, 0.054f, kGlove, 0.03f),
+    E(WristR,    0, -0.065f, 0.008f,  0.052f, 0.078f, 0.062f, kGlove, 0.03f),
     // piernas: pantalón y botas altas
     C(HipL,      0, 0, 0,  0, -0.42f, 0,              0.074f, kUnder, 0.04f),
     C(KneeL,     0, 0, 0,  0, -0.40f, 0,              0.055f, kUnder, 0.03f),
     C(KneeL,     0, -0.2f, 0.005f,  0, -0.40f, 0.01f, 0.064f, kBoot, 0.03f),
-    E(AnkleL,    0, -0.025f, 0.06f,   0.07f, 0.064f, 0.15f,   kBoot, 0.04f),
-    E(AnkleL,    0, -0.074f, 0.06f,   0.074f, 0.02f, 0.155f,  kCoatDark, 0.01f), // suela
+    E(AnkleL,    0, -0.02f, 0.07f,    0.082f, 0.072f, 0.17f,  kBoot, 0.04f),     // botas grandes y redondas
+    E(AnkleL,    0, -0.01f, 0.18f,    0.07f, 0.06f, 0.07f,    kBoot, 0.03f),     // puntera
+    E(AnkleL,    0, -0.074f, 0.075f,  0.086f, 0.022f, 0.18f,  kCoatDark, 0.01f), // suela
     C(HipR,      0, 0, 0,  0, -0.42f, 0,              0.074f, kUnder, 0.04f),
     C(KneeR,     0, 0, 0,  0, -0.40f, 0,              0.055f, kUnder, 0.03f),
     C(KneeR,     0, -0.2f, 0.005f,  0, -0.40f, 0.01f, 0.064f, kBoot, 0.03f),
-    E(AnkleR,    0, -0.025f, 0.06f,   0.07f, 0.064f, 0.15f,   kBoot, 0.04f),
-    E(AnkleR,    0, -0.074f, 0.06f,   0.074f, 0.02f, 0.155f,  kCoatDark, 0.01f),
+    E(AnkleR,    0, -0.02f, 0.07f,    0.082f, 0.072f, 0.17f,  kBoot, 0.04f),
+    E(AnkleR,    0, -0.01f, 0.18f,    0.07f, 0.06f, 0.07f,    kBoot, 0.03f),
+    E(AnkleR,    0, -0.074f, 0.075f,  0.086f, 0.022f, 0.18f,  kCoatDark, 0.01f),
 };
-// Cabeza del protagonista, en una malla aparte y más fina (5 mm): rasgos de un hombre de
-// treinta y tantos, cansado. Mandíbula ancha con barba de días, pómulos marcados y mejillas
-// algo hundidas, nariz recta con un caballete (se la rompió alguna vez), labios finos, ojos
-// hundidos. Pelo corto ceniza, rapado en el lado izquierdo; el flequillo y las grietas de luz
-// son piezas aparte (game_draw.cpp).
-const uint32_t kSkinShade = rgba(176, 152, 136), kStubble = rgba(162, 146, 134), kLip = rgba(178, 138, 126);
-const uint32_t kHairShaved = rgba(96, 92, 94);
+// Cabeza del protagonista, en una malla aparte (5 mm), estilo de animación: cara en forma
+// de huevo con el mentón en punta, nariz apenas insinuada y un pelo de mechones afilados
+// (conos redondeados) que se funden con el cráneo. Pelo oscuro con un mechón claro en el
+// flequillo: su luz. Ojos, cejas, boca y la veta de luz van aparte (game_draw.cpp).
+const uint32_t kSkinWarm = rgba(238, 204, 178), kHairDark = rgba(50, 44, 52), kHairLight = rgba(232, 222, 196);
 const BodyPrim kHeroHeadPrims[] = {
-    C(Neck,      0, 0.02f, 0,  0, 0.1f, 0.005f,       0.038f, kSkinC, 0.0f),
-    E(Head, 0.0000f, 0.14f, -0.0135f, 0.0832f, 0.118f, 0.1044f, kSkinC, 0.03f),    // cráneo
-    E(Head, 0.0000f, 0.1f, 0.0342f, 0.0688f, 0.098f, 0.0756f, kSkinC, 0.03f),    // cara
-    E(Head, 0.0000f, 0.045f, 0.0405f, 0.0560f, 0.045f, 0.0630f, kStubble, 0.03f),  // mandíbula
-    E(Head, 0.0480f, 0.05f, 0.0108f, 0.0176f, 0.04f, 0.0378f, kStubble, 0.025f),
-    E(Head, -0.0480f, 0.05f, 0.0108f, 0.0176f, 0.04f, 0.0378f, kStubble, 0.025f),
-    E(Head, 0.0000f, 0.028f, 0.0837f, 0.0216f, 0.025f, 0.0198f, kStubble, 0.02f),  // mentón
-    E(Head, 0.0440f, 0.104f, 0.0693f, 0.0216f, 0.016f, 0.0234f, kSkinC, 0.02f), // pómulos
-    E(Head, -0.0440f, 0.104f, 0.0693f, 0.0216f, 0.016f, 0.0234f, kSkinC, 0.02f),
-    E(Head, 0.0000f, 0.146f, 0.0900f, 0.0624f, 0.014f, 0.0198f, kSkinC, 0.02f),    // arco de las cejas
-    C(Head, 0.0000f, 0.138f, 0.1026f, 0.0000f, 0.097f, 0.1285f, 0.0100f, kSkinC, 0.012f), // tabique
-    E(Head, 0.0000f, 0.12f, 0.1185f, 0.0080f, 0.008f, 0.0072f, kSkinC, 0.006f),  // el caballete
-    E(Head, 0.0000f, 0.091f, 0.1300f, 0.0105f, 0.0115f, 0.0105f, kSkinC, 0.008f),  // punta
-    E(Head, 0.0096f, 0.085f, 0.1215f, 0.0072f, 0.007f, 0.0072f, kSkinC, 0.006f),
-    E(Head, -0.0096f, 0.085f, 0.1215f, 0.0072f, 0.007f, 0.0072f, kSkinC, 0.006f),
-    E(Head, 0.0000f, 0.071f, 0.1044f, 0.0168f, 0.0062f, 0.0081f, kLip, 0.006f),    // labios
-    E(Head, 0.0000f, 0.06f, 0.1017f, 0.0144f, 0.0072f, 0.0081f, kLip, 0.006f),
-    E(Head, 0.0824f, 0.112f, -0.0072f, 0.0104f, 0.03f, 0.0189f, kSkinC, 0.01f), // orejas
-    E(Head, -0.0824f, 0.112f, -0.0072f, 0.0104f, 0.03f, 0.0189f, kSkinC, 0.01f),
-    E(Head, 0.0000f, 0.175f, -0.0162f, 0.0848f, 0.088f, 0.1080f, kHairC, 0.004f),   // pelo corto
-    E(Head, -0.0160f, 0.17f, 0.0540f, 0.0704f, 0.05f, 0.0540f, kHairC, 0.01f),    // nacimiento, más largo a la derecha
-    E(Head, 0.0576f, 0.14f, -0.0180f, 0.0288f, 0.06f, 0.0810f, kHairShaved, 0.01f), // lado rapado
-    E(Head, 0.0000f, 0.12f, -0.0675f, 0.0848f, 0.1f, 0.0666f, kHairShaved, 0.02f), // nuca
-    // Tallas: huecos de los ojos y la comisura.
-    E(Head, 0.0288f, 0.122f, 0.1017f, 0.0176f, 0.013f, 0.0144f, kSkinShade, -0.008f),
-    E(Head, -0.0288f, 0.122f, 0.1017f, 0.0176f, 0.013f, 0.0144f, kSkinShade, -0.008f),
-    E(Head, 0.0000f, 0.0655f, 0.1116f, 0.0152f, 0.0016f, 0.0072f, kLip, -0.003f),
-
-    // Línea de la mandíbula: de debajo de la oreja al mentón, marcada.
-    C(Head,      0.052f, 0.07f, -0.005f,  0.016f, 0.028f, 0.078f, 0.017f, kStubble, 0.018f),
-    C(Head,     -0.052f, 0.07f, -0.005f, -0.016f, 0.028f, 0.078f, 0.017f, kStubble, 0.018f),
-    // Sombreado pintado (con la luz difusa de la ciudad gris, los volúmenes solos no se leen).
-    P(Head,      0.029f, 0.125f, 0.098f,  0.023f, 0.017f, 0.014f, rgba(146, 120, 110)),  // cuencas
-    P(Head,     -0.029f, 0.125f, 0.098f,  0.023f, 0.017f, 0.014f, rgba(146, 120, 110)),
-    P(Head,      0.0125f, 0.106f, 0.12f,  0.0055f, 0.02f, 0.01f, rgba(170, 142, 128)),   // laterales de la nariz
-    P(Head,     -0.0125f, 0.106f, 0.12f,  0.0055f, 0.02f, 0.01f, rgba(170, 142, 128)),
-    P(Head,      0, 0.08f, 0.113f,        0.013f, 0.0055f, 0.01f, rgba(160, 132, 120)),   // bajo la nariz
-    P(Head,      0, 0.0505f, 0.104f,      0.014f, 0.005f, 0.01f, rgba(150, 128, 118)),    // bajo el labio
-    P(Head,      0.046f, 0.084f, 0.074f,  0.014f, 0.012f, 0.022f, rgba(172, 146, 132)),   // bajo los pómulos
-    P(Head,     -0.046f, 0.084f, 0.074f,  0.014f, 0.012f, 0.022f, rgba(172, 146, 132)),
-    P(Head,      0, 0.018f, 0.035f,       0.06f, 0.022f, 0.06f, rgba(132, 118, 110)),     // bajo la mandíbula
-    P(Neck,      0, 0.07f, 0.0f,          0.045f, 0.03f, 0.045f, rgba(160, 138, 126)),    // sombra del cuello
+    C(Neck,      0, 0.0f, 0,  0, 0.1f, 0.004f,         0.034f, kSkinWarm, 0.0f),
+    E(Head,      0, 0.15f, -0.012f,   0.1f, 0.11f, 0.106f,   kSkinWarm, 0.03f),   // cráneo
+    E(Head,      0, 0.108f, 0.028f,   0.086f, 0.085f, 0.082f, kSkinWarm, 0.04f),  // mejillas
+    K(Head,      0, 0.085f, 0.04f,  0, 0.03f, 0.082f,   0.066f, 0.022f, kSkinWarm, 0.035f),  // mentón en punta
+    E(Head,      0, 0.106f, 0.112f,   0.0095f, 0.012f, 0.009f, kSkinWarm, 0.016f),  // nariz pequeña
+    E(Head,      0.094f, 0.12f, -0.01f,  0.012f, 0.026f, 0.018f, kSkinWarm, 0.012f), // orejas
+    E(Head,     -0.094f, 0.12f, -0.01f,  0.012f, 0.026f, 0.018f, kSkinWarm, 0.012f),
+    // Pelo: casquete y mechones.
+    E(Head,      0, 0.178f, -0.02f,   0.108f, 0.098f, 0.114f, kHairDark, 0.006f),
+    K(Head,      0, 0.2f, -0.08f,     0, 0.16f, -0.21f,     0.05f, 0.008f, kHairDark, 0.02f),  // atrás
+    K(Head,      0.06f, 0.19f, -0.07f,  0.125f, 0.14f, -0.17f, 0.042f, 0.007f, kHairDark, 0.02f),
+    K(Head,     -0.06f, 0.19f, -0.07f, -0.125f, 0.14f, -0.17f, 0.042f, 0.007f, kHairDark, 0.02f),
+    K(Head,      0.02f, 0.25f, -0.01f,  0.055f, 0.315f, -0.09f, 0.045f, 0.008f, kHairDark, 0.02f), // arriba
+    K(Head,     -0.04f, 0.245f, 0.0f,  -0.1f, 0.295f, -0.06f,  0.042f, 0.008f, kHairDark, 0.02f),
+    K(Head,      0.0f, 0.24f, -0.05f,   0.0f, 0.3f, -0.15f,   0.042f, 0.008f, kHairDark, 0.02f),
+    K(Head,      0.088f, 0.165f, 0.01f,  0.135f, 0.095f, 0.0f, 0.032f, 0.006f, kHairDark, 0.015f), // patillas
+    K(Head,     -0.088f, 0.165f, 0.01f, -0.135f, 0.095f, 0.0f, 0.032f, 0.006f, kHairDark, 0.015f),
+    K(Head,      0, 0.12f, -0.09f,     0, 0.05f, -0.125f,   0.04f, 0.008f, kHairDark, 0.02f),  // nuca
+    // Flequillo: barrido hacia su izquierda, con el mechón claro en medio.
+    K(Head,      0.035f, 0.225f, 0.075f,  0.085f, 0.17f, 0.118f, 0.028f, 0.005f, kHairDark, 0.014f),
+    K(Head,     -0.005f, 0.228f, 0.08f,   0.03f, 0.172f, 0.124f, 0.026f, 0.005f, kHairDark, 0.014f),
+    K(Head,     -0.045f, 0.222f, 0.075f, -0.05f, 0.165f, 0.12f,  0.024f, 0.005f, kHairDark, 0.014f),
+    K(Head,     -0.072f, 0.21f, 0.06f,   -0.098f, 0.158f, 0.098f, 0.016f, 0.004f, kHairLight, 0.008f),  // el mechón claro
+    K(Head,     -0.085f, 0.2f, 0.035f,   -0.118f, 0.13f, 0.06f,  0.024f, 0.005f, kHairDark, 0.014f),
 };
 
 // Ilse, la Archivera: túnica larga hasta los pies, capucha caída sobre los hombros y pelo
@@ -382,6 +382,7 @@ const BodyPrim kIlsePrims[] = {
 #undef E
 #undef C
 #undef P
+#undef K
 
 // Postura en A: brazos abiertos ~35° y piernas algo separadas, para que la unión suave no
 // funda la mano con la cadera ni un muslo con el otro.
@@ -416,7 +417,7 @@ void defineEnemyModels() {
         kModels[1 + k] = {d.rig, d.jointCount, prims.data(), int(prims.size()), k == int(EnemyKind::Brute) ? 0.017f : 0.011f, &gEnemyBind[k]};
     }
     kModels[int(ModelId::HeroHead)] = {kSkeleton, JointCount, kHeroHeadPrims, int(sizeof(kHeroHeadPrims) / sizeof(kHeroHeadPrims[0])),
-                                       0.005f, &kHeroBind, 0.004f};
+                                       0.005f, &kHeroBind, 0.0f};
     kModels[int(ModelId::Ilse)] = {kSkeleton, JointCount, kIlsePrims, int(sizeof(kIlsePrims) / sizeof(kIlsePrims[0])), 0.011f, &kHeroBind};
 }
 
@@ -433,6 +434,32 @@ void bindMatrices(const ModelDef& def, Mat4* out) {
     computeWorldMatrices(def.rig, def.jointCount, def.bindPose ? *def.bindPose : Pose{}, Mat4::identity(), out);
 }
 const BuiltModel& model(ModelId id) { return gModels[int(id)]; }
+
+// Punto de la cara (espacio de la cabeza) delante de (x, y): se busca la superficie de la
+// malla de la cabeza avanzando desde delante. Para pegar ojos, cejas y boca a la piel.
+Vec3 headSurface(float x, float y) {
+    static Field field;
+    static Mat4 headBind;
+    if (field.prims.empty()) {
+        Mat4 bind[kMaxJoints];
+        bindMatrices(kModels[int(ModelId::HeroHead)], bind);
+        headBind = bind[Head];
+        const ModelDef& d = kModels[int(ModelId::HeroHead)];
+        for (int i = 0; i < d.primCount; ++i) {
+            const BodyPrim& bp = d.prims[i];
+            if (bp.paint) continue;
+            field.prims.push_back({bp.joint, bp.capsule, bp.a, bp.b, bp.r, bp.color, bp.blend, false, rigidInverse(bind[bp.joint]),
+                                   {-1e9f, -1e9f, -1e9f}, {1e9f, 1e9f, 1e9f}});
+        }
+    }
+    float z = 0.25f;
+    for (int i = 0; i < 200; ++i) {
+        float dist = field.eval(transformPoint(headBind, {x, y, z}));
+        if (dist < 0.0005f) break;
+        z -= std::max(dist, 0.0005f);
+    }
+    return {x, y, z};
+}
 
 void buildModels(Renderer& r) {
     defineEnemyModels();

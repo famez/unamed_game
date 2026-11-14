@@ -4,9 +4,9 @@
 
 namespace {
 
-constexpr float kAcceleration = 45.0f;  // m/s²: arranca rápido pero no de golpe
-constexpr float kDeceleration = 60.0f;
-constexpr float kTurnSmooth = 16.0f;    // giro amortiguado (más alto = más rápido)
+constexpr float kAcceleration = 26.0f;  // m/s²: arranca con algo de inercia (~0,25 s a la carrera)
+constexpr float kDeceleration = 30.0f;  // y frena sin pararse en seco
+constexpr float kTurnSmooth = 10.0f;    // giro amortiguado (más alto = más rápido)
 constexpr float kDashTime = 0.14f;      // el acercamiento al objetivo dura esto
 constexpr float kAirHover = 0.85f;      // fracción de la gravedad que se anula en un golpe aéreo
 
@@ -303,6 +303,7 @@ void Character::startMove(Move m, float faceYaw, float dash) {
     impactDone_ = false;
     yaw = wrapAngle(faceYaw);
     speed = 0;
+    moveVel_ = {};
     const MoveDef& d = kMoves[int(m)];
     if (isAirAttack(m)) {
         ++airStep_;
@@ -435,22 +436,34 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
     bool aimed = guarding() || charge() > 0;
     float maxSpeed = (aimed ? kGuardSpeed : (sprintHeld_ && body.grounded ? kSprintSpeed : kRunSpeed)) * speedScale;
     float targetSpeed = canMove ? maxSpeed * input : 0.0f;
-    speed = moveTowards(speed, targetSpeed, (targetSpeed > speed ? kAcceleration : kDeceleration) * dt);
+    // La velocidad (vector) va hacia la deseada con aceleración limitada: al cambiar de
+    // dirección traza una curva en vez de girar en seco, y al soltar frena con suavidad.
+    // Dar media vuelta frena más (pivota) para no deslizarse de lado.
+    Vec3 targetVel = (input > 0.01f ? moveDir_ : forward()) * targetSpeed;
+    Vec3 diff = targetVel - moveVel_;
+    bool speeding = length(targetVel) > length(moveVel_) && dot(targetVel, moveVel_) >= 0;
+    float rate = speeding ? kAcceleration : kDeceleration;
+    if (dot(targetVel, moveVel_) < 0) rate *= 1.6f;
+    float dl = length(diff), maxDelta = rate * dt;
+    moveVel_ += dl > maxDelta ? diff * (maxDelta / dl) : diff;
+    speed = length(moveVel_);
     if (canMove && (input > 0.01f || aimed)) {
         float targetYaw = aimed ? camYaw_ : std::atan2(moveDir_.x, moveDir_.z);
         float step = wrapAngle(targetYaw - yaw) * (1.0f - std::exp(-kTurnSmooth * dt));
-        yaw = wrapAngle(yaw + clampf(step, -22.0f * dt, 22.0f * dt));
+        yaw = wrapAngle(yaw + clampf(step, -14.0f * dt, 14.0f * dt));
     }
-    Vec3 dir = canMove || speed < 0.01f ? moveDir_ : forward();
+    Vec3 dir = speed > 0.01f ? moveVel_ * (1.0f / speed) : forward();
     if (rolling()) {
         float u = rollTime_ / kRollDuration;
         dir = rollDir_;
         speed = kRollSpeed * (1.0f - 0.5f * u);
+        moveVel_ = dir * speed;
         yaw = std::atan2(rollDir_.x, rollDir_.z);
         rollTime_ += dt;
         if (rollTime_ >= kRollDuration) {
             rollTime_ = -1;
             speed *= 0.5f;  // sale de la voltereta aún con algo de inercia
+            moveVel_ = moveVel_ * 0.5f;
             counterWindow_ = 0.4f;  // un golpe ahora es un contraataque
         }
     }
@@ -507,6 +520,9 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
     wasGrounded_ = body.grounded;
     landTimer_ = std::max(0.0f, landTimer_ - dt);
 
+    // Tiempo sin hacer nada: el reposo se va relajando.
+    bool still = speed < 0.3f && move_ == Move::None && !rolling() && body.grounded && !hurt() && !guarding() && !absorbing();
+    idleTime_ = still ? idleTime_ + dt : 0.0f;
     // La fase avanza con la distancia recorrida (solo pisando suelo): los pies no patinan.
     if (body.grounded) phase_ = std::fmod(phase_ + speed * dt * 2.0f * kPi / 2.6f, 2.0f * kPi);
     airBlend_ = moveTowards(airBlend_, body.grounded ? 0.0f : 1.0f, 7.0f * dt);
@@ -688,24 +704,51 @@ void Character::animate(Pose& out) const {
     r[ShoulderR].x = lerpf(r[ShoulderR].x, 1.0f, 0.6f * sprint);
     r[ElbowL].x -= 0.3f * sprint;
 
-    // Reposo: postura de combate con las piernas abiertas y respiración.
+    // Reposo: postura de combate con las piernas abiertas, que nunca está quieta del todo:
+    // respira (pecho y hombros), pasa el peso de una pierna a otra, mira a los lados de vez
+    // en cuando y, si sigue un rato sin hacer nada, se relaja (baja el arma, se encorva un
+    // poco y a veces rueda los hombros).
     float idle = (1.0f - run) * (1.0f - airBlend_);
-    float breath = std::sin(time_ * 2.2f);
-    float sway = std::sin(time_ * 1.1f);
-    r[HipL].z += 0.12f * idle;
-    r[HipR].z -= 0.12f * idle;
-    r[KneeL].x += 0.18f * idle;
-    r[KneeR].x += 0.18f * idle;
+    float breath = std::sin(time_ * 1.7f);
+    float weight = std::sin(time_ * 0.42f);  // peso de una pierna a otra (~15 s el ciclo)
+    float relax = smoothstep01((idleTime_ - 4.0f) / 1.5f) * idle;
+    r[HipL].z += (0.12f - 0.04f * relax) * idle;
+    r[HipR].z -= (0.12f - 0.04f * relax) * idle;
+    r[KneeL].x += (0.18f + 0.14f * std::max(0.0f, -weight)) * idle;  // se dobla la rodilla que descansa
+    r[KneeR].x += (0.18f + 0.14f * std::max(0.0f, weight)) * idle;
     r[AnkleL].z -= 0.1f * idle;
     r[AnkleR].z += 0.1f * idle;
-    out.rootOffset.y -= (0.035f + 0.01f * breath) * idle;
-    out.rootOffset.x += 0.015f * sway * idle;
-    r[Chest].x += 0.03f * breath * idle;
-    r[Pelvis].y += 0.25f * idle;  // de medio lado, con el arma delante
+    out.rootOffset.y -= (0.035f + 0.012f * breath + 0.02f * std::fabs(weight)) * idle;
+    out.rootOffset.x += 0.035f * weight * idle;
+    r[Pelvis].z += 0.07f * weight * idle;
+    r[Spine].z -= 0.05f * weight * idle;
+    r[Chest].x += (0.045f * breath + 0.12f * relax) * idle;
+    r[Spine].x += 0.06f * relax;
+    r[Pelvis].y += 0.25f * (1.0f - 0.5f * relax) * idle;  // de medio lado, con el arma delante
     r[Chest].y -= 0.1f * idle;
-    r[Head].y -= 0.15f * idle;
-    r[Head].x += 0.03f * std::sin(time_ * 0.7f) * idle;
-    r[ShoulderL].z += 0.04f * breath * idle;
+    r[ShoulderL].z += 0.05f * breath * idle;
+    r[ShoulderR].z -= 0.05f * breath * idle;
+    // Mirar alrededor: cada 7 s gira la cabeza a un lado (alterno) y vuelve.
+    float gp = std::fmod(time_ + 3.0f, 7.0f);
+    float glance = gp < 2.4f ? std::sin(gp / 2.4f * kPi) : 0.0f;
+    float side = std::fmod(std::floor((time_ + 3.0f) / 7.0f), 2.0f) < 1.0f ? 1.0f : -1.0f;
+    r[Head].y += (-0.15f + 0.6f * glance * side) * idle;
+    r[Neck].y += 0.2f * glance * side * idle;
+    r[Chest].y += 0.08f * glance * side * idle;
+    r[Head].x += (0.03f * std::sin(time_ * 0.7f) + 0.1f * relax) * idle;
+    // Relajado: baja el arma y deja caer el otro brazo.
+    r[ShoulderR].x = lerpf(r[ShoulderR].x, 0.15f, 0.7f * relax);
+    r[ElbowR].x = lerpf(r[ElbowR].x, -0.45f, 0.7f * relax);
+    r[WristR].x = lerpf(r[WristR].x, 0.3f, 0.7f * relax);
+    r[ElbowL].x = lerpf(r[ElbowL].x, -0.15f, 0.7f * relax);
+    // Y cada 12 s rueda los hombros, como quien se estira.
+    float rp = std::fmod(idleTime_, 12.0f);
+    float roll = idleTime_ > 6.0f && rp < 1.6f ? std::sin(rp / 1.6f * kPi) : 0.0f;
+    r[ShoulderL].x -= 0.35f * roll * std::sin(rp * 4.0f);
+    r[ShoulderR].x -= 0.35f * roll * std::sin(rp * 4.0f + 1.0f);
+    r[ShoulderL].z += 0.12f * roll;
+    r[ShoulderR].z -= 0.12f * roll;
+    r[Neck].x -= 0.25f * roll;
 
     // En el aire: piernas recogidas (más al subir), brazos abiertos.
     float a = airBlend_;

@@ -158,6 +158,8 @@ private:
     int lastKey_ = -1;
     float lean_ = 0, bank_ = 0;  // inclinación hacia delante (aceleración) y lateral (giro)
     float prevSpeed_ = 0, prevYaw_ = 0;
+    Vec3 moveVel_;        // velocidad propia en el plano (con inercia)
+    float idleTime_ = 0;  // segundos sin hacer nada (para el reposo)
     float landTimer_ = 0, landStrength_ = 0;
     bool wasGrounded_ = true;
     float fallSpeed_ = 0;
