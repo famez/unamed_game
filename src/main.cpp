@@ -206,7 +206,7 @@ int main(int argc, char** argv) {
                 case PauseMenu::Result::QualityChanged: renderer.setQuality(Quality(menu.quality)); break;
                 case PauseMenu::Result::None: break;
             }
-        } else if (input.wasPressed(Key::I)) {
+        } else if (input.wasPressed(Key::I) || input.wasPressed(Key::Tab)) {
             inventory.show();
             platform::setMouseCaptured(false);
         } else if (wasCaptured && !captured && !autoplay) {
@@ -232,9 +232,9 @@ int main(int argc, char** argv) {
             } else {
                 pending.jump |= input.wasPressed(Key::Space);
                 pending.attack |= input.mouseLeftPressed;
-                pending.dodge |= input.wasPressed(Key::Shift);
-                pending.lockOn |= input.wasPressed(Key::Tab);
-                pending.unlock |= input.mouseMiddlePressed || input.wasPressed(Key::X);
+                pending.dodge |= input.wasPressed(Key::C) || input.wasPressed(Key::Ctrl);
+                pending.lockOn |= input.wasPressed(Key::R) || input.mouseMiddlePressed;
+                pending.unlock |= input.wasPressed(Key::X);
                 pending.interact |= input.wasPressed(Key::F);
                 pending.runCommand |= input.wasPressed(Key::E);
             }
@@ -277,6 +277,8 @@ int main(int argc, char** argv) {
                 c.command = pending.command;
                 c.runCommand = pending.runCommand;
                 c.advance = pending.advance;
+                c.sprint = playing && input.isDown(Key::Shift);
+                c.attackHeld = playing && captured && input.mouseLeft && !game.dialogueBlocking();
                 c.commandScroll = pending.scroll;
                 c.camForward = cam.forwardFlat();
                 if (autoplay) {

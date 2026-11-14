@@ -21,6 +21,15 @@ const HitParams kHits[int(Move::Count)] = {
     {1.0f, 0.1f,  0.0f,  1.5f, 2.5f, false},  // Air2
     {2.0f, 0.9f, -1.0f,  8.0f, 3.0f, true},   // AirFinisher: remolino con el látigo
     {0,    0,     1,     0,    0,    false},  // Cast
+    {1.4f, 0.8f,  0.5f,  7.0f, 1.0f, true},   // Rush: embestida
+    {1.8f, 0.4f, -1.0f,  6.0f, 2.0f, true},   // Counter: contraataque en giro
+    {2.6f, 1.0f,  0.3f,  9.0f, 3.0f, true},   // Charged: corte cargado
+    {1.2f, 0.0f,  0.3f,  1.0f, 9.0f, false},  // Launcher: lanza al enemigo hacia arriba
+    {1.8f, 0.8f, -1.0f,  6.0f, 3.0f, true},   // Plunge: picado contra el suelo
+    {1.1f, 0.6f,  0.7f,  3.5f, 0.6f, false},  // Thrust: estocada de lanza
+    {0.6f,-0.4f,  0.3f,  1.5f, 0.3f, false},  // Punch
+    {0.6f,-0.4f,  0.3f,  1.5f, 0.3f, false},  // PunchL
+    {2.0f, 0.0f,  0.2f,  4.0f, 7.0f, true},   // Uppercut: gancho final
 };
 const SpellDef kSpells[int(Spell::Count)] = {
     {"Fuego", 8, rgba(255, 140, 50)},
@@ -35,11 +44,6 @@ constexpr float kPerfectGuard = 0.35f;  // bloquear al poco de levantar la guard
 constexpr float kMpRegen = 1.0f;        // PM por segundo
 constexpr float kHpOrb = 8, kMpOrb = 6;
 constexpr size_t kMaxParticles = 900;
-
-uint32_t scaleColor(uint32_t c, float k) {
-    auto ch = [&](int shift) { return uint32_t(clampf(float((c >> shift) & 0xFF) * k, 0, 255)) << shift; };
-    return ch(0) | ch(8) | ch(16) | (c & 0xFF000000u);
-}
 
 // El color que cada especie de Gris ha robado (y devuelve al disiparse).
 uint32_t enemyColor(EnemyKind k) {
@@ -154,7 +158,9 @@ void Game::update(float dt, const Controls& c) {
     }
 
     bool wasGrounded = hero_.body.grounded;
-    hero_.update(dt, down ? Vec3{} : c.move, !down && c.jump, world_);
+    hero_.setSprint(c.sprint);
+    hero_.setAttackHeld(c.attackHeld);
+    hero_.update(dt, down ? Vec3{} : c.move, !down && c.jump, world_, std::atan2(c.camForward.x, c.camForward.z));
     if (c.jump && wasGrounded && hero_.body.vel.y > 1.0f) sound(Sfx::Jump, hero_.body.pos, 0.7f);
     updateBrizna(dt);
     Move impact = hero_.takeImpact();

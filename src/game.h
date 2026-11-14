@@ -52,6 +52,8 @@ struct Controls {
     int commandScroll = 0;   // mover la selección del menú de comandos
     Vec3 camForward{0, 0, 1};  // hacia dónde mira la cámara (para elegir objetivo)
     bool advance = false;      // pasar la línea de diálogo
+    bool sprint = false;       // mantener: correr
+    bool attackHeld = false;   // ataque mantenido (corte cargado)
 };
 
 // Datos de la cámara para dibujar: billboards, proyección de etiquetas al HUD.

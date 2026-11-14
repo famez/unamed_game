@@ -934,7 +934,7 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
             uiText(ui, x0 + width - 10, y + 6, 15, value, sel ? rgba(60, 70, 110) : kUiDim, FontFace::Title, Align::Right);
         }
         skewRect(d, x - 6, h - 30, x + 400, h - 8, 6, kUiPanel);
-        uiText(ui, x, h - 28, 14, "Rueda · elegir    E · usar    Clic · atacar    I · inventario", kUiDim);
+        uiText(ui, x, h - 28, 14, "Clic atacar (mantén: cargar) · C esquivar · Shift correr · R fijar · Tab inventario", kUiDim);
     }
 
     // Objetivo fijado arriba a la derecha.

@@ -27,7 +27,7 @@ prota: …
 prota: No lo sé.
 brizna: Vale. Entonces de momento serás «el que brilla». Aquí eso es raro. Y peligroso.
 brizna: Ya vienen. Los Grises sienten el color de lejos.
-sistema: Clic izquierdo para atacar · Shift para esquivar · Tab para fijar un objetivo.
+sistema: Clic izquierdo para atacar (mantén para cargar) · C para esquivar · Shift para correr · R para fijar un objetivo.
 !capitulo
 
 == primer_combate

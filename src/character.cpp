@@ -54,6 +54,7 @@ struct MoveDef {
     float lean;          // inclinación del tronco hacia delante
     float step;          // paso adelante (m) durante el golpe...
     float stepFrom, stepTo;  // ...en este tramo
+    bool leftArm = false;  // los keyframes son del brazo izquierdo (en espejo)
 };
 
 // Recordatorio de signos: rotar +X lleva hacia atrás un brazo que cuelga; -X hacia
@@ -105,6 +106,53 @@ const ArmKey kCastKeys[] = {    // brazo al frente señalando con el arma
     {0.75f, -1.60f,  0.15f,  0.00f,  0.00f, 1.3f,  0.35f, Smooth},
     {1.00f, GUARD, Smooth},
 };
+const ArmKey kRushKeys[] = {     // embestida: hoja recta al frente todo el tiempo
+    {0.00f, GUARD, Smooth},
+    {0.15f, -1.55f,  0.00f,  0.00f,  0.00f, 1.45f, 0.50f, Strike},
+    {0.80f, -1.55f,  0.00f,  0.00f,  0.00f, 1.45f, 0.50f, Smooth},
+    {1.00f, GUARD, Smooth},
+};
+const ArmKey kChargedKeys[] = {  // corte cargado: ya viene con el arma arriba
+    {0.00f, -3.00f,  0.10f, -0.20f, -0.60f, 0.3f, -0.20f, Smooth},
+    {0.30f, -3.10f,  0.10f, -0.20f, -0.70f, 0.2f, -0.30f, Windup},
+    {0.45f, -0.60f,  0.00f, -0.10f,  0.00f, 1.2f,  0.30f, Strike},
+    {0.65f, -0.45f,  0.00f, -0.10f,  0.10f, 1.3f,  0.35f, Overshoot},
+    {1.00f, GUARD, Smooth},
+};
+const ArmKey kLaunchKeys[] = {   // lanzador: de abajo a arriba
+    {0.00f, GUARD, Smooth},
+    {0.25f,  0.50f,  0.00f, -0.10f, -0.20f, 1.3f, -0.40f, Windup},
+    {0.42f, -2.80f,  0.20f, -0.20f, -0.30f, 0.6f,  0.40f, Strike},
+    {0.60f, -3.00f,  0.20f, -0.20f, -0.30f, 0.5f,  0.45f, Overshoot},
+    {1.00f, GUARD, Smooth},
+};
+const ArmKey kPlungeKeys[] = {   // picado: arriba mientras cae y golpe contra el suelo
+    {0.00f, GUARD, Smooth},
+    {0.20f, -3.00f,  0.10f, -0.20f, -0.60f, 0.3f, -0.20f, Windup},
+    {0.74f, -3.00f,  0.10f, -0.20f, -0.60f, 0.3f, -0.20f, Smooth},
+    {0.80f, -0.50f,  0.00f, -0.10f,  0.00f, 1.2f,  0.30f, Strike},
+    {1.00f, GUARD, Smooth},
+};
+const ArmKey kThrustKeys[] = {   // estocada (lanza)
+    {0.00f, GUARD, Smooth},
+    {0.30f, -0.60f,  0.10f, -0.20f, -1.80f, 1.3f, -0.40f, Windup},
+    {0.45f, -1.55f,  0.00f,  0.00f,  0.00f, 1.45f, 0.50f, Strike},
+    {0.62f, -1.60f,  0.00f,  0.00f,  0.05f, 1.45f, 0.55f, Overshoot},
+    {1.00f, GUARD, Smooth},
+};
+#define FIST -0.30f, 0.00f, -0.10f, -1.80f, 0.0f, 0.00f
+const ArmKey kPunchKeys[] = {    // directo (guanteletes); el izquierdo usa las mismas en espejo
+    {0.00f, FIST, Smooth},
+    {0.40f, -1.55f,  0.00f, -0.05f, -0.05f, 0.0f,  0.35f, Strike},
+    {1.00f, FIST, Smooth},
+};
+const ArmKey kUppercutKeys[] = { // gancho final
+    {0.00f, FIST, Smooth},
+    {0.30f,  0.35f,  0.00f, -0.15f, -1.90f, 0.0f, -0.35f, Windup},
+    {0.45f, -2.20f,  0.25f, -0.05f, -1.30f, 0.0f,  0.45f, Strike},
+    {1.00f, FIST, Smooth},
+};
+#undef FIST
 #undef GUARD
 
 #define N(a) int(sizeof(a) / sizeof((a)[0]))
@@ -119,6 +167,15 @@ const MoveDef kMoves[int(Move::Count)] = {
     {0.36f, 0.38f, 0.04f, 0.25f, kSlash1Keys,   N(kSlash1Keys), 0,         0,        0.00f, 1.00f, 0.0f, 0.10f, 0.0f, 0.0f, 1.0f},  // Air2
     {0.60f, 0.50f, 0.05f, 0.20f, kSpinKeys,     N(kSpinKeys),   4 * kPi,   0,        0.10f, 0.80f, 0.0f, 0.10f, 0.0f, 0.0f, 1.0f},  // AirFinisher
     {0.50f, 0.28f, 0.08f, 0.25f, kCastKeys,     N(kCastKeys),   0,         0,        0.00f, 1.00f, 0.0f, 0.00f, 0.0f, 0.0f, 1.0f},  // Cast
+    {0.50f, 0.35f, 0.04f, 0.25f, kRushKeys,     N(kRushKeys),   0,         0,        0.00f, 1.00f, 0.0f, 0.45f, 0.0f, 0.0f, 1.0f},  // Rush
+    {0.42f, 0.40f, 0.03f, 0.20f, kSpinKeys,     N(kSpinKeys),   2 * kPi,   0,        0.05f, 0.65f, 0.0f, 0.10f, 0.3f, 0.1f, 0.5f},  // Counter
+    {0.55f, 0.47f, 0.04f, 0.20f, kChargedKeys,  N(kChargedKeys), 0,        0,        0.00f, 1.00f, 0.0f, 0.35f, 0.6f, 0.35f, 0.55f}, // Charged
+    {0.55f, 0.42f, 0.05f, 0.25f, kLaunchKeys,   N(kLaunchKeys), 0,         0,        0.00f, 1.00f, 7.5f, -0.10f, 0.0f, 0.0f, 1.0f}, // Launcher
+    {1.40f, 0.80f, 0.05f, 0.20f, kPlungeKeys,   N(kPlungeKeys), 0,         0,        0.00f, 1.00f, 0.0f, 0.30f, 0.0f, 0.0f, 1.0f},  // Plunge
+    {0.42f, 0.42f, 0.05f, 0.25f, kThrustKeys,   N(kThrustKeys), 0,         0,        0.00f, 1.00f, 0.0f, 0.25f, 0.6f, 0.3f, 0.5f},  // Thrust
+    {0.24f, 0.38f, 0.05f, 0.30f, kPunchKeys,    N(kPunchKeys),  0,         0,        0.00f, 1.00f, 0.0f, 0.15f, 0.2f, 0.2f, 0.5f},  // Punch
+    {0.24f, 0.38f, 0.05f, 0.30f, kPunchKeys,    N(kPunchKeys),  0,         0,        0.00f, 1.00f, 0.0f, 0.15f, 0.2f, 0.2f, 0.5f, true}, // PunchL
+    {0.50f, 0.45f, 0.05f, 0.25f, kUppercutKeys, N(kUppercutKeys), 0,       0,        0.00f, 1.00f, 3.5f, 0.10f, 0.2f, 0.2f, 0.45f}, // Uppercut
 };
 #undef N
 // clang-format on
@@ -143,14 +200,17 @@ ArmKey sampleKeys(const MoveDef& d, float u) {
     return d.keys[d.keyCount - 1];
 }
 
-// Mezcla la pose del brazo derecho sobre la de locomoción con peso `w`.
-void applyArm(Vec3* r, const ArmKey& k, float w) {
-    r[ShoulderR].x = lerpAngle(r[ShoulderR].x, k.shoulderX, w);
-    r[ShoulderR].y = lerpAngle(r[ShoulderR].y, k.shoulderY, w);
-    r[ShoulderR].z = lerpAngle(r[ShoulderR].z, k.shoulderZ, w);
-    r[ElbowR].x = lerpAngle(r[ElbowR].x, k.elbowX, w);
-    r[WristR].x = lerpAngle(r[WristR].x, k.wristX, w);
-    r[Chest].y += k.chestY * w;
+// Mezcla la pose de un brazo sobre la de locomoción con peso `w`. El izquierdo, en espejo
+// (se invierten los giros en Y y Z, y la torsión del pecho).
+void applyArm(Vec3* r, const ArmKey& k, float w, bool left = false) {
+    Joint sh = left ? ShoulderL : ShoulderR, el = left ? ElbowL : ElbowR, wr = left ? WristL : WristR;
+    float m = left ? -1.0f : 1.0f;
+    r[sh].x = lerpAngle(r[sh].x, k.shoulderX, w);
+    r[sh].y = lerpAngle(r[sh].y, m * k.shoulderY, w);
+    r[sh].z = lerpAngle(r[sh].z, m * k.shoulderZ, w);
+    r[el].x = lerpAngle(r[el].x, k.elbowX, w);
+    r[wr].x = lerpAngle(r[wr].x, k.wristX, w);
+    r[Chest].y += m * k.chestY * w;
 }
 
 float moveDuration(Move m, float attackSpeed) {
@@ -200,6 +260,10 @@ Mat4 Character::modelMatrix() const {
                 translate(-pivot);
         }
     }
+    if (flipTime_ >= 0) {  // doble salto: voltereta hacia delante
+        const Vec3 pivot{0, 0.9f, 0};
+        m = m * translate(pivot) * rotateX(smoothstep01(flipTime_ / 0.45f) * 2.0f * kPi) * translate(-pivot);
+    }
     if (rolling()) {
         // Voltereta: el cuerpo encogido da una vuelta sobre el eje lateral.
         float u = clampf(rollTime_ / kRollDuration, 0, 1);
@@ -214,9 +278,18 @@ Move Character::nextAttack() const {
         if (airComboSpent_) return Move::None;
         return airStep_ == 0 ? Move::Air1 : airStep_ == 1 ? Move::Air2 : Move::AirFinisher;
     }
-    if (comboStep_ >= comboHits) return Move::Finisher;
-    const Move seq[3] = {Move::Slash1, Move::Slash2, Move::Slash3};
-    return seq[comboStep_ % 3];
+    if (comboStep_ >= comboHits) return moveSet == MoveSet::Fists ? Move::Uppercut : Move::Finisher;
+    switch (moveSet) {
+        case MoveSet::Lance: {
+            const Move seq[3] = {Move::Thrust, Move::Slash2, Move::Thrust};
+            return seq[comboStep_ % 3];
+        }
+        case MoveSet::Fists: return comboStep_ % 2 ? Move::PunchL : Move::Punch;
+        default: {
+            const Move seq[3] = {Move::Slash1, Move::Slash2, Move::Slash3};
+            return seq[comboStep_ % 3];
+        }
+    }
 }
 
 void Character::startMove(Move m, float faceYaw, float dash) {
@@ -230,10 +303,19 @@ void Character::startMove(Move m, float faceYaw, float dash) {
         ++airStep_;
         if (m == Move::AirFinisher) airComboSpent_ = true;
         body.vel.y = std::max(body.vel.y, 2.0f);  // un pequeño impulso: el combo aéreo "flota"
-    } else if (isAttack(m)) {
-        comboStep_ = m == Move::Finisher ? 0 : comboStep_ + 1;
+    } else if (m == Move::Finisher || m == Move::Uppercut) {
+        comboStep_ = 0;
+    } else if (m == Move::Slash1 || m == Move::Slash2 || m == Move::Slash3 || m == Move::Thrust || m == Move::Punch ||
+               m == Move::PunchL) {
+        ++comboStep_;
     }
     if (d.hop > 0 && body.grounded) body.vel.y = d.hop;
+    if (m == Move::Plunge) body.vel.y = std::max(body.vel.y, 3.0f);  // un saltito antes de caer
+    if (m == Move::Rush) {  // embestida: sale disparado hacia delante
+        dashTime_ = 0.28f;
+        dashVel_ = forward() * 15.0f;
+        return;
+    }
     if (dash > 0.05f) {
         dashTime_ = kDashTime;
         dashVel_ = forward() * (dash / kDashTime);
@@ -244,9 +326,22 @@ void Character::startMove(Move m, float faceYaw, float dash) {
 }
 
 bool Character::attack(float faceYaw, float dash) {
-    if (rolling() || hurt() || downTimer >= 0) return false;
+    if (rolling() || hurt() || downTimer >= 0 || lying > 0.01f) return false;
+    // Especiales según la situación (solo si no hay otro golpe en curso).
+    if (move_ == Move::None) {
+        Move special = Move::None;
+        if (!body.grounded && guardHeld_) special = Move::Plunge;
+        else if (body.grounded && counterWindow_ > 0) special = Move::Counter;
+        else if (sprinting()) special = Move::Rush;
+        else if (body.grounded && guardHeld_) special = Move::Launcher;
+        if (special != Move::None) {
+            counterWindow_ = 0;
+            startMove(special, faceYaw, special == Move::Counter ? dash : 0.0f);
+            return true;
+        }
+    }
     if (isAttack(move_)) {  // durante un golpe: se encadena el siguiente al terminar
-        if (move_ == Move::AirFinisher) return false;
+        if (move_ == Move::AirFinisher || move_ == Move::Plunge || move_ == Move::Rush) return false;
         queued_ = true;
         queuedYaw_ = faceYaw;
         queuedDash_ = dash;
@@ -299,7 +394,10 @@ int Character::stateKey() const {
            (hurt() ? 1 << 8 : 0) | (downTimer >= 0 ? 1 << 9 : 0);
 }
 
-void Character::update(float dt, Vec3 moveDir, bool jump, const World& world) {
+void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, float camYaw) {
+    camYaw_ = camYaw;
+    counterWindow_ = std::max(0.0f, counterWindow_ - dt);
+    if (flipTime_ >= 0 && (flipTime_ += dt) > 0.45f) flipTime_ = -1;
     for (int i = 0; i < JointCount; ++i) prevJoints_[i] = joints[i];
     prevPos_ = body.pos;
     for (int i = 0; i < kRibbonPoints; ++i) ribbonPrevFrame_[i] = ribbon_[i];
@@ -316,13 +414,25 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world) {
         dashVel_ = {};
     }
 
+    // Cargar el corte: con el ataque mantenido y las manos libres. Al soltar con la carga
+    // completa sale el corte cargado.
+    bool charging = attackHeld_ && move_ == Move::None && body.grounded && !rolling() && !hurt() && !guardHeld_ &&
+                    downTimer < 0 && lying <= 0.01f;
+    if (charging) {
+        chargeTime_ += dt;
+    } else {
+        if (!attackHeld_ && charge() >= 1.0f && move_ == Move::None) startMove(Move::Charged, camYaw_, 0);
+        chargeTime_ = 0;
+    }
     // Correr hacia donde se pide; el cuerpo gira hacia la dirección de la marcha con un
-    // giro amortiguado (rápido al principio, suave al final).
-    bool canMove = !busy() && !guarding();
-    float targetSpeed = canMove ? kRunSpeed * input : 0.0f;
+    // giro amortiguado. Con la guardia o cargando se anda despacio mirando a la cámara.
+    bool canMove = !busy();
+    bool aimed = guarding() || charge() > 0;
+    float maxSpeed = aimed ? kGuardSpeed : (sprintHeld_ && body.grounded ? kSprintSpeed : kRunSpeed);
+    float targetSpeed = canMove ? maxSpeed * input : 0.0f;
     speed = moveTowards(speed, targetSpeed, (targetSpeed > speed ? kAcceleration : kDeceleration) * dt);
-    if (canMove && input > 0.01f) {
-        float targetYaw = std::atan2(moveDir_.x, moveDir_.z);
+    if (canMove && (input > 0.01f || aimed)) {
+        float targetYaw = aimed ? camYaw_ : std::atan2(moveDir_.x, moveDir_.z);
         float step = wrapAngle(targetYaw - yaw) * (1.0f - std::exp(-kTurnSmooth * dt));
         yaw = wrapAngle(yaw + clampf(step, -22.0f * dt, 22.0f * dt));
     }
@@ -336,6 +446,7 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world) {
         if (rollTime_ >= kRollDuration) {
             rollTime_ = -1;
             speed *= 0.5f;  // sale de la voltereta aún con algo de inercia
+            counterWindow_ = 0.4f;  // un golpe ahora es un contraataque
         }
     }
 
@@ -356,7 +467,17 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world) {
         body.vel.y += knock_.y;
         knock_.y = 0;
     }
-    if (jump && body.grounded && !busy() && !guarding()) body.vel.y = kJumpSpeed;
+    if (jump && !busy()) {
+        if (body.grounded) {
+            body.vel.y = kJumpSpeed;
+        } else if (!doubleJumpUsed_) {  // doble salto con voltereta
+            body.vel.y = kJumpSpeed * 0.9f;
+            doubleJumpUsed_ = true;
+            flipTime_ = 0;
+        }
+    }
+    // Picado: tras el saltito, cae a plomo.
+    if (move_ == Move::Plunge && !impactDone_ && moveTime_ > 0.18f) body.vel.y = -22.0f;
     // Golpe aéreo: casi sin gravedad mientras dura (se queda flotando).
     if (isAirAttack(move_)) {
         body.vel.y += kGravity * kAirHover * dt;
@@ -368,6 +489,7 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world) {
     if (body.grounded && !isAirAttack(move_)) {
         airStep_ = 0;
         airComboSpent_ = false;
+        doubleJumpUsed_ = false;
     }
     // Aterrizaje: se aplasta más cuanto más rápido caía.
     if (body.grounded && !wasGrounded_) {
@@ -396,7 +518,16 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world) {
         const MoveDef& d = kMoves[int(move_)];
         moveTime_ += dt;
         float u = moveTime_ / moveDuration(move_, attackSpeed);
-        if (!impactDone_ && u >= d.impactU) {
+        if (move_ == Move::Plunge) {
+            // El picado golpea al tocar el suelo y se recupera enseguida.
+            if (!impactDone_ && body.grounded && moveTime_ > 0.2f) {
+                impactDone_ = true;
+                pendingImpact_ = move_;
+                moveTime_ = std::max(moveTime_, moveDuration(move_, attackSpeed) * 0.78f);
+                u = moveTime_ / moveDuration(move_, attackSpeed);
+            }
+            if (!impactDone_) u = std::min(u, 0.75f);  // sigue arriba hasta aterrizar
+        } else if (!impactDone_ && u >= d.impactU) {
             impactDone_ = true;
             pendingImpact_ = move_;
         }
@@ -500,7 +631,12 @@ void Character::animate(Pose& out) const {
     Vec3* r = out.rotation;
 
     float run = clampf(speed / kRunSpeed, 0, 1) * (1.0f - airBlend_);
-    float s = std::sin(phase_), c = std::cos(phase_);
+    float sprint = clampf((speed - kRunSpeed) / (kSprintSpeed - kRunSpeed), 0, 1) * (1.0f - airBlend_);
+    // Andando con la guardia (o cargando) se puede ir hacia atrás o de lado: el ciclo de
+    // piernas se invierte hacia atrás y se abre de lado.
+    float along = dot(moveDir_, forward());
+    float back = along < -0.3f ? -1.0f : 1.0f;
+    float s = std::sin(phase_) * back, c = std::cos(phase_);
     // Rebote: dos veces por ciclo (una por pisada), con el punto bajo al apoyar.
     float bounce = std::fabs(std::sin(phase_));
 
@@ -536,6 +672,13 @@ void Character::animate(Pose& out) const {
     r[Neck].z = -0.6f * bank_;
     r[Head].y = -(r[Pelvis].y + r[Chest].y);
     out.rootOffset.y = -0.06f * run * (1.0f - bounce) + 0.02f * run;
+    // Corriendo a tope: más inclinado, zancada larga y brazos echados atrás.
+    r[Spine].x += 0.25f * sprint;
+    r[HipL].x *= 1.0f + 0.3f * sprint;
+    r[HipR].x *= 1.0f + 0.3f * sprint;
+    r[ShoulderL].x = lerpf(r[ShoulderL].x, 0.9f, 0.6f * sprint);
+    r[ShoulderR].x = lerpf(r[ShoulderR].x, 1.0f, 0.6f * sprint);
+    r[ElbowL].x -= 0.3f * sprint;
 
     // Reposo: postura de combate con las piernas abiertas y respiración.
     float idle = (1.0f - run) * (1.0f - airBlend_);
@@ -604,14 +747,18 @@ void Character::animate(Pose& out) const {
         float wOut = d.blendOut > 0 ? (1.0f - u) / d.blendOut : 1.0f;
         float w = clampf(std::min(wIn, wOut), 0, 1);
         ArmKey k = sampleKeys(d, u);
-        applyArm(r, k, w);
+        applyArm(r, k, w, d.leftArm);
+        if (moveSet == MoveSet::Fists && !d.leftArm && move_ != Move::Cast)  // guardia con el otro puño
+            applyArm(r, {0, -0.6f, 0, -0.1f, -1.9f, 0, 0, Smooth}, w * 0.8f, true);
         float commit = clampf((u - d.impactU + 0.12f) / 0.12f, 0, 1);  // 0 preparando, 1 golpeado
         r[Spine].x += (d.lean * commit - 0.08f * (1.0f - commit)) * w;
         r[Spine].y += k.chestY * 0.35f * w;  // la cadera acompaña la torsión
         r[Head].y -= k.chestY * 0.5f * w;
-        r[ShoulderL].x = lerpAngle(r[ShoulderL].x, -0.5f, w);  // brazo libre equilibrando
-        r[ShoulderL].z = lerpAngle(r[ShoulderL].z, 0.9f, w);
-        r[ElbowL].x = lerpAngle(r[ElbowL].x, -0.5f, w);
+        if (moveSet != MoveSet::Fists) {  // brazo libre equilibrando
+            r[ShoulderL].x = lerpAngle(r[ShoulderL].x, -0.5f, w);
+            r[ShoulderL].z = lerpAngle(r[ShoulderL].z, 0.9f, w);
+            r[ElbowL].x = lerpAngle(r[ElbowL].x, -0.5f, w);
+        }
         if (body.grounded) {
             float lunge = 0.15f + 0.25f * commit;  // zancada que se abre al golpear
             r[HipL].x = lerpAngle(r[HipL].x, -0.35f - lunge, w);  // pierna izquierda adelantada
@@ -622,6 +769,17 @@ void Character::animate(Pose& out) const {
         }
     }
 
+    // Cargando el corte: el arma sube poco a poco por encima de la cabeza y el cuerpo se
+    // agacha y se echa atrás, tenso.
+    if (float ch = charge(); ch > 0) {
+        float w = smoothstep01(ch * 1.5f);
+        applyArm(r, {0, -3.0f, 0.1f, -0.2f, -0.6f, 0.3f, -0.2f, Smooth}, w);
+        r[Spine].x -= 0.12f * w;
+        r[KneeL].x += 0.4f * w;
+        r[KneeR].x += 0.4f * w;
+        out.rootOffset.y -= 0.1f * w;
+        if (ch >= 1.0f) r[Chest].y += 0.04f * std::sin(time_ * 40.0f);  // tiembla: listo
+    }
     // Guardia: hoja horizontal delante del cuerpo, agachado.
     if (guardBlend_ > 0) {
         float w = guardBlend_;
