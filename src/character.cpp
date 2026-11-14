@@ -231,6 +231,26 @@ float stepSpeed(const MoveDef& d, float u, float duration) {
 
 void Character::reset() { *this = Character{}; }
 
+bool Character::absorbing() const {
+    return absorbHeld_ && body.grounded && move_ == Move::None && !rolling() && !hurt() && !beaming() && downTimer < 0 &&
+           lying <= 0.01f;
+}
+
+bool Character::startBeam(Vec3 dir, float duration) {
+    if (hurt() || downTimer >= 0 || lying > 0.01f || rolling() || beaming()) return false;
+    if (move_ != Move::None && !impactDone_) return false;  // como la esquiva: tras el impacto
+    Vec3 d = normalize(flat(dir));
+    if (length(d) < 0.5f) d = forward();
+    move_ = Move::None;
+    queued_ = false;
+    dashTime_ = 0;
+    dashVel_ = {};
+    beamDir_ = d;
+    beamTime_ = duration;
+    yaw = std::atan2(d.x, d.z);
+    return true;
+}
+
 bool Character::guarding() const {
     return guardHeld_ && body.grounded && move_ == Move::None && !rolling() && !hurt() && downTimer < 0;
 }
@@ -426,7 +446,7 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
     }
     // Correr hacia donde se pide; el cuerpo gira hacia la dirección de la marcha con un
     // giro amortiguado. Con la guardia o cargando se anda despacio mirando a la cámara.
-    bool canMove = !busy();
+    bool canMove = !busy() && !absorbing();
     bool aimed = guarding() || charge() > 0;
     float maxSpeed = aimed ? kGuardSpeed : (sprintHeld_ && body.grounded ? kSprintSpeed : kRunSpeed);
     float targetSpeed = canMove ? maxSpeed * input : 0.0f;
@@ -450,6 +470,23 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
         }
     }
 
+    // Haz de luz: velocidad fija en línea recta, sin gravedad; al terminar conserva algo.
+    if (beaming()) {
+        beamTime_ -= dt;
+        body.vel = beamDir_ * kBeamSpeed + Vec3{0, kGravity * dt, 0};
+        moveBody(body, world, dt, kStepHeight);
+        if (beamTime_ <= 0) {
+            beamTime_ = 0;
+            body.vel = beamDir_ * 4.0f;
+            speed = 4.0f;
+        }
+        Pose target;
+        animate(target);
+        pose = target;
+        computeWorldMatrices(pose, modelMatrix(), joints);
+        updateSecondary(dt);
+        return;
+    }
     knock_ = knock_ * std::exp(-8.0f * dt);
     if (dashTime_ > 0) {
         dashTime_ -= dt;
@@ -552,6 +589,7 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
     }
     guardTime_ = guarding() ? guardTime_ + dt : 0.0f;
     guardBlend_ = moveTowards(guardBlend_, guarding() ? 1.0f : 0.0f, 12.0f * dt);
+    absorbBlend_ = moveTowards(absorbBlend_, absorbing() ? 1.0f : 0.0f, 6.0f * dt);
 
     // Pose: la del estado actual, fundida desde la anterior si el estado ha cambiado.
     int key = stateKey();
@@ -779,6 +817,16 @@ void Character::animate(Pose& out) const {
         r[KneeR].x += 0.4f * w;
         out.rootOffset.y -= 0.1f * w;
         if (ch >= 1.0f) r[Chest].y += 0.04f * std::sin(time_ * 40.0f);  // tiembla: listo
+    }
+    // Absorbiendo luz: brazos abiertos hacia arriba, cabeza alta, se eleva un poco.
+    if (absorbBlend_ > 0) {
+        float w = smoothstep01(absorbBlend_);
+        float pulse = std::sin(time_ * 6.0f) * 0.05f;
+        applyArm(r, {0, -2.2f, -0.6f, -0.9f, -0.3f, 0.4f, 0, Smooth}, w);
+        applyArm(r, {0, -2.2f, -0.6f, -0.9f, -0.3f, 0.4f, 0, Smooth}, w, true);
+        r[Spine].x -= (0.2f + pulse) * w;
+        r[Neck].x -= 0.35f * w;
+        out.rootOffset.y += (0.12f + pulse) * w;
     }
     // Guardia: hoja horizontal delante del cuerpo, agachado.
     if (guardBlend_ > 0) {

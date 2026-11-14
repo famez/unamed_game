@@ -27,6 +27,7 @@ set(LOGIC_SOURCES
     src/game.cpp
     src/game_story.cpp
     src/levels.cpp
+    src/light.cpp
     src/story.cpp
     src/synth.cpp
 )

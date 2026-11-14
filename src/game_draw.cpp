@@ -461,6 +461,14 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
         return;
     }
     if (blink) return;
+    if (hero_.beaming()) {  // hecho luz: una estela alargada en lugar del cuerpo
+        Vec3 c = hero_.interpolatedPos(alpha) + Vec3{0, 1.0f, 0};
+        Vec3 d = hero_.beamDir();
+        solid->ellipsoid(translate(c) * basisY(d), {}, {0.16f, 1.3f, 0.16f}, rgba(255, 245, 215), Material::Glow);
+        solid->ellipsoid(translate(c - d * 0.3f) * basisY(d), {}, {0.25f, 0.9f, 0.25f}, rgba(120, 220, 255), Material::Glow);
+        solid->light(c, Vec3{1.0f, 0.95f, 0.85f} * 3.0f, 6.0f);
+        return;
+    }
     float flash = heroFlash_ > 0 ? 0.7f : 0;
     // Cuerpo continuo (malla con skinning) con contorno, y los detalles rígidos encima.
     const BuiltModel& body = model(ModelId::Hero);
@@ -637,7 +645,7 @@ void Game::drawEffects(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Vi
 
     // Proyectiles.
     for (const Projectile& p : projectiles_) {
-        uint32_t col = p.kind == ProjectileKind::Fire  ? rgba(255, 150, 50)
+        uint32_t col = p.kind == ProjectileKind::Fire  ? rgba(255, 235, 160)
                        : p.kind == ProjectileKind::Ice ? rgba(170, 235, 255)
                        : p.reflected                   ? rgba(255, 255, 200)
                                                        : rgba(255, 140, 230);
@@ -647,11 +655,13 @@ void Game::drawEffects(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Vi
             continue;
         }
         switch (p.kind) {
-            case ProjectileKind::Fire:
-                solid->fireBall(p.pos, 0.35f, p.seed, 1.4f);
-                solid->light(p.pos, Vec3{1.0f, 0.5f, 0.15f} * 3.0f, 4.0f);
-                glowDot(glow, view, p.pos, 0.3f, withAlpha(col, 0.5f));
+            case ProjectileKind::Fire: {  // lanza de luz
+                Vec3 d = normalize(p.vel);
+                solid->ellipsoid(translate(p.pos) * basisY(d), {}, {0.07f, 0.5f, 0.07f}, rgba(255, 245, 210), Material::Glow);
+                solid->light(p.pos, Vec3{1.0f, 0.9f, 0.6f} * 2.5f, 4.0f);
+                glowDot(glow, view, p.pos, 0.3f, withAlpha(rgba(255, 230, 150), 0.5f));
                 break;
+            }
             case ProjectileKind::Ice: {
                 Vec3 d = normalize(p.vel);
                 solid->ellipsoid(translate(p.pos) * basisY(d) * rotateY(time_ * 10.0f), {}, {0.06f, 0.2f, 0.06f}, col,
@@ -901,8 +911,16 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
         uiText(ui, right, cy - 66, 18, buf, kUiText, FontFace::Title, Align::Right);
         segBar(d, right, cy - 40, maxHp_ * 2.6f, 18, hp_ / maxHp_, hpGhost_ / maxHp_, rgba(70, 245, 190),
                rgba(255, 60, 120), int(maxHp_ / 10));
-        segBar(d, right - 14, cy - 12, maxMp_ * 3.2f, 10, mp_ / maxMp_, mp_ / maxMp_, kUiPink, 0, int(maxMp_ / 5));
-        uiText(ui, right - 14 - maxMp_ * 3.2f - 12, cy - 16, 14, "PM", kUiPink, FontFace::Title, Align::Right);
+        segBar(d, right - 14, cy - 12, maxMp_ * 1.8f, 10, mp_ / maxMp_, mp_ / maxMp_, rgba(255, 225, 140), 0, 10);
+        uiText(ui, right - 14 - maxMp_ * 1.8f - 12, cy - 16, 14, "LUZ", rgba(255, 230, 150), FontFace::Title, Align::Right);
+        if (mp_ >= maxMp_) {  // Supernova lista
+            float pulse = 0.6f + 0.4f * std::sin(time_ * 6.0f);
+            uiText(ui, right - 14, cy + 4, 15, "V · SUPERNOVA", withAlpha(rgba(255, 230, 150), pulse), FontFace::Title,
+                   Align::Right, pulse);
+        }
+        if (lightAt(hero_.body.pos) > 0.3f)
+            uiText(ui, right - 14 - maxMp_ * 1.8f - 60, cy - 16, 13, "EN LA LUZ", rgba(255, 245, 200), FontFace::Title,
+                   Align::Right, 0.6f);
         // Lúmenes.
         diamond(d, w - 196, cy + 46, 9, kUiAmber);
         diamond(d, w - 196, cy + 46, 4, rgba(255, 250, 210));
@@ -926,7 +944,7 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
             if (i < 3) {
                 const SpellDef& s = spellDef(Spell(i));
                 std::snprintf(name, sizeof(name), "%s", s.name);
-                std::snprintf(value, sizeof(value), "%d PM", int(s.cost));
+                std::snprintf(value, sizeof(value), "%d luz", int(s.cost));
                 usable = mp_ >= s.cost;
                 accent = s.color;
             } else {
@@ -947,8 +965,8 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
             uiText(ui, x0 + 40, y + 4, 19, name, tc);
             uiText(ui, x0 + width - 10, y + 6, 15, value, sel ? rgba(60, 70, 110) : kUiDim, FontFace::Title, Align::Right);
         }
-        skewRect(d, x - 6, h - 30, x + 400, h - 8, 6, kUiPanel);
-        uiText(ui, x, h - 28, 14, "Clic atacar (mantén: cargar) · C esquivar · Shift correr · R fijar · Tab inventario", kUiDim);
+        skewRect(d, x - 6, h - 30, x + 560, h - 8, 6, kUiPanel);
+        uiText(ui, x, h - 28, 14, "Clic atacar · Q luz (mantén: absorber) · C esquivar · Shift correr · R fijar · Tab inventario", kUiDim);
     }
 
     // Objetivo fijado arriba a la derecha.
@@ -961,6 +979,7 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
         segBar(d, right, 56, 240, 12, f, f, kUiPink, 0, 10);
     }
 
+    if (novaFlash_ > 0) fillRect(d, 0, 0, w, h, withAlpha(rgba(255, 250, 235), novaFlash_ * 0.9f));
     // Jefe: barra grande arriba en el centro.
     for (const Enemy& e : enemies_)
         if (e.boss && e.alive()) {

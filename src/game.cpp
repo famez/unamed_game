@@ -32,16 +32,15 @@ const HitParams kHits[int(Move::Count)] = {
     {2.0f, 0.0f,  0.2f,  4.0f, 7.0f, true},   // Uppercut: gancho final
 };
 const SpellDef kSpells[int(Spell::Count)] = {
-    {"Fuego", 8, rgba(255, 140, 50)},
-    {"Hielo", 10, rgba(120, 220, 255)},
-    {"Cura", 25, rgba(120, 255, 150)},
+    {"Lanza de luz", 20, rgba(255, 230, 150)},
+    {"Refracción", 15, rgba(120, 220, 255)},
+    {"Calidez", 35, rgba(255, 160, 200)},
 };
 // clang-format on
 
 constexpr float kHeroRespawn = 3.0f;
 constexpr float kInvulnAfterHit = 0.8f;
 constexpr float kPerfectGuard = 0.35f;  // bloquear al poco de levantar la guardia rechaza al atacante
-constexpr float kMpRegen = 1.0f;        // PM por segundo
 constexpr float kHpOrb = 8, kMpOrb = 6;
 constexpr size_t kMaxParticles = 900;
 
@@ -129,7 +128,7 @@ void Game::update(float dt, const Controls& c) {
         hero_.downTimer += dt;
         if (hero_.downTimer > kHeroRespawn) respawnHero();
     } else {
-        mp_ = std::min(maxMp_, mp_ + kMpRegen * dt);
+        updateLight(dt, c);
         if (c.lockOn) cycleLock(c.camForward);
         if (c.unlock) lock_ = -1;
         if (c.commandScroll != 0)
@@ -349,6 +348,7 @@ bool Game::castSpell(Spell s) {
     if (!hero_.cast(yaw)) return false;
     mp_ -= d.cost;
     pendingSpell_ = s;
+    pendingNova_ = false;
     return true;
 }
 
@@ -405,7 +405,12 @@ void Game::castImpact(Spell s) {
 
 void Game::resolveImpact(Move m) {
     if (m == Move::Cast) {
-        castImpact(pendingSpell_);
+        if (pendingNova_) {
+            pendingNova_ = false;
+            supernova();
+        } else {
+            castImpact(pendingSpell_);
+        }
         return;
     }
     const WeaponStats& w = inv_.weaponStats();
@@ -548,7 +553,7 @@ void Game::killEnemy(Enemy& e) {
 }
 
 void Game::hurtHero(Vec3 dir, float damage, float knock, Enemy* source) {
-    if (hero_.downTimer >= 0 || hero_.rolling() || heroInvuln_ > 0) return;
+    if (hero_.downTimer >= 0 || hero_.rolling() || hero_.beaming() || heroInvuln_ > 0) return;
     Vec3 chest = hero_.body.pos + Vec3{0, 1.0f, 0};
     // Guardia de frente: no hace daño. Si se acaba de levantar, rechaza al atacante.
     if (hero_.guarding() && dot(dir, hero_.forward()) < -0.2f) {
@@ -865,10 +870,10 @@ void Game::updateProjectiles(float dt) {
 void Game::explodeFire(Vec3 point) {
     const float radius = 2.2f;
     float magic = inv_.weaponStats().magic;
-    blasts_.push_back({point, 0, 1.6f, random01() * 100.0f});
-    sound(Sfx::FireBoom, point);
-    spawnSparks(point, {0, 1, 0}, 18, rgba(255, 170, 60), 5.0f);
-    spawnRing(Vec3{point.x, groundHeight(point) + 0.05f, point.z}, radius, 0.4f, rgba(255, 150, 60));
+    sound(Sfx::FireBoom, point, 0.8f, 1.3f);
+    spawnRing(Vec3{point.x, groundHeight(point) + 0.06f, point.z}, 2.8f, 0.5f, rgba(255, 245, 200));
+    spawnSparks(point, {0, 1, 0}, 22, rgba(255, 240, 180), 5.0f);
+    spawnRing(Vec3{point.x, groundHeight(point) + 0.05f, point.z}, radius, 0.4f, rgba(255, 220, 140));
     shake_ = std::max(shake_, 0.15f);
     for (Enemy& e : enemies_) {
         if (!e.targetable()) continue;
@@ -878,8 +883,7 @@ void Game::explodeFire(Vec3 point) {
         float falloff = 1.0f - 0.5f * clampf(d / radius, 0, 1);
         Vec3 dir = normalize(flat(to));
         if (length(dir) < 0.5f) dir = hero_.forward();
-        e.burn = 2.5f;
-        hitEnemy(e, dir, (8 + magic * 2.0f) * falloff, 5.0f, 2.5f, true);
+        hitEnemy(e, dir, (12 + magic * 2.0f) * falloff, 5.0f, 2.5f, true);
     }
     for (Crate& c : crates_)
         if (!c.broken && length(c.box.center() - point) < radius) breakCrate(c);

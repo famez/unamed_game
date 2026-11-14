@@ -22,7 +22,7 @@ int fails = 0;
 void run(Game& g, float secs, Controls c = {}) {
     for (int i = 0; i < int(secs * 60); ++i) {
         g.update(dt, c);
-        c.jump = c.attack = c.dodge = c.interact = c.lockOn = c.unlock = c.runCommand = false;
+        c.jump = c.attack = c.dodge = c.interact = c.lockOn = c.unlock = c.runCommand = c.beam = c.nova = false;
         c.command = -1;
         c.commandScroll = 0;
     }
@@ -194,24 +194,80 @@ int main() {
         run(j, 1.0f);
         CHECK(hit < 100 && j.hp_ == 100, "onda de la seta: quieto %.0f PV, saltando %.0f PV", hit, j.hp_);
     }
-    {  // Magias: Fuego gasta PM y daña; Cura cura; sin PM no sale
+    {  // Técnicas de luz: la lanza gasta Luz y daña; Calidez cura; sin Luz no salen
         Game g = fresh();
         place(g, {0, 0, -10});
         addEnemy(g, EnemyKind::Shroom, {0, 0, -5});
+        float l0 = g.mp_;
         Controls c;
         c.command = 0;
         run(g, 1.5f, c);
-        CHECK(g.mp_ < 50 - 8 + 2, "Fuego gasta 8 PM (PM %.1f)", g.mp_);
-        CHECK(g.enemies_[0].health < 60 && g.enemies_[0].burn > 0, "y quema a la seta (vida %.0f)", g.enemies_[0].health);
+        CHECK(std::fabs(g.mp_ - (l0 - 20)) < 1e-3f, "la lanza de luz gasta 20 de Luz (queda %.0f)", g.mp_);
+        CHECK(g.enemies_[0].health < 60, "y daña a la seta (vida %.0f)", g.enemies_[0].health);
         g.hp_ = 40;
+        g.mp_ = 60;
         c.command = 2;
         run(g, 1.0f, c);
-        CHECK(g.hp_ > 80, "Cura: de 40 a %.0f PV", g.hp_);
+        CHECK(g.hp_ > 80, "Calidez: de 40 a %.0f PV", g.hp_);
         g.mp_ = 5;
         size_t before = g.projectiles_.size();
         c.command = 1;
         run(g, 0.6f, c);
-        CHECK(g.projectiles_.size() == before && g.mp_ >= 5, "sin PM no se lanza Hielo");
+        CHECK(g.projectiles_.size() == before && g.mp_ >= 5, "sin Luz no sale la Refraccion");
+    }
+    {  // La Luz: absorber, hacerse luz y Supernova
+        Game g = fresh();
+        place(g, {0, 0, -10});
+        Controls hold;
+        hold.absorb = true;
+        float l0 = g.mp_;
+        run(g, 1.0f, hold);
+        CHECK(g.mp_ == l0, "en una zona gris no hay luz que absorber");
+        g.nodes_[0].lit = true;
+        g.nodes_[0].litTime = 10;
+        place(g, g.nodes_[0].pos + Vec3{1.5f, 0, 0});
+        g.mp_ = 0;
+        run(g, 1.0f, hold);
+        CHECK(g.mp_ > 30 && g.hero_.body.pos.y > -0.01f, "junto a un nodo encendido se absorbe (%.0f de Luz en 1 s)", g.mp_);
+        // Haz: gratis dentro de la luz y llega más lejos; fuera cuesta 20.
+        Vec3 p0 = g.hero_.body.pos;
+        float l1 = g.mp_;
+        Controls beam = press(&Controls::beam);
+        beam.camForward = {0, 0, 1};
+        run(g, 0.8f, beam);
+        float lit = length(flat(g.hero_.body.pos - p0));
+        CHECK(g.mp_ == l1 && lit > 11.0f, "haz dentro de la luz: gratis y recorre %.1f m", lit);
+        place(g, {0, 0, -12});
+        g.mp_ = 50;
+        p0 = g.hero_.body.pos;
+        addEnemy(g, EnemyKind::Imp, {0, 0, -7}, AiState::Idle);
+        run(g, 0.8f, beam);
+        float grey = length(flat(g.hero_.body.pos - p0));
+        CHECK(g.mp_ == 30 && grey > 8.0f && grey < 11.5f, "haz en zona gris: cuesta 20 y recorre %.1f m", grey);
+        CHECK(g.enemies_[0].health < 30, "el haz atraviesa al Rastrero y le hace dano (vida %.0f)", g.enemies_[0].health);
+        CHECK(g.hp_ == 100, "durante el haz no te alcanzan");
+        // Arrancar el color a un Gris aturdido.
+        Enemy& e = g.enemies_[0];
+        e.state = AiState::Stagger;
+        e.stateTime = 0;
+        place(g, e.body.pos + Vec3{1.5f, 0, 0});
+        g.mp_ = 0;
+        float hpE = e.health;
+        e.state = AiState::Stagger;
+        run(g, 0.5f, hold);
+        CHECK(g.mp_ > 3 && (g.enemies_.empty() || g.enemies_[0].health < hpE), "absorber de un Gris aturdido: le arranca su color (+%.0f de Luz)", g.mp_);
+        // Supernova: solo con la Luz llena.
+        g.enemies_.clear();
+        for (int i = 0; i < 4; ++i) addEnemy(g, EnemyKind::Shroom, g.hero_.body.pos + Vec3{std::cos(float(i)) * 3, 0, std::sin(float(i)) * 3});
+        g.mp_ = 50;
+        run(g, 0.5f, press(&Controls::nova));
+        CHECK(g.enemies_[0].health == 60, "sin la Luz llena no hay Supernova");
+        g.mp_ = 100;
+        float c0 = g.croma_;
+        run(g, 1.0f, press(&Controls::nova));
+        bool all = true;
+        for (const Enemy& en : g.enemies_) all = all && en.health < 30;
+        CHECK(all && g.mp_ == 0 && g.croma_ > c0, "Supernova: dana a todos alrededor, gasta la Luz y devuelve croma");
     }
     {  // Hielo congela: el enemigo va más lento
         Game g = fresh();

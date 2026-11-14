@@ -42,6 +42,7 @@ struct OrbitCamera {
 struct PendingInput {
     bool jump = false, attack = false, dodge = false, lockOn = false, unlock = false, interact = false;
     bool advance = false;  // pasar la línea de diálogo
+    bool beam = false, nova = false;
     bool runCommand = false;
     int command = -1, scroll = 0;
 };
@@ -94,11 +95,18 @@ int main(int argc, char** argv) {
     if (!loadFonts(assetDir)) return 1;
     // Audio: música y efectos sintetizados; la música se guarda en ~/.cache/unamed_game.
     Audio audio;
+    float masterVolume = 1.0f;
     {
         const char* xdg = std::getenv("XDG_CACHE_HOME");
         const char* home = std::getenv("HOME");
         std::string cache = xdg && *xdg ? std::string(xdg) : std::string(home ? home : ".") + "/.cache";
-        audio.init(cache + "/unamed_game");
+        // --silencio: sin audio (pruebas de noche); --volumen 0..1: volumen general.
+        bool silent = false;
+        for (int i = 1; i < argc; ++i) {
+            if (std::strcmp(argv[i], "--silencio") == 0) silent = true;
+            if (std::strcmp(argv[i], "--volumen") == 0 && i + 1 < argc) masterVolume = clampf(float(std::atof(argv[i + 1])), 0, 1);
+        }
+        if (!silent) audio.init(cache + "/unamed_game");
     }
     double modelStart = platform::timeSeconds();
     buildModels(renderer);
@@ -114,6 +122,7 @@ int main(int argc, char** argv) {
     cam.target = game.hero().body.pos + Vec3{0, 1.0f, 0};
     Vec3 camVel;  // velocidad del muelle de la cámara
     float sceneBlend = 0;  // 0 = cámara de juego, 1 = plano de diálogo
+    float qHeld = -1;      // tiempo con Q mantenida (-1 = suelta)
     DrawFlags flags;
     // Modo debug (F12 / º, o --debug al arrancar): solo esqueletos y cajas en alambre.
     bool debugView = false;
@@ -237,6 +246,14 @@ int main(int argc, char** argv) {
                 pending.unlock |= input.wasPressed(Key::X);
                 pending.interact |= input.wasPressed(Key::F);
                 pending.runCommand |= input.wasPressed(Key::E);
+                pending.nova |= input.wasPressed(Key::V);
+                // Q: pulsación corta = hacerse luz; mantenida = absorber.
+                if (input.wasPressed(Key::Q)) qHeld = 0;
+                if (input.isDown(Key::Q)) qHeld += float(frameDt);
+                else if (qHeld >= 0) {
+                    if (qHeld < 0.22f) pending.beam = true;
+                    qHeld = -1;
+                }
             }
             pending.scroll -= int(input.wheel);  // rueda arriba = entrada de arriba
             const Key slotKeys[] = {Key::N1, Key::N2, Key::N3, Key::N4, Key::N5, Key::N6};
@@ -278,6 +295,9 @@ int main(int argc, char** argv) {
                 c.runCommand = pending.runCommand;
                 c.advance = pending.advance;
                 c.sprint = playing && input.isDown(Key::Shift);
+                c.absorb = playing && qHeld >= 0.22f;
+                c.beam = pending.beam;
+                c.nova = pending.nova;
                 c.attackHeld = playing && captured && input.mouseLeft && !game.dialogueBlocking();
                 c.commandScroll = pending.scroll;
                 c.camForward = cam.forwardFlat();
@@ -455,7 +475,7 @@ int main(int argc, char** argv) {
             stems[int(Stem::Pulse)] = game.inCombat() && !game.dialogueBlocking() ? 0.8f : 0.0f;
             stems[int(Stem::Shimmer)] = memory ? 0.3f : smoothstep01((croma - 0.55f) / 0.2f) * 0.75f;
             audio.setStemGains(stems);
-            audio.setMasterVolume(paused ? 0.35f : 0.8f);
+            audio.setMasterVolume((paused ? 0.35f : 0.8f) * masterVolume);
         }
 
         // Estadísticas en el título de la ventana cada medio segundo.

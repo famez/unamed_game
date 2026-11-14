@@ -53,6 +53,9 @@ struct Controls {
     Vec3 camForward{0, 0, 1};  // hacia dónde mira la cámara (para elegir objetivo)
     bool advance = false;      // pasar la línea de diálogo
     bool sprint = false;       // mantener: correr
+    bool absorb = false;       // mantener Q: absorber luz
+    bool beam = false;         // pulsar Q: hacerse luz (haz)
+    bool nova = false;         // V con la Luz llena: Supernova
     bool attackHeld = false;   // ataque mantenido (corte cargado)
 };
 
@@ -289,6 +292,8 @@ public:
     // Posición del objetivo fijado (para la cámara). Falso si no hay.
     bool lockTarget(Vec3& pos) const;
     float cameraShake() const { return shake_; }
+    // Intensidad de luz (0..1) en un punto: zonas de nodos encendidos y faroles.
+    float lightAt(Vec3 p) const;
     // Escenario y objetivo actuales.
     LevelId level() const { return level_; }
     const std::string& levelName() const { return levelName_; }
@@ -362,6 +367,8 @@ private:
     void notify(const std::string& text, uint32_t color);
     void heal(float hp, float mp);
     void castImpact(Spell s);
+    void supernova();
+    void updateLight(float dt, const Controls& c);
     void spawnSparks(Vec3 pos, Vec3 dir, int count, uint32_t color, float speed, bool stars = true);
     void spawnRing(Vec3 pos, float radius, float life, uint32_t color);
     float groundHeight(Vec3 p) const;
@@ -415,13 +422,17 @@ private:
     Character hero_;
     Inventory inv_;
     float hp_ = 100, maxHp_ = 100;
-    float mp_ = 50, maxMp_ = 50;
+    float mp_ = 40, maxMp_ = 100;  // Luz: se absorbe del mundo (no se regenera sola)
     float hpGhost_ = 100;     // barra roja que va detrás al perder vida
     float heroInvuln_ = 0;    // tras un golpe, un momento sin recibir otro
     float heroFlash_ = 0;
     float guardFlash_ = 0;    // destello de bloqueo (perfecto = más fuerte)
     bool perfectGuard_ = false;
     Spell pendingSpell_ = Spell::Fire;  // la que sale al llegar el impacto del Cast
+    bool pendingNova_ = false;          // el Cast en curso es la Supernova
+    std::vector<int> beamHits_;         // Grises ya atravesados por el haz en curso
+    float absorbHint_ = 0;              // para no repetir el aviso de "no hay luz"
+    float novaFlash_ = 0;
     int commandSel_ = 0;
     int lock_ = -1;           // enemigo fijado
     std::vector<Enemy> enemies_;

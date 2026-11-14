@@ -45,6 +45,9 @@ brizna: Bien. Respira, si es que respiras.
 brizna: Mira la plaza: tres nodos cromáticos, apagados. Si los enciendes, el color volverá a este barrio.
 brizna: Uno junto a las cajas del oeste, otro en la terraza y otro en la plataforma alta. Tendrás que saltar.
 sistema: Acércate a un nodo y pulsa F para encenderlo. Los Grises cercanos te lo impedirán.
+brizna: Una cosa más. Tú no solo llevas color: puedes beberte la luz.
+brizna: Junto a un nodo encendido, mantén Q y absórbela. Con ella podrás hacerte luz tú mismo: pulsa Q y cruzarás lo que sea.
+sistema: Q: hacerse luz (cuesta Luz; gratis dentro de las zonas con color) · Mantén Q: absorber luz (también de un Gris aturdido) · V con la Luz llena: Supernova.
 
 == domo
 !aviso
