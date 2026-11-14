@@ -1,87 +1,105 @@
-# Iridia · biblia de la historia
+# La Hora Detenida · biblia de la historia
 
-Documento de referencia para escribir los guiones (`assets/story/`). Lo que aquí se
-explica **no se cuenta al jugador de golpe**: se revela por capas, capítulo a capítulo.
+Documento de referencia para escenarios, escenas y enemigos. **Casi nada de esto se dice
+con palabras**: se ve. Si algo se puede contar con un plano, un objeto o un eco, no se
+escribe.
+
+## Reglas de tono
+
+- **Adulto y sobrio.** Ni terror ni ternura. Referentes: *Little Nightmares* (contar sin
+  hablar), *Prince of Persia* (luz y sombra en un mismo cuerpo, con peso), *Inside*.
+- **Casi sin diálogo.** Nadie explica el mundo. Como mucho, una frase suelta en un momento
+  que la merezca (y nunca dos seguidas). El protagonista no habla.
+- **Tutoriales mínimos.** Un icono de tecla y una palabra, en el momento en que hace falta
+  y solo la primera vez («Q · Entrar»). Nada de párrafos de ayuda.
+- **Escenas visuales.** La cámara encuadra, el juego se calla y algo ocurre: una silueta
+  que repite un gesto, una farola que se apaga sola, alguien que mira desde lejos.
+- **Paleta.** Se empieza en gris de verdad: hormigón, niebla, poca luz. El color aparece
+  poco y cuenta algo (la luz cálida y quemada; la sombra fría, violeta y profunda).
+- **Nada es el mal.** La luz y la sombra son dos mitades necesarias. El problema es que se
+  separaron.
 
 ## El mundo
 
-**Iridia** es una ciudad construida sobre terrazas flotantes alrededor de **el Faro**,
-una torre-prisma que recogía la luz del cielo y la repartía por los barrios a través de
-los **nodos cromáticos**. En Iridia el color no es decoración: es **memoria**. Cada
-recuerdo vivido con intensidad deja un poso de color; la gente guardaba sus recuerdos
-más queridos en pequeños prismas personales y el Faro los mantenía vivos.
+**Iridia** vivía al ritmo de una marea: de día la luz (recordar, sentir, vivir), de noche
+la sombra (descansar, olvidar, curar). El **Faro**, en el centro, movía esa marea.
 
-Hace trescientas noches llegó **el Apagón**: el Faro se encendió con una luz blanca
-imposible durante un instante y después se apagó. Todo el color de la ciudad —todos los
-recuerdos— fue absorbido. Los habitantes se convirtieron en **Grises**: personas vaciadas
-que ya no recuerdan quiénes son y que, por instinto, persiguen cualquier resto de color
-para llenarse con él. No son monstruos. Por eso disiparlos duele.
+Hace trescientas noches alguien **detuvo el Faro en el instante exacto del crepúsculo**. La
+ciudad se quedó parada entre el día y la noche: **gris**. La luz y la sombra no
+desaparecieron; se separaron y se estancaron en los extremos. Los relojes de toda la
+ciudad marcan la misma hora.
 
-Cuando el Prismero disipa a un Gris, su color vuelve al mundo… y un fragmento de su
-memoria pasa al Prismero. El jugador gana recuerdos que no son suyos.
+## Los atrapados (enemigos)
 
-## Personajes
+No son monstruos: son los habitantes, atascados en uno de los dos extremos. Liberarlos no
+los mata; los devuelve a la marea. Por eso no hay celebración al vencerlos.
 
-- **El Prismero** (protagonista, sin nombre al principio). Despierta dentro del prisma
-  de la fuente de la plaza. No recuerda nada. Lleva color encima y un arma de luz sólida.
-  *Verdad (no se revela hasta el capítulo 4):* no nació. Fue construido la noche del
-  Apagón con el color que se pudo salvar; tiene la cara de **Teo**, un chico de dieciséis
-  años, pero está hecho de los recuerdos de cientos de personas. Es un "nosotros" que
-  cree ser un "yo".
-- **Brizna**. Una chispa de luz que le guía. Bromista, tierna, nerviosa cuando se habla
-  del pasado. *Verdad:* es lo que queda de **Alba**, la ingeniera jefe del Faro y hermana
-  mayor de Teo. Teo murió unos días antes del Apagón. Alba quiso usar el Faro para
-  reunir los recuerdos que la ciudad tenía de su hermano y devolverle la vida; el Faro
-  se desbordó y se tragó el color de todos. Brizna lo sabe y lo calla: ayudar al
-  Prismero a devolver el color es su penitencia.
-- **La Archivera** (antagonista). Antes era **Ilse**, la bibliotecaria del Archivo, la
-  persona que custodiaba los recuerdos de la ciudad. Tras el Apagón fue la única que no
-  se volvió del todo gris: decidió que el olvido es una piedad. "El color duele. Yo os di
-  la paz." Quiere recuperar el color que lleva el Prismero y encerrarlo para siempre en el
-  Archivo. No es malvada: ha visto demasiado dolor.
-- **Nora** (capítulo 1). Vendedora de farolillos del mercado. Esperaba cada tarde a su
-  hija **Lía**, que salió la noche del Apagón y nunca volvió. Su forma de Gris es la más
-  grande del mercado: "la que espera". Al liberarla recuerda a Lía y, en paz, le deja al
-  Prismero su farolillo.
+- **Deslumbrados (luz).** No pueden dejar de recordar: reviven su mejor o su peor día en
+  bucle hasta quemarse. Siluetas blancas, sobreexpuestas, que vibran y dejan estela.
+  Rápidos, agresivos, golpes que ciegan. Sueltan **Luz**. Débiles ante la sombra.
+- **Vaciados (sombra).** Lo olvidaron todo y buscan cualquier recuerdo con el que
+  llenarse. Formas oscuras y estiradas, sigilosas; los **sabuesos** (cuadrúpedos, cabeza
+  baja, olfatean el rastro de luz) cazan en manada. Acechan desde lo oscuro y flanquean.
+  Sueltan **Sombra**. Débiles ante la luz.
+- Todos **aprenden** (aprendizaje por refuerzo, compartido por especie y guardado entre
+  partidas): si repites una táctica, dejará de funcionar. Los jefes se adaptan dentro del
+  mismo combate.
+
+## El protagonista
+
+No tiene nombre. Despierta en una fuente seca de una plaza gris, sin fuerzas: apenas
+camina, no sabe pelear. Está hecho de las dos cosas —recuerdos que se guardaron y
+recuerdos que se olvidaron—: es el único ser de la ciudad que puede ser **luz y sombra**.
+
+- **Luz.** Entrar en las fuentes de luz, saltar de una a otra, emboscar desde ellas;
+  absorber luz; golpes rápidos.
+- **Sombra.** Fundirse con las zonas oscuras y moverse por ellas sin ser visto; romper
+  fuentes de luz para crear oscuridad; golpes que absorben luz; agujeros negros.
+- Se cambia de una a otra según convenga. Las dos se estorban: romper una farola para
+  crear sombra te quita esa farola como camino de luz. De ahí salen los acertijos.
+- Empieza sin nada. La luz se recupera en el capítulo 1; la sombra al final de ese
+  capítulo, tras el primer encuentro con Ilse.
+
+## Las dos que esperan
+
+- **La chispa (Alba).** Una mota de luz que le guía sin hablar: se adelanta, se detiene
+  donde hay algo que mirar. Es lo que queda de **Alba**, la ingeniera del Faro. Ella lo
+  detuvo: la noche que tocaba era la primera en la que empezaría a olvidar a su hermano
+  **Teo**, muerto unos días antes. Quiere que la marea vuelva… pero inclinada hacia la luz,
+  para no olvidar nunca.
+- **Ilse, la Archivera.** Guardiana del Archivo, donde la ciudad dejaba de noche lo que
+  ya no podía cargar. Se la ve a lo lejos, en lo alto, mirando. A veces aparta Vaciados
+  del camino; a veces los suelta contra él. Quiere que la marea vuelva… inclinada hacia la
+  sombra, para que nadie vuelva a sufrir lo que sufrió esta ciudad.
+
+Ninguna de las dos miente; las dos tienen razón a medias.
+
+## Objetivo
+
+**Volver a poner en marcha la hora.** Cada barrio está atascado en un extremo; el
+protagonista lo equilibra (encender lo que se apagó, apagar lo que quema) y gana poderes
+de los dos lados. Al final llega al Faro.
+
+El final no es «luz o sombra»: reiniciar la marea significa que Alba empezará a olvidar a
+Teo, y que el protagonista —hecho de recuerdos prestados— cambiará con ella. Qué se queda
+él es la última decisión.
 
 ## Temas
 
-1. **¿Somos nuestros recuerdos?** Si el Prismero está hecho de memorias ajenas, ¿quién es?
-2. **El duelo y la culpa.** Alba no supo dejar ir a su hermano y rompió la ciudad.
-3. **El olvido como piedad o como robo.** La Archivera tiene parte de razón.
-4. **Devolver lo que no es tuyo.** Cada color que el Prismero libera es alguien que
-   vuelve a ser quien era… y un trozo menos de sí mismo.
+1. El duelo necesita las dos mitades: recordar y poder dejar de hacerlo.
+2. La culpa de quien detuvo el tiempo por amor.
+3. ¿Quién eres si estás hecho de lo que otros recordaron y olvidaron?
 
-## Estructura (5 capítulos)
+## Capítulo 1 · La plaza parada (lo que se juega ahora)
 
-| Cap. | Título | Escenarios | Revelación |
-|---|---|---|---|
-| 1 | La primera luz | Plaza del Prisma · Mercado de los Ecos · Puente de los Faroles | Los Grises fueron personas. Brizna oculta algo ("Teo"). Aparece la Archivera. |
-| 2 | Jardines de cristal | Invernaderos flotantes | El Prismero recuerda cosas que nunca vivió. |
-| 3 | El Archivo sin palabras | La biblioteca de Ilse | Quién fue Alba; qué pasó la noche del Apagón. |
-| 4 | El barrio del reloj parado | La casa de Teo | El Prismero no es Teo. Brizna es Alba. |
-| 5 | El Faro | La torre | Elegir: quedarse los recuerdos (ser alguien) o devolverlos todos (dejar de ser). |
-
-## Capítulo 1 · La primera luz (lo que se juega ahora)
-
-- **Plaza del Prisma.** Despertar sin memoria; primeros Grises; Brizna explica el Faro y
-  los nodos. Al encender cada nodo vuelve el color a un trozo de la plaza y aparecen ecos
-  de memoria: una mujer (Alba) que le habla a alguien a quien quiere mucho. La puerta del
-  mercado se abre.
-- **Mercado de los Ecos.** Los Eco repiten frases de sus vidas ("¿Has visto a mi
-  hija?"). El puesto de farolillos de Nora; su forma de Gris, enorme, defiende la plaza.
-  Al liberarla, su recuerdo: Lía. Primera vez que el Prismero siente el recuerdo de otro
-  como propio.
-- **Puente de los Faroles.** Los faroles los hizo Nora; encenderlos es honrarla. Un eco
-  en el centro del puente: un chico (Teo) asustado de la altura, su hermana riéndose.
-  En la otra orilla espera la Archivera: "Lo que llevas dentro no es tuyo". Brizna, a
-  gritos: "¡Teo, no la escuches!". Silencio. El capítulo termina con esa palabra en el aire.
-
-## Reglas para escribir
-
-- Frases cortas. Nada de exposición larga: el mundo se entiende por lo que la gente dice
-  de pasada.
-- Brizna nunca miente del todo: calla, cambia de tema o hace una broma.
-- El Prismero habla poco y pregunta mucho. Su nombre en pantalla es "???".
-- Cada escenario necesita al menos un momento pequeño y humano (un objeto, una frase de un
-  Eco) además de la trama.
+- **Plaza del Reloj.** Despertar en la fuente seca. Niebla, gris. Andar cuesta. La chispa
+  aparece y se aleja: hay que seguirla. Un reloj de pie, parado. Primer Vaciado. Primera
+  fuente de luz encendida: se aprende a entrar en ella. Ecos: una mujer (Alba) arreglando
+  una farola con un chico (Teo) que le sostiene la escalera.
+- **Mercado Quemado.** Todo blanco y sobreexpuesto: aquí la gente no dejó de recordar.
+  Deslumbrados repitiendo el mismo gesto (alguien que vende, alguien que espera en un
+  puesto de farolillos). Un jefe: la vendedora de farolillos, convertida en una figura que
+  ya no deja de esperar.
+- **Puente.** Farolas sobre el vacío: el puente solo se cruza de luz en luz. Al otro lado,
+  Ilse. No hay palabras: extiende la mano, toda la luz del puente se apaga y algo de su
+  sombra se queda dentro del protagonista. Fin del capítulo.
