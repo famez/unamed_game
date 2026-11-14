@@ -312,6 +312,11 @@ public:
         return out;
     }
     bool inCombat() const;
+    bool bossAlive() const {
+        for (const Enemy& e : enemies_)
+            if (e.boss && e.alive()) return true;
+        return false;
+    }
     // "El color es energía": 0 = ciudad gris y apagada, 1 = a todo color.
     float croma() const { return croma_; }
     // Apertura extra del campo de visión (radianes) en acercamientos y remates.

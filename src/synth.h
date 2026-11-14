@@ -25,11 +25,13 @@ enum class Stem { Pad, Melody, Pulse, Shimmer, Count };
 struct Music {
     StereoBuffer stems[int(Stem::Count)];
     float loopSeconds = 0;
+    size_t pos = 0;  // posición de reproducción (la usa el mezclador)
 };
 
-// "La primera luz": Si menor / Re mayor, 84 pulsaciones por minuto, 16 compases en bucle
-// sin costura (las colas de la reverberación pasan del final al principio).
-Music renderMusic();
+// Una pista por escenario y la del jefe. Cada una en bucle sin costura (las colas de la
+// reverberación pasan del final al principio).
+enum class TrackId { Plaza, Mercado, Puente, Jefe, Count };
+Music renderMusic(TrackId id);
 StereoBuffer renderSfx(Sfx id);
 
 bool saveWav(const std::string& path, const StereoBuffer& buf);

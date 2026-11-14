@@ -26,7 +26,7 @@ PaWrite paWrite = nullptr;
 PaFree paFree = nullptr;
 
 constexpr int kBlock = 512;  // frames por envío (~12 ms)
-constexpr int kMusicVersion = 2;  // cambiarlo regenera la caché si cambia la partitura
+constexpr int kMusicVersion = 3;  // cambiarlo regenera la caché si cambia la música
 
 void makeDirs(const std::string& path) {
     for (size_t i = 1; i <= path.size(); ++i)
@@ -59,36 +59,70 @@ bool Audio::init(const std::string& cacheDir) {
     voices_.reserve(64);
     running_ = true;
     thread_ = std::thread(&Audio::run, this);
-    // La música: de la caché si ya se generó; si no, se sintetiza en segundo plano (tarda
-    // un poco) y se guarda para la próxima vez.
-    loader_ = std::thread([this, cacheDir] {
-        Music m;
-        bool cached = true;
-        for (int s = 0; s < int(Stem::Count) && cached; ++s) {
-            char name[64];
-            std::snprintf(name, sizeof(name), "/musica_v%d_capa%d.wav", kMusicVersion, s);
-            cached = loadWav(cacheDir + name, m.stems[s]);
-        }
-        if (!cached) {
-            m = renderMusic();
-            makeDirs(cacheDir);
-            for (int s = 0; s < int(Stem::Count); ++s) {
-                char name[64];
-                std::snprintf(name, sizeof(name), "/musica_v%d_capa%d.wav", kMusicVersion, s);
-                saveWav(cacheDir + name, m.stems[s]);
-            }
-        }
-        std::lock_guard<std::mutex> lock(mutex_);
-        music_ = std::move(m);
-        musicPos_ = 0;
-        musicReady_ = true;
-    });
+    cacheDir_ = cacheDir;
+    loader_ = std::thread(&Audio::loaderLoop, this);
     return true;
 }
 
+// Prepara las pistas que se piden: de la caché si ya se generaron; si no, se sintetizan
+// (unos segundos) y se guardan para la próxima vez.
+void Audio::loaderLoop() {
+    while (running_) {
+        int id = -1;
+        {
+            std::unique_lock<std::mutex> lock(mutex_);
+            loaderCv_.wait(lock, [&] { return !running_ || (wanted_ >= 0 && !tracks_.count(wanted_)); });
+            if (!running_) return;
+            id = wanted_;
+        }
+        auto m = std::make_unique<Music>();
+        bool cached = true;
+        auto path = [&](int stem) {
+            char name[96];
+            std::snprintf(name, sizeof(name), "/musica_v%d_pista%d_capa%d.wav", kMusicVersion, id, stem);
+            return cacheDir_ + name;
+        };
+        for (int st = 0; st < int(Stem::Count) && cached; ++st) cached = loadWav(path(st), m->stems[st]);
+        if (!cached) {
+            *m = renderMusic(TrackId(id));
+            makeDirs(cacheDir_);
+            for (int st = 0; st < int(Stem::Count); ++st) saveWav(path(st), m->stems[st]);
+        }
+        std::lock_guard<std::mutex> lock(mutex_);
+        tracks_[id] = std::move(m);
+        if (wanted_ == id && current_ != id) {
+            previous_ = current_;
+            current_ = id;
+            fade_ = 0;
+            tracks_[id]->pos = 0;
+        }
+    }
+}
+
+void Audio::playTrack(TrackId tid) {
+    int id = int(tid);
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!running_ || wanted_ == id) return;
+    wanted_ = id;
+    if (tracks_.count(id)) {
+        if (current_ != id) {
+            previous_ = current_;
+            current_ = id;
+            fade_ = 0;
+            tracks_[id]->pos = 0;
+        }
+    } else {
+        loaderCv_.notify_one();
+    }
+}
+
 void Audio::shutdown() {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        running_ = false;
+    }
+    loaderCv_.notify_all();
     if (loader_.joinable()) loader_.join();
-    running_ = false;
     if (thread_.joinable()) thread_.join();
     if (stream_ && paFree) paFree(stream_);
     stream_ = nullptr;
@@ -117,27 +151,46 @@ void Audio::run() {
     }
 }
 
+void Audio::mixTrack(Music& m, float* acc, int frames, const float* g0, const float* g1) {
+    size_t len = m.stems[0].frames();
+    for (int st = 0; st < int(Stem::Count); ++st) {
+        if (g0[st] < 1e-4f && g1[st] < 1e-4f) continue;
+        const int16_t* d = m.stems[st].data.data();
+        for (int i = 0; i < frames; ++i) {
+            size_t p = (m.pos + size_t(i)) % len;
+            float g = (g0[st] + (g1[st] - g0[st]) * float(i) / float(frames)) / 32768.0f;
+            acc[i * 2] += float(d[p * 2]) * g;
+            acc[i * 2 + 1] += float(d[p * 2 + 1]) * g;
+        }
+    }
+    m.pos = (m.pos + size_t(frames)) % len;
+}
+
 void Audio::mix(int16_t* out, int frames) {
     std::vector<float> acc(size_t(frames) * 2, 0.0f);
     std::lock_guard<std::mutex> lock(mutex_);
-    // Música: las capas a la vez, cada una con su volumen (rampa suave por bloque).
-    if (musicReady_ && music_.stems[0].frames() > 0) {
-        size_t len = music_.stems[0].frames();
-        for (int s = 0; s < int(Stem::Count); ++s) {
-            float g0 = stemGain_[s];
-            float g1 = g0 + (stemTarget_[s] - g0) * 0.04f;  // ~1,5 s para llegar
-            stemGain_[s] = g1;
-            if (g0 < 1e-4f && g1 < 1e-4f) continue;
-            const int16_t* d = music_.stems[s].data.data();
-            for (int i = 0; i < frames; ++i) {
-                size_t p = (musicPos_ + size_t(i)) % len;
-                float g = (g0 + (g1 - g0) * float(i) / float(frames)) / 32768.0f;
-                acc[size_t(i) * 2] += float(d[p * 2]) * g;
-                acc[size_t(i) * 2 + 1] += float(d[p * 2 + 1]) * g;
-            }
-        }
-        musicPos_ = (musicPos_ + size_t(frames)) % len;
+    // Música: las capas a la vez, cada una con su volumen (rampa suave por bloque); la
+    // pista anterior se apaga mientras entra la nueva.
+    float f0 = fade_;
+    fade_ = std::min(1.0f, fade_ + float(frames) / (2.0f * kSampleRate));
+    float g0[int(Stem::Count)], g1[int(Stem::Count)];
+    for (int st = 0; st < int(Stem::Count); ++st) {
+        g0[st] = stemGain_[st];
+        stemGain_[st] += (stemTarget_[st] - stemGain_[st]) * 0.04f;  // ~1,5 s para llegar
+        g1[st] = stemGain_[st];
     }
+    auto play = [&](int id, float a0, float a1) {
+        auto it = tracks_.find(id);
+        if (it == tracks_.end() || it->second->stems[0].frames() == 0) return;
+        float s0[int(Stem::Count)], s1[int(Stem::Count)];
+        for (int st = 0; st < int(Stem::Count); ++st) {
+            s0[st] = g0[st] * a0;
+            s1[st] = g1[st] * a1;
+        }
+        mixTrack(*it->second, acc.data(), frames, s0, s1);
+    };
+    if (current_ >= 0) play(current_, f0, fade_);
+    if (previous_ >= 0 && f0 < 1.0f) play(previous_, 1.0f - f0, 1.0f - fade_);
     // Efectos: lectura con interpolación lineal (para cambiar el tono) y panorámica.
     for (Voice& v : voices_) {
         const std::vector<int16_t>& d = v.buf->data;

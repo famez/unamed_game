@@ -472,9 +472,15 @@ int main(int argc, char** argv) {
             float stems[int(Stem::Count)];
             stems[int(Stem::Pad)] = 0.85f;
             stems[int(Stem::Melody)] = memory ? 0.0f : smoothstep01((croma - 0.2f) / 0.15f) * 0.9f;
-            stems[int(Stem::Pulse)] = game.inCombat() && !game.dialogueBlocking() ? 0.8f : 0.0f;
+            stems[int(Stem::Pulse)] = (game.inCombat() && !game.dialogueBlocking()) || game.bossAlive() ? 0.8f : 0.0f;
             stems[int(Stem::Shimmer)] = memory ? 0.3f : smoothstep01((croma - 0.55f) / 0.2f) * 0.75f;
             audio.setStemGains(stems);
+            // Una pista por escenario; la del jefe mientras haya uno.
+            TrackId track = game.bossAlive() ? TrackId::Jefe
+                            : game.level() == LevelId::Mercado ? TrackId::Mercado
+                            : game.level() == LevelId::Puente  ? TrackId::Puente
+                                                                : TrackId::Plaza;
+            audio.playTrack(track);
             audio.setMasterVolume((paused ? 0.35f : 0.8f) * masterVolume);
         }
 
