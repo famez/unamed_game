@@ -31,20 +31,34 @@ float smin(float a, float b, float k) {
 }
 
 // Primitivas ya colocadas en la pose de reposo (espacio del modelo).
+// Primitiva en el espacio de su articulación; `toLocal` lleva un punto del modelo a ese
+// espacio (en la postura de reposo).
 struct PlacedPrim {
     int joint;
     bool capsule;
     Vec3 a, b, r;
     uint32_t color;
     float blend;
-    Vec3 lo, hi;  // caja envolvente (para saltarse las lejanas)
+    Mat4 toLocal;
+    Vec3 lo, hi;  // caja envolvente en el espacio del modelo (para saltarse las lejanas)
 };
+
+// Inversa de una matriz rígida (rotación + traslación): Rᵀ y -Rᵀ·t.
+Mat4 rigidInverse(const Mat4& m) {
+    Mat4 r = Mat4::identity();
+    for (int c = 0; c < 3; ++c)
+        for (int k = 0; k < 3; ++k) r.m[c * 4 + k] = m.m[k * 4 + c];
+    Vec3 t = translationOf(m);
+    for (int k = 0; k < 3; ++k) r.m[12 + k] = -(r.m[k] * t.x + r.m[4 + k] * t.y + r.m[8 + k] * t.z);
+    return r;
+}
 
 struct Field {
     std::vector<PlacedPrim> prims;
 
     float primDist(const PlacedPrim& p, Vec3 q) const {
-        return p.capsule ? sdCapsule(q, p.a, p.b, p.r.x) : sdEllipsoid(q - p.a, p.r);
+        Vec3 l = transformPoint(p.toLocal, q);
+        return p.capsule ? sdCapsule(l, p.a, p.b, p.r.x) : sdEllipsoid(l - p.a, p.r);
     }
     float eval(Vec3 q) const {
         float d = 1e9f;
@@ -69,23 +83,29 @@ struct Field {
 }  // namespace
 
 void buildSkinnedMesh(const ModelDef& def, std::vector<SkinVertex>& verts, std::vector<uint32_t>& indices) {
-    // Pose de reposo: rotaciones a cero; las matrices son traslaciones puras.
     Mat4 bind[kMaxJoints];
-    computeWorldMatrices(def.rig, def.jointCount, Pose{}, Mat4::identity(), bind);
+    bindMatrices(def, bind);
     Field f;
     Vec3 lo{1e9f, 1e9f, 1e9f}, hi{-1e9f, -1e9f, -1e9f};
     for (int i = 0; i < def.primCount; ++i) {
         const BodyPrim& bp = def.prims[i];
-        PlacedPrim p{bp.joint, bp.capsule, transformPoint(bind[bp.joint], bp.a), transformPoint(bind[bp.joint], bp.b),
-                     bp.r, bp.color, bp.blend, {}, {}};
+        PlacedPrim p{bp.joint, bp.capsule, bp.a, bp.b, bp.r, bp.color, bp.blend, rigidInverse(bind[bp.joint]), {}, {}};
+        // Caja envolvente local → las 8 esquinas al espacio del modelo.
         Vec3 ext = bp.capsule ? Vec3{bp.r.x, bp.r.x, bp.r.x} : bp.r;
-        Vec3 pmin = p.a, pmax = p.a;
+        Vec3 lmin = bp.a, lmax = bp.a;
         if (bp.capsule) {
-            pmin = {std::min(p.a.x, p.b.x), std::min(p.a.y, p.b.y), std::min(p.a.z, p.b.z)};
-            pmax = {std::max(p.a.x, p.b.x), std::max(p.a.y, p.b.y), std::max(p.a.z, p.b.z)};
+            lmin = {std::min(bp.a.x, bp.b.x), std::min(bp.a.y, bp.b.y), std::min(bp.a.z, bp.b.z)};
+            lmax = {std::max(bp.a.x, bp.b.x), std::max(bp.a.y, bp.b.y), std::max(bp.a.z, bp.b.z)};
         }
-        p.lo = pmin - ext;
-        p.hi = pmax + ext;
+        lmin = lmin - ext;
+        lmax = lmax + ext;
+        p.lo = {1e9f, 1e9f, 1e9f};
+        p.hi = {-1e9f, -1e9f, -1e9f};
+        for (int c = 0; c < 8; ++c) {
+            Vec3 w = transformPoint(bind[bp.joint], {c & 1 ? lmax.x : lmin.x, c & 2 ? lmax.y : lmin.y, c & 4 ? lmax.z : lmin.z});
+            p.lo = {std::min(p.lo.x, w.x), std::min(p.lo.y, w.y), std::min(p.lo.z, w.z)};
+            p.hi = {std::max(p.hi.x, w.x), std::max(p.hi.y, w.y), std::max(p.hi.z, w.z)};
+        }
         lo = {std::min(lo.x, p.lo.x), std::min(lo.y, p.lo.y), std::min(lo.z, p.lo.z)};
         hi = {std::max(hi.x, p.hi.x), std::max(hi.y, p.hi.y), std::max(hi.z, p.hi.z)};
         f.prims.push_back(p);
@@ -264,10 +284,23 @@ const BodyPrim kHeroPrims[] = {
 #undef E
 #undef C
 
+// Postura en A: brazos abiertos ~35° y piernas algo separadas, para que la unión suave no
+// funda la mano con la cadera ni un muslo con el otro.
+Pose heroBindPose() {
+    Pose p;
+    p.rotation[ShoulderL].z = 0.6f;
+    p.rotation[ShoulderR].z = -0.6f;
+    p.rotation[HipL].z = 0.12f;
+    p.rotation[HipR].z = -0.12f;
+    return p;
+}
+const Pose kHeroBind = heroBindPose();
+
 ModelDef kModels[int(ModelId::Count)] = {
-    {kSkeleton, JointCount, kHeroPrims, int(sizeof(kHeroPrims) / sizeof(kHeroPrims[0])), 0.011f},
+    {kSkeleton, JointCount, kHeroPrims, int(sizeof(kHeroPrims) / sizeof(kHeroPrims[0])), 0.011f, &kHeroBind},
 };
 std::vector<BodyPrim> gEnemyPrims[3];
+Pose gEnemyBind[3];
 
 // Los enemigos reutilizan sus formas (enemy.cpp): las opacas y gruesas forman la malla.
 void defineEnemyModels() {
@@ -280,7 +313,8 @@ void defineEnemyModels() {
             if (enemyShapeIsRigid(sh)) continue;
             prims.push_back({sh.joint, false, sh.center, {}, sh.radii, sh.color, 0.03f});
         }
-        kModels[1 + k] = {d.rig, d.jointCount, prims.data(), int(prims.size()), k == 1 ? 0.017f : 0.012f};
+        gEnemyBind[k] = enemyBindPose(EnemyKind(k));
+        kModels[1 + k] = {d.rig, d.jointCount, prims.data(), int(prims.size()), k == 1 ? 0.017f : 0.012f, &gEnemyBind[k]};
     }
 }
 
@@ -292,6 +326,10 @@ bool enemyShapeIsRigid(const EnemyShape& s) { return s.glow || std::min(s.radii.
 ModelId enemyModel(int enemyKind) { return ModelId(1 + enemyKind); }
 
 const ModelDef& modelDef(ModelId id) { return kModels[int(id)]; }
+
+void bindMatrices(const ModelDef& def, Mat4* out) {
+    computeWorldMatrices(def.rig, def.jointCount, def.bindPose ? *def.bindPose : Pose{}, Mat4::identity(), out);
+}
 const BuiltModel& model(ModelId id) { return gModels[int(id)]; }
 
 void buildModels(Renderer& r) {
@@ -306,8 +344,8 @@ void buildModels(Renderer& r) {
         m.jointCount = def.jointCount;
         m.triangles = indices.size() / 3;
         Mat4 bind[kMaxJoints];
-        computeWorldMatrices(def.rig, def.jointCount, Pose{}, Mat4::identity(), bind);
-        for (int j = 0; j < def.jointCount; ++j) m.inverseBind[j] = translate(-translationOf(bind[j]));
+        bindMatrices(def, bind);
+        for (int j = 0; j < def.jointCount; ++j) m.inverseBind[j] = rigidInverse(bind[j]);
         std::printf("modelo %d: %zu vertices, %zu triangulos\n", i, verts.size(), m.triangles);
     }
 }

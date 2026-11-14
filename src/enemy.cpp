@@ -331,6 +331,23 @@ const char* aiStateName(AiState s) {
 
 const EnemyDef& enemyDef(EnemyKind k) { return kDefs[int(k)]; }
 
+Pose enemyBindPose(EnemyKind kind) {
+    Pose p;
+    Vec3* r = p.rotation;
+    if (kind == EnemyKind::Imp) {
+        r[ImArmL].z = 0.6f;
+        r[ImArmR].z = -0.6f;
+        r[ImLegL].z = 0.15f;
+        r[ImLegR].z = -0.15f;
+    } else if (kind == EnemyKind::Shroom) {
+        r[ShArmL].z = 0.5f;
+        r[ShArmR].z = -0.5f;
+        r[ShLegL].z = 0.15f;
+        r[ShLegR].z = -0.15f;
+    }
+    return p;
+}
+
 Enemy makeEnemy(EnemyKind kind, Vec3 pos, float yaw, float seed) {
     Enemy e;
     e.kind = kind;

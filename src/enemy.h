@@ -83,5 +83,8 @@ struct Enemy {
 };
 
 Enemy makeEnemy(EnemyKind kind, Vec3 pos, float yaw, float seed);
+// Postura en la que se genera la malla del cuerpo: brazos y piernas separados del tronco
+// para que la unión suave no los pegue.
+Pose enemyBindPose(EnemyKind kind);
 // Pose según el estado y el tiempo; calcula también las matrices de las articulaciones.
 void animateEnemy(Enemy& e, float time, float dt);

@@ -30,6 +30,10 @@ struct ModelDef {
     const BodyPrim* prims;
     int primCount;
     float voxel;  // tamaño de celda (m): más pequeño = más detalle y más triángulos
+    // Postura de reposo en la que se genera la malla (nullptr = la del esqueleto). Debe
+    // separar las partes que no deben fundirse: brazos abiertos y piernas algo separadas
+    // (postura en A); si no, la unión suave pega las manos a la cadera.
+    const Pose* bindPose = nullptr;
 };
 
 // Malla generada + la inversa de la pose de reposo de cada hueso (para el skinning).
@@ -40,6 +44,8 @@ struct BuiltModel {
     size_t triangles = 0;
 };
 
+// Postura de reposo de un modelo (rotaciones de su bindPose) en matrices mundo.
+void bindMatrices(const ModelDef& def, Mat4* out);
 // Genera la malla en la CPU (lógica pura; también la usan los tests).
 void buildSkinnedMesh(const ModelDef& def, std::vector<SkinVertex>& verts, std::vector<uint32_t>& indices);
 
