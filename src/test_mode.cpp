@@ -12,11 +12,11 @@
 
 namespace {
 
-const uint32_t kWhite = rgba(226, 230, 240), kCyan = rgba(40, 220, 255), kMagenta = rgba(255, 70, 190);
+const uint32_t kWhite = rgba(150, 150, 154), kCyan = rgba(40, 220, 255), kMagenta = rgba(255, 70, 190);
 const uint32_t kAmber = rgba(255, 190, 60), kLime = rgba(120, 255, 140), kViolet = rgba(150, 110, 255);
 const uint32_t kNeons[] = {kCyan, kMagenta, kAmber, kLime, kViolet};
-const uint32_t kTints[] = {rgba(226, 230, 240), rgba(205, 212, 250), rgba(200, 238, 222), rgba(250, 210, 228),
-                           rgba(250, 226, 196), rgba(222, 208, 250)};
+const uint32_t kTints[] = {rgba(150, 150, 154), rgba(138, 142, 156), rgba(136, 152, 146), rgba(160, 140, 146),
+                           rgba(164, 152, 136), rgba(146, 140, 160)};
 const uint32_t kLeaves[] = {rgba(255, 110, 200), rgba(170, 110, 255), rgba(90, 210, 255), rgba(255, 150, 90),
                             rgba(110, 230, 150)};
 
@@ -50,7 +50,7 @@ void Game::buildPrueba() {
     int theme = int(random01() * 5) % 5;
     levelName_ = std::string("Prueba: ") + names[theme];
     bool grass = random01() < 0.5f;
-    floorColor_ = grass ? rgba(80, 200, 140) : rgba(196, 200, 214);
+    floorColor_ = grass ? rgba(70, 120, 90) : rgba(104, 106, 112);
     floorMaterial_ = grass ? Material::Grass : Material::Ground;
     const float H = random01() < 0.5f ? 20.0f : 25.0f;
     testArena_ = H;
@@ -98,8 +98,8 @@ void Game::buildPrueba() {
             addRim(p + Vec3{0, 2 * h, 0}, w, w, neon);
         } else if (r < 0.55f && findSpot(3.5f, p)) {  // plataforma con escalón
             float w = 2.0f + random01() * 1.5f, h = 0.45f + random01() * 0.5f;
-            addBlock(p + Vec3{0, h, 0}, {w, h, w}, rgba(214, 222, 240));
-            addBlock(p + Vec3{0, h * 0.5f, w + 0.4f}, {1.2f, h * 0.5f, 0.4f}, rgba(214, 222, 240));
+            addBlock(p + Vec3{0, h, 0}, {w, h, w}, rgba(132, 134, 140));
+            addBlock(p + Vec3{0, h * 0.5f, w + 0.4f}, {1.2f, h * 0.5f, 0.4f}, rgba(132, 134, 140));
             addRim(p + Vec3{0, 2 * h, 0}, w, w, neon);
         } else if (r < 0.75f && findSpot(1.6f, p)) {
             addTree(p, 0.9f + random01() * 0.4f, kLeaves[(theme + i) % 5]);

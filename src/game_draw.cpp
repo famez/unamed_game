@@ -71,48 +71,32 @@ struct Shape {
 };
 // Detalles rígidos del Prismero (el cuerpo es la malla de models.cpp): lo que debe verse
 // nítido o brillar.
-const uint32_t kHair = rgba(232, 78, 176), kSuitC = rgba(240, 244, 252), kNeon = rgba(40, 215, 255);
-const uint32_t kNeonPink = rgba(255, 80, 190), kEye = rgba(24, 58, 112), kOutline = rgba(28, 24, 58);
+const uint32_t kHair = rgba(74, 72, 76), kScarfC = rgba(104, 58, 50), kEyeC = rgba(36, 34, 38);
+const uint32_t kVein = rgba(255, 222, 170), kOutline = rgba(14, 14, 18);
 // clang-format off
 const Shape kHeroShapes[] = {
-    // ojos grandes con iris luminoso y brillo, cejas y boca
-    {Head,      {0.055f, 0.14f, 0.143f},  {0.031f, 0.043f, 0.016f}, kEye, Material::Cloth},
-    {Head,      {-0.055f, 0.14f, 0.143f}, {0.031f, 0.043f, 0.016f}, kEye, Material::Cloth},
-    {Head,      {0.055f, 0.134f, 0.155f}, {0.019f, 0.026f, 0.008f}, kNeon, Material::Glow},
-    {Head,      {-0.055f, 0.134f, 0.155f},{0.019f, 0.026f, 0.008f}, kNeon, Material::Glow},
-    {Head,      {0.064f, 0.153f, 0.16f},  {0.008f, 0.011f, 0.004f}, rgba(255, 255, 255), Material::Glow},
-    {Head,      {-0.046f, 0.153f, 0.16f}, {0.008f, 0.011f, 0.004f}, rgba(255, 255, 255), Material::Glow},
-    {Head,      {0.058f, 0.195f, 0.142f}, {0.032f, 0.008f, 0.012f}, kHair, Material::Cloth},
-    {Head,      {-0.058f, 0.195f, 0.142f},{0.032f, 0.008f, 0.012f}, kHair, Material::Cloth},
-    {Head,      {0, 0.068f, 0.138f},      {0.018f, 0.005f, 0.008f}, rgba(200, 90, 110), Material::Cloth},
-    // auriculares con anillo de neón
-    {Head,      {0.158f, 0.14f, 0},       {0.03f, 0.052f, 0.052f},  kSuitC, Material::Metal},
-    {Head,      {-0.158f, 0.14f, 0},      {0.03f, 0.052f, 0.052f},  kSuitC, Material::Metal},
-    {Head,      {0.186f, 0.14f, 0},       {0.007f, 0.036f, 0.036f}, kNeon, Material::Glow},
-    {Head,      {-0.186f, 0.14f, 0},      {0.007f, 0.036f, 0.036f}, kNeon, Material::Glow},
+    // ojos pequeños y oscuros, cejas
+    {Head,      {0.04f, 0.128f, 0.112f},  {0.017f, 0.007f, 0.006f}, kEyeC, Material::Cloth},
+    {Head,      {-0.04f, 0.128f, 0.112f}, {0.017f, 0.007f, 0.006f}, kEyeC, Material::Cloth},
+    {Head,      {0.043f, 0.148f, 0.112f}, {0.024f, 0.006f, 0.008f}, kHair, Material::Cloth},
+    {Head,      {-0.043f, 0.148f, 0.112f},{0.024f, 0.006f, 0.008f}, kHair, Material::Cloth},
+    {Chest,     {0, 0.235f, 0.1f},        {0.06f, 0.035f, 0.02f},   kScarfC, Material::Cloth},  // nudo de la bufanda
 };
-// Líneas de neón del traje (cajas finas sobre la superficie).
+// Vetas de luz bajo la piel y el abrigo: brillan según la Luz que lleva (apagadas, grises).
 struct NeonLine {
     int joint;
     Vec3 center, half;
-    uint32_t color;
 };
 const NeonLine kNeonLines[] = {
-    {Chest,  {0.07f, 0.08f, 0.124f},  {0.005f, 0.09f, 0.004f}, kNeon},
-    {Chest,  {-0.07f, 0.08f, 0.124f}, {0.005f, 0.09f, 0.004f}, kNeon},
-    {ElbowL, {0, -0.11f, 0.044f},     {0.006f, 0.08f, 0.004f}, kNeon},
-    {ElbowR, {0, -0.11f, 0.044f},     {0.006f, 0.08f, 0.004f}, kNeon},
-    {HipL,   {0, -0.13f, 0.111f},     {0.006f, 0.12f, 0.004f}, kNeonPink},
-    {HipR,   {0, -0.13f, 0.111f},     {0.006f, 0.12f, 0.004f}, kNeonPink},
-    {AnkleL, {0, -0.074f, 0.065f},    {0.082f, 0.006f, 0.162f}, kNeon},
-    {AnkleR, {0, -0.074f, 0.065f},    {0.082f, 0.006f, 0.162f}, kNeon},
-    {Pelvis, {0, 0.06f, 0.119f},      {0.03f, 0.018f, 0.006f}, kNeonPink},
+    {Chest,  {0.0f, 0.06f, 0.124f},   {0.004f, 0.07f, 0.004f}},   // en la abertura del abrigo
+    {WristL, {0, -0.03f, 0.05f},      {0.004f, 0.04f, 0.004f}},   // dorso de las manos
+    {WristR, {0, -0.03f, 0.05f},      {0.004f, 0.04f, 0.004f}},
+    {Neck,   {0.03f, 0.06f, 0.03f},   {0.003f, 0.03f, 0.003f}},
 };
 // clang-format on
-// Pelo de punta: direcciones desde el centro de la cabeza.
+// Mechones: direcciones desde el centro de la cabeza (pelo corto, algo despeinado).
 const Vec3 kSpikes[] = {
-    {0, 0.35f, -1}, {0.6f, 0.4f, -0.8f}, {-0.6f, 0.4f, -0.8f}, {0.9f, 0.5f, -0.2f}, {-0.9f, 0.5f, -0.2f},
-    {0.3f, 1, -0.4f}, {-0.35f, 1, -0.3f}, {0, -0.1f, -1}, {0.5f, 0, -0.9f}, {-0.5f, 0, -0.9f},
+    {0, 0.2f, -1}, {0.55f, 0.05f, -0.8f}, {-0.55f, 0.05f, -0.8f}, {0.3f, 0.5f, -0.9f},
 };
 // clang-format on
 
@@ -152,7 +136,7 @@ void drawWeapon(Renderer& r, const Mat4& w, const WeaponStats& ws, Move m, float
     float morph = smoothstep01(u / 0.15f) * smoothstep01((1.0f - u) / 0.15f);
     float whip = (m == Move::Slash3 || m == Move::AirFinisher) ? morph : 0.0f;
     float hammer = m == Move::Finisher ? morph : 0.0f;
-    const uint32_t grip = rgba(235, 238, 248);
+    const uint32_t grip = ws.hilt;
     if (ws.style == WeaponStyle::Fists) {  // guantelete: funda clara y nudillos de luz
         r.ellipsoid(w, {0, -0.06f, 0.008f}, {0.062f, 0.088f, 0.072f}, ws.blade, Material::Metal);
         r.ellipsoid(w, {0, -0.115f, 0.03f}, {0.055f, 0.022f, 0.05f}, ws.trail, Material::Glow);
@@ -160,9 +144,8 @@ void drawWeapon(Renderer& r, const Mat4& w, const WeaponStats& ws, Move m, float
         return;
     }
     r.box(w, kGripLocal, {0.02f, 0.02f, 0.075f}, grip, Material::Metal);
-    r.ellipsoid(w, kGripLocal + Vec3{0, 0, 0.09f}, {0.07f, 0.07f, 0.025f}, grip, Material::Metal);
-    r.ellipsoid(w, kGripLocal + Vec3{0, 0, 0.1f}, {0.055f, 0.055f, 0.02f}, ws.trail, Material::Glow);
-    r.ellipsoid(w, kGripLocal - Vec3{0, 0, 0.08f}, {0.03f, 0.03f, 0.03f}, ws.trail, Material::Glow);  // pomo
+    r.box(w, kGripLocal + Vec3{0, 0, 0.09f}, {0.07f, 0.014f, 0.016f}, ws.blade, Material::Metal);  // guarda
+    r.ellipsoid(w, kGripLocal - Vec3{0, 0, 0.08f}, {0.025f, 0.025f, 0.025f}, ws.blade, Material::Metal);  // pomo
 
     if (whip > 0.01f) {
         // Látigo: cadena de cuentas de luz, más larga, que se curva hacia atrás.
@@ -187,8 +170,8 @@ void drawWeapon(Renderer& r, const Mat4& w, const WeaponStats& ws, Move m, float
     }
     // Hoja: núcleo luminoso del color del prisma dentro de una funda clara.
     r.box(w, mid, {0.04f, 0.011f, len * 0.5f}, ws.blade, Material::Metal);
-    r.box(w, mid, {0.014f, 0.015f, len * 0.48f}, ws.trail, Material::Glow);
-    r.ellipsoid(w, tip, {0.045f, 0.018f, 0.09f}, ws.trail, Material::Glow);
+    r.box(w, mid, {0.004f, 0.013f, len * 0.46f}, ws.trail, Material::Glow);  // veta de luz por el filo
+    r.ellipsoid(w, tip, {0.04f, 0.011f, 0.08f}, ws.blade, Material::Metal);
     if (hammer > 0.01f) {  // martillo: una cabeza de luz que crece en la punta
         Vec3 head = tip + Vec3{0, 0, 0.05f};
         r.box(w, head, Vec3{0.16f, 0.11f, 0.11f} * hammer, ws.blade, Material::Metal);
@@ -206,9 +189,9 @@ void drawWeapon(Renderer& r, const Mat4& w, const WeaponStats& ws, Move m, float
 
 // --- HUD: primitivas 2D en píxeles (origen arriba a la izquierda) ---
 
-const uint32_t kUiPanel = rgba(12, 16, 42, 205), kUiCyan = rgba(40, 220, 255), kUiPink = rgba(255, 70, 190);
-const uint32_t kUiText = rgba(240, 245, 255), kUiDim = rgba(150, 165, 210), kUiAmber = rgba(255, 196, 70);
-const uint32_t kUiShadow = rgba(8, 10, 30, 200);
+const uint32_t kUiPanel = rgba(14, 14, 18, 200), kUiCyan = rgba(222, 214, 198), kUiPink = rgba(196, 92, 100);
+const uint32_t kUiText = rgba(236, 234, 228), kUiDim = rgba(140, 140, 146), kUiAmber = rgba(232, 196, 140);
+const uint32_t kUiShadow = rgba(6, 6, 8, 200);
 
 void fillRect(DebugDraw& d, float x0, float y0, float x1, float y1, uint32_t c) {
     d.quad({x0, y0, 0}, {x1, y0, 0}, {x1, y1, 0}, {x0, y1, 0}, c);
@@ -548,24 +531,25 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
         }
     }
     for (const Shape& s : kHeroShapes) solid->ellipsoid(j[s.joint], s.center, s.radii, s.color, s.material, flash);
-    for (const NeonLine& l : kNeonLines) solid->box(j[l.joint], l.center, l.half, l.color, Material::Glow, flash);
-    solid->box(j[Chest] * translate({0, 0.12f, 0.128f}) * rotateZ(kPi * 0.25f), {}, {0.028f, 0.028f, 0.012f}, kNeonPink,
-               Material::Glow, flash);  // núcleo del pecho
+    // Las vetas: apagadas sin Luz; encendidas, del color de la luz (o de la sombra).
+    float lit = clampf(mp_ / maxMp_, 0, 1);
+    uint32_t vein = mixRgb(rgba(70, 68, 72), kVein, lit);
+    for (const NeonLine& l : kNeonLines) solid->box(j[l.joint], l.center, l.half, vein, lit > 0.05f ? Material::Glow : Material::Cloth, flash);
     // Mechones de pelo: se inclinan hacia donde se queda atrás el punto con muelle que
     // sigue a la cabeza (inercia al correr, saltar y girar).
     Vec3 lagW = hero_.hairLag();
     const float* hm = j[Head].m;
     Vec3 lag{hm[0] * lagW.x + hm[1] * lagW.y + hm[2] * lagW.z, hm[4] * lagW.x + hm[5] * lagW.y + hm[6] * lagW.z,
              hm[8] * lagW.x + hm[9] * lagW.y + hm[10] * lagW.z};
-    Vec3 headCenter{0, 0.2f, -0.02f};
+    Vec3 headCenter{0, 0.17f, -0.02f};
     for (Vec3 d : kSpikes) {
-        Vec3 n = normalize(normalize(d) + lag * 5.0f);
-        solid->ellipsoid(j[Head] * translate(headCenter + n * 0.13f) * basisY(n), {}, {0.06f, 0.14f, 0.055f}, kHair,
+        Vec3 n = normalize(normalize(d) + lag * 3.0f);
+        solid->ellipsoid(j[Head] * translate(headCenter + n * 0.1f) * basisY(n), {}, {0.045f, 0.075f, 0.03f}, kHair,
                          Material::Cloth, flash);
     }
-    for (float x : {-0.07f, 0.0f, 0.07f}) {  // flequillo hacia un lado
-        Vec3 n = normalize(Vec3{-0.6f + x * 2.0f, -0.5f, 1.0f} + lag * 3.0f);
-        solid->ellipsoid(j[Head] * translate(Vec3{x, 0.27f, 0.1f}) * basisY(-n), {}, {0.045f, 0.09f, 0.035f}, kHair,
+    for (float x : {-0.05f, 0.04f}) {  // mechones sobre la frente
+        Vec3 n = normalize(Vec3{-0.4f + x * 3.0f, -0.6f, 1.0f} + lag * 2.0f);
+        solid->ellipsoid(j[Head] * translate(Vec3{x, 0.225f, 0.08f}) * basisY(-n), {}, {0.035f, 0.06f, 0.022f}, kHair,
                          Material::Cloth, flash);
     }
     drawWeapon(*solid, j[WristR], ws, hero_.move(), hero_.moveU(), time_);
@@ -579,9 +563,8 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
         float len = length(d);
         if (len < 1e-4f) continue;
         float t = float(i) / float(Character::kRibbonPoints - 1);
-        float wdt = lerpf(0.07f, 0.035f, t);
-        uint32_t col = mixRgb(kNeon, kNeonPink, t);  // cinta de luz: del cian al magenta
-        solid->ellipsoid(translate((a + b) * 0.5f) * basisY(d), {}, {wdt, len * 0.62f, 0.012f}, col, Material::Glow, flash);
+        float wdt = lerpf(0.055f, 0.04f, t);  // la cola de la bufanda
+        solid->ellipsoid(translate((a + b) * 0.5f) * basisY(d), {}, {wdt, len * 0.62f, 0.014f}, kScarfC, Material::Cloth, flash);
     }
     if (guardFlash_ > 0)
         solid->light(translationOf(j[WristR]) + hero_.forward() * 0.3f,
@@ -1014,25 +997,24 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
     {
         float cx = w - 86, cy = h - 86;
         fillCircle(d, cx, cy, 58, kUiPanel, 6, kPi / 6);
-        fillCircle(d, cx, cy, 52, hp_ / maxHp_ < 0.25f ? rgba(255, 60, 90) : kUiCyan, 6, kPi / 6);
-        fillCircle(d, cx, cy, 47, rgba(20, 26, 64), 6, kPi / 6);
-        fillCircle(d, cx, cy + 8, 26, rgba(250, 214, 188));  // cara
-        fillCircle(d, cx, cy - 10, 27, rgba(232, 78, 176), 20);  // pelo
-        for (int i = 0; i < 5; ++i) {
-            float a = kPi * (1.05f + 0.22f * float(i));
-            d.triangle({cx + std::cos(a) * 16 - 9, cy + std::sin(a) * 16 - 6, 0}, {cx + std::cos(a) * 16 + 9, cy + std::sin(a) * 16 - 6, 0},
-                       {cx + std::cos(a) * 44, cy + std::sin(a) * 40 - 4, 0}, rgba(232, 78, 176));
-        }
-        fillRect(d, cx - 24, cy - 6, cx + 24, cy + 1, rgba(232, 78, 176));
-        fillCircle(d, cx - 10, cy + 8, 5, kUiCyan, 10);
-        fillCircle(d, cx + 10, cy + 8, 5, kUiCyan, 10);
+        // Retrato sobrio: silueta (cabeza y hombros del abrigo) y la veta de luz del pecho.
+        fillCircle(d, cx, cy, 52, hp_ / maxHp_ < 0.25f ? rgba(200, 60, 70) : rgba(150, 148, 144), 6, kPi / 6);
+        fillCircle(d, cx, cy, 47, rgba(22, 22, 26), 6, kPi / 6);
+        d.triangle({cx - 34, cy + 40, 0}, {cx + 34, cy + 40, 0}, {cx, cy + 6, 0}, rgba(44, 45, 52));  // hombros
+        fillRect(d, cx - 30, cy + 22, cx + 30, cy + 40, rgba(44, 45, 52));
+        fillRect(d, cx - 12, cy + 14, cx + 12, cy + 22, rgba(104, 58, 50));                      // bufanda
+        fillCircle(d, cx, cy - 4, 17, rgba(150, 134, 122), 20);                                  // cara en penumbra
+        fillCircle(d, cx, cy - 13, 16, rgba(64, 62, 66), 20);                                    // pelo
+        fillRect(d, cx - 16, cy - 13, cx + 16, cy - 8, rgba(64, 62, 66));
+        float litP = clampf(mp_ / maxMp_, 0, 1);
+        fillRect(d, cx - 1.5f, cy + 24, cx + 1.5f, cy + 38, withAlpha(rgba(255, 222, 170), 0.25f + 0.75f * litP));
         if (heroFlash_ > 0) fillCircle(d, cx, cy, 52, withAlpha(rgba(255, 60, 90), heroFlash_ * 2.5f), 6, kPi / 6);
 
         float right = cx - 66;
         uiText(ui, right - maxHp_ * 2.6f - 6, cy - 64, 15, "PV", kUiCyan, FontFace::Title);
         std::snprintf(buf, sizeof(buf), "%d / %d", int(std::ceil(hp_)), int(maxHp_));
         uiText(ui, right, cy - 66, 18, buf, kUiText, FontFace::Title, Align::Right);
-        segBar(d, right, cy - 40, maxHp_ * 2.6f, 18, hp_ / maxHp_, hpGhost_ / maxHp_, rgba(70, 245, 190),
+        segBar(d, right, cy - 40, maxHp_ * 2.6f, 18, hp_ / maxHp_, hpGhost_ / maxHp_, rgba(214, 206, 192),
                rgba(255, 60, 120), int(maxHp_ / 10));
         segBar(d, right - 14, cy - 12, maxMp_ * 1.8f, 10, mp_ / maxMp_, mp_ / maxMp_, rgba(255, 225, 140), 0, 10);
         uiText(ui, right - 14 - maxMp_ * 1.8f - 12, cy - 16, 14, "LUZ", rgba(255, 230, 150), FontFace::Title, Align::Right);
@@ -1065,8 +1047,8 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
     {
         const float x = 28, rowH = 34, width = 300;
         float y0 = h - 30 - rowH * float(kCommandCount) - 40;
-        skewRect(d, x, y0, x + 170, y0 + 30, 10, rgba(40, 220, 255, 230));
-        uiText(ui, x + 16, y0 + 6, 17, "COMANDOS", rgba(10, 20, 50), FontFace::Title);
+        skewRect(d, x, y0, x + 170, y0 + 30, 10, rgba(222, 214, 198, 220));
+        uiText(ui, x + 16, y0 + 6, 17, "COMANDOS", rgba(18, 18, 22), FontFace::Title);
         for (int i = 0; i < kCommandCount; ++i) {
             float y = y0 + 36 + float(i) * rowH;
             bool sel = i == commandSel_;
@@ -1087,13 +1069,13 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
                 accent = itemDef(id).color;
             }
             float x0 = x + (sel ? 16.0f : 0.0f);
-            skewRect(d, x0, y, x0 + width, y + rowH - 5, 8, sel ? rgba(235, 245, 255, 240) : kUiPanel);
-            skewRect(d, x0, y, x0 + 6, y + rowH - 5, 8, usable ? accent : rgba(90, 95, 120));
+            skewRect(d, x0, y, x0 + width, y + rowH - 5, 8, sel ? rgba(228, 222, 210, 235) : kUiPanel);
+            skewRect(d, x0, y, x0 + 6, y + rowH - 5, 8, usable ? mixRgb(accent, rgba(200, 196, 186), 0.6f) : rgba(70, 70, 76));
             if (sel) d.triangle({x0 - 14, y + 5, 0}, {x0 - 14, y + rowH - 10, 0}, {x0 - 4, y + (rowH - 5) * 0.5f, 0}, kUiCyan);
             char key[4];
             std::snprintf(key, sizeof(key), "%d", i + 1);
-            uint32_t tc = !usable ? rgba(120, 125, 150) : sel ? rgba(20, 30, 70) : kUiText;
-            uiText(ui, x0 + 18, y + 6, 15, key, sel ? rgba(40, 120, 170) : kUiCyan, FontFace::Title);
+            uint32_t tc = !usable ? rgba(110, 110, 116) : sel ? rgba(20, 20, 24) : kUiText;
+            uiText(ui, x0 + 18, y + 6, 15, key, sel ? rgba(90, 84, 76) : kUiCyan, FontFace::Title);
             uiText(ui, x0 + 40, y + 4, 19, name, tc);
             uiText(ui, x0 + width - 10, y + 6, 15, value, sel ? rgba(60, 70, 110) : kUiDim, FontFace::Title, Align::Right);
         }

@@ -8,11 +8,11 @@
 
 namespace {
 
-const uint32_t kWhite = rgba(226, 230, 240), kGlass = rgba(40, 92, 130), kCyan = rgba(40, 220, 255);
+const uint32_t kWhite = rgba(150, 150, 154), kGlass = rgba(40, 92, 130), kCyan = rgba(40, 220, 255);
 const uint32_t kMagenta = rgba(255, 70, 190), kAmber = rgba(255, 190, 60), kLime = rgba(120, 255, 140);
 const uint32_t kNeons[] = {kCyan, kMagenta, kAmber, kLime};
-const uint32_t kTints[] = {rgba(226, 230, 240), rgba(205, 212, 250), rgba(200, 238, 222), rgba(250, 210, 228),
-                           rgba(250, 226, 196), rgba(222, 208, 250)};
+const uint32_t kTints[] = {rgba(150, 150, 154), rgba(138, 142, 156), rgba(136, 152, 146), rgba(160, 140, 146),
+                           rgba(164, 152, 136), rgba(146, 140, 160)};
 
 AABB area(Vec3 lo, Vec3 hi) { return {lo, hi}; }
 bool inside(const AABB& a, Vec3 p) {
@@ -118,10 +118,10 @@ void Game::addGate(const std::string& id, Vec3 c, Vec3 h, uint32_t color, bool c
 
 void Game::buildPlaza() {
     levelName_ = "Plaza del Prisma";
-    floorColor_ = rgba(80, 200, 140);
+    floorColor_ = rgba(70, 120, 90);
     floorMaterial_ = Material::Grass;
     const Mat4 id = Mat4::identity();
-    addDecor(id, {0, 0.004f, 0}, {16.2f, 0.004f, 16.2f}, rgba(205, 210, 226), Material::Ground, false);
+    addDecor(id, {0, 0.004f, 0}, {16.2f, 0.004f, 16.2f}, rgba(118, 120, 126), Material::Ground, false);
     int k = 0;
     for (float x : {-11.0f, 0.0f, 11.0f}) {
         if (x != 0.0f) addBuilding(x, 19, 5.0f, 3.0f, 4.6f + float(k % 3), {0, 0, -1}, kTints[k % 6], kNeons[k & 3]);
@@ -175,9 +175,9 @@ void Game::buildPlaza() {
                  kMagenta, Material::Glow, false);
     lamps_.push_back({{0, 3.0f, 0}, kMagenta, false});  // el prisma de la fuente
 
-    addBlock({10.5f, 0.45f, 10.5f}, {3.5f, 0.45f, 3.5f}, rgba(214, 222, 240));
-    addBlock({10.5f, 0.15f, 6.1f}, {1.5f, 0.15f, 0.3f}, rgba(214, 222, 240));
-    addBlock({10.5f, 0.30f, 6.7f}, {1.5f, 0.30f, 0.3f}, rgba(214, 222, 240));
+    addBlock({10.5f, 0.45f, 10.5f}, {3.5f, 0.45f, 3.5f}, rgba(132, 134, 140));
+    addBlock({10.5f, 0.15f, 6.1f}, {1.5f, 0.15f, 0.3f}, rgba(132, 134, 140));
+    addBlock({10.5f, 0.30f, 6.7f}, {1.5f, 0.30f, 0.3f}, rgba(132, 134, 140));
     addRim({10.5f, 0.9f, 10.5f}, 3.5f, 3.5f, kCyan);
     addBlock({-6.5f, 0.45f, 7.0f}, {0.8f, 0.45f, 0.8f}, kWhite);
     addBlock({-8.7f, 1.6f, 9.0f}, {0.8f, 0.15f, 0.8f}, kWhite);
@@ -272,7 +272,7 @@ void Game::buildPlaza() {
 
 void Game::buildMercado() {
     levelName_ = "Mercado de los Ecos";
-    floorColor_ = rgba(196, 200, 214);
+    floorColor_ = rgba(104, 106, 112);
     floorMaterial_ = Material::Ground;
     const Mat4 id = Mat4::identity();
     // Calle de los toldos (z 0..28) entre edificios bajos.

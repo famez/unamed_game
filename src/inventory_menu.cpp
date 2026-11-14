@@ -149,8 +149,8 @@ bool InventoryMenu::update(const Input& in, Game& game, int width, int height) {
 void InventoryMenu::draw(UiLayer& ui, const Game& game, int width, int height) const {
     DebugDraw& d = ui.shapes;
     const Inventory& inv = game.inventory();
-    const uint32_t navy = rgba(14, 18, 46, 240), light = rgba(240, 245, 255), dim = rgba(150, 165, 210);
-    const uint32_t cyan = rgba(40, 220, 255), amber = rgba(255, 196, 70);
+    const uint32_t navy = rgba(16, 16, 20, 240), light = rgba(236, 234, 228), dim = rgba(140, 140, 146);
+    const uint32_t cyan = rgba(222, 214, 198), amber = rgba(232, 196, 140);
     TextStyle title;
     title.face = FontFace::Title;
     TextStyle right;

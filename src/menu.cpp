@@ -94,12 +94,12 @@ PauseMenu::Result PauseMenu::update(const Input& in, int width, int height) {
 
 void PauseMenu::draw(UiLayer& ui, int width, int height) const {
     DebugDraw& d = ui.shapes;
-    const uint32_t cyan = rgba(40, 220, 255), text = rgba(240, 245, 255), dim = rgba(150, 165, 210);
-    fillRect(d, 0, 0, float(width), float(height), rgba(8, 10, 30, 150));  // velo sobre la escena
+    const uint32_t cyan = rgba(222, 214, 198), text = rgba(236, 234, 228), dim = rgba(140, 140, 146);
+    fillRect(d, 0, 0, float(width), float(height), rgba(4, 4, 6, 160));  // velo sobre la escena
     Rect p = panelRect(width, height);
-    fillRect(d, p.x0, p.y0, p.x1, p.y1, rgba(14, 18, 46, 238));
+    fillRect(d, p.x0, p.y0, p.x1, p.y1, rgba(16, 16, 20, 238));
     fillRect(d, p.x0, p.y0, p.x1, p.y0 + 4, cyan);
-    strokeRect(d, p.x0, p.y0, p.x1, p.y1, rgba(70, 90, 160));
+    strokeRect(d, p.x0, p.y0, p.x1, p.y1, rgba(80, 80, 88));
     TextStyle title;
     title.face = FontFace::Title;
     title.align = Align::Center;
@@ -116,7 +116,7 @@ void PauseMenu::draw(UiLayer& ui, int width, int height) const {
         Rect r = itemRect(i, width, height);
         bool sel = i == selected_;
         if (sel) {
-            fillRect(d, r.x0, r.y0, r.x1, r.y1, rgba(40, 220, 255, 40));
+            fillRect(d, r.x0, r.y0, r.x1, r.y1, rgba(222, 214, 198, 30));
             fillRect(d, r.x0, r.y0, r.x0 + 5, r.y1, cyan);
         }
         TextStyle st;

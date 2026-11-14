@@ -12,13 +12,21 @@ const Vec3 kSunDir = normalize(Vec3{0.45f, 0.8f, 0.35f});  // hacia el sol
 
 // Constantes y funciones comunes a los shaders de color (en espacio lineal).
 const char* kCommonGlsl = R"(
-// Paleta luminosa y saturada, de tarde soleada.
-const vec3 kSunColor = vec3(1.0, 0.93, 0.82) * 1.35;
-const vec3 kFillColor = vec3(0.55, 0.65, 0.95) * 0.45;  // relleno frío opuesto al sol
-const vec3 kZenith   = vec3(0.06, 0.24, 0.85);
-const vec3 kHorizon  = vec3(0.85, 0.62, 0.80);  // horizonte rosado: cielo de ciudad luminosa
-const vec3 kBounce   = vec3(0.30, 0.26, 0.18);
-const float kFogDensity = 0.006;
+// Dos paletas: la ciudad parada (gris de verdad: cielo cubierto, luz pobre y fría, niebla
+// espesa) y la ciudad viva (tarde cálida). El croma del mundo pasa de una a otra; las
+// macros usan uWorldColor, así que solo valen en los shaders que lo declaran.
+const vec3 kSunWarm = vec3(1.0, 0.92, 0.80) * 1.25, kSunGrey = vec3(0.80, 0.83, 0.88) * 0.7;
+const vec3 kFillWarm = vec3(0.55, 0.65, 0.95) * 0.4, kFillGrey = vec3(0.50, 0.53, 0.58) * 0.25;
+const vec3 kZenithWarm = vec3(0.07, 0.22, 0.70), kZenithGrey = vec3(0.17, 0.18, 0.21);
+const vec3 kHorizonWarm = vec3(0.80, 0.60, 0.68), kHorizonGrey = vec3(0.36, 0.37, 0.40);
+const vec3 kBounceWarm = vec3(0.28, 0.24, 0.17), kBounceGrey = vec3(0.13, 0.13, 0.14);
+#define kSunColor mix(kSunGrey, kSunWarm, uWorldColor)
+#define kFillColor mix(kFillGrey, kFillWarm, uWorldColor)
+#define kZenith mix(kZenithGrey, kZenithWarm, uWorldColor)
+#define kHorizon mix(kHorizonGrey, kHorizonWarm, uWorldColor)
+#define kBounce mix(kBounceGrey, kBounceWarm, uWorldColor)
+#define kWorldFog mix(0.024, 0.007, uWorldColor)  // niebla de la ciudad parada
+const float kFogDensity = 0.007;  // humo y volúmenes
 
 vec3 toLinear(vec3 c) { return pow(c, vec3(2.2)); }
 
@@ -159,7 +167,7 @@ void main() {
         sat = max(sat, 1.0 - smoothstep(uZone[i].w * 0.55, uZone[i].w, length(vWorldPos - uZone[i].xyz)));
     if (scenery) {
         float l = dot(base, vec3(0.299, 0.587, 0.114));
-        base = mix(vec3(l), base, mix(0.04, 1.0, sat)) * mix(0.7, 1.0, sat);
+        base = mix(vec3(l), base, mix(0.04, 1.0, sat)) * mix(0.55, 1.0, sat);
         if (material == 4) base *= mix(0.2, 1.0, sat);
         seamGlow *= sat;
         if (n.y > 0.5) {
@@ -181,7 +189,7 @@ void main() {
         glow = mix(glow, vec3(2.0), vParams.y);
         float distE = length(uCameraPos - vWorldPos);
         vec3 fogE = mix(vec3(dot(kHorizon, vec3(0.299, 0.587, 0.114))), kHorizon, mix(0.15, 1.0, sat));
-        glow = mix(glow, fogE, 1.0 - exp(-pow(distE * kFogDensity, 2.0)));
+        glow = mix(glow, fogE, 1.0 - exp(-pow(distE * kWorldFog, 2.0)));
         fragColor = vec4(finish(glow), 1.0);  // alfa = máscara de bloom: brilla
         return;
     }
@@ -257,7 +265,7 @@ void main() {
     color = mix(color, vec3(1.6), vParams.y);  // destello de impacto
 
     float dist = length(uCameraPos - vWorldPos);
-    float fog = 1.0 - exp(-pow(dist * kFogDensity, 2.0));
+    float fog = 1.0 - exp(-pow(dist * kWorldFog, 2.0));
     vec3 fogColor = mix(vec3(dot(kHorizon, vec3(0.299, 0.587, 0.114))), kHorizon, mix(0.15, 1.0, uWorldColor));
     color = mix(color, fogColor, fog);
     // Alfa = máscara de bloom: los destellos de golpe y las juntas del suelo brillan.
@@ -351,11 +359,13 @@ void main() {
     // Nubes: ruido sobre un plano alto, más densas hacia el horizonte.
     if (dir.y > 0.0) {
         vec2 uv = dir.xz / (dir.y + 0.15) * 1.6;
-        float c = smoothstep(0.5, 0.75, fbm(uv + vec2(uTime * 0.01, 0.0)));
-        color = mix(color, vec3(1.0, 0.98, 0.96) * 1.25, c * smoothstep(0.0, 0.15, dir.y) * 0.9);
+        // Sin croma, cielo cubierto: más nubes, grises y bajas.
+        float c = smoothstep(mix(0.3, 0.5, uWorldColor), 0.75, fbm(uv + vec2(uTime * 0.01, 0.0)));
+        vec3 cloud = mix(vec3(0.30, 0.31, 0.34), vec3(1.0, 0.98, 0.96) * 1.25, uWorldColor);
+        color = mix(color, cloud, c * smoothstep(0.0, 0.15, dir.y) * 0.9);
     }
     float sun = max(dot(dir, uSunDir), 0.0);
-    color += kSunColor * (pow(sun, 600.0) * 4.0 + pow(sun, 12.0) * 0.08);  // disco + halo
+    color += kSunColor * (pow(sun, 600.0) * 4.0 + pow(sun, 12.0) * 0.08) * mix(0.05, 1.0, uWorldColor);  // disco + halo
     fragColor = vec4(finish(color), clamp(pow(sun, 300.0) * 2.0, 0.0, 1.0));  // el sol brilla
 }
 )";

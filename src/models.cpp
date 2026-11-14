@@ -226,59 +226,58 @@ void buildSkinnedMesh(const ModelDef& def, std::vector<SkinVertex>& verts, std::
     }
 }
 
-// --- Prismero: el protagonista ---------------------------------------------------------
-// Traje claro con acentos de neón, cabeza algo grande (proporciones de dibujo animado),
-// pelo magenta, guantes y botas altas.
+// --- El protagonista -------------------------------------------------------------------
+// Adulto, de proporciones realistas: abrigo largo oscuro hasta las rodillas, bufanda
+// gastada, pantalón y botas de trabajo, pelo corto ceniza. La luz no está en la ropa: son
+// vetas finas bajo la piel (ver game_draw.cpp) que brillan según la Luz que lleva.
 namespace {
-const uint32_t kSuit = rgba(240, 244, 252), kUnder = rgba(38, 46, 86), kSkinC = rgba(250, 214, 188);
-const uint32_t kHairC = rgba(232, 78, 176), kAccent = rgba(30, 200, 245), kBoot = rgba(236, 240, 250);
+const uint32_t kCoat = rgba(44, 45, 52), kCoatDark = rgba(30, 30, 36), kUnder = rgba(62, 62, 66);
+const uint32_t kSkinC = rgba(206, 182, 164), kHairC = rgba(74, 72, 76), kBoot = rgba(58, 50, 44);
+const uint32_t kScarf = rgba(104, 58, 50), kGlove = rgba(36, 34, 36);
 #define E(j, cx, cy, cz, rx, ry, rz, col, k) {j, false, {cx, cy, cz}, {}, {rx, ry, rz}, col, k}
 #define C(j, ax, ay, az, bx, by, bz, rad, col, k) {j, true, {ax, ay, az}, {bx, by, bz}, {rad, rad, rad}, col, k}
 // clang-format off
 const BodyPrim kHeroPrims[] = {
-    // tronco: malla interior oscura, chaqueta corta clara con cuello alto
-    E(Pelvis,    0, -0.01f, 0,        0.15f, 0.10f, 0.11f,    kUnder, 0.0f),
-    E(Spine,     0, 0.08f, 0,         0.135f, 0.13f, 0.10f,   kUnder, 0.04f),
-    E(Chest,     0, 0.10f, 0.01f,     0.175f, 0.15f, 0.12f,   kSuit, 0.04f),
-    E(Chest,     0, 0.22f, -0.01f,    0.12f, 0.075f, 0.10f,   kSuit, 0.03f),   // cuello alto
-    E(Pelvis,    0, 0.06f, 0,         0.158f, 0.03f, 0.118f,  kAccent, 0.01f), // cinturón
-    C(Neck,      0, 0, 0,  0, 0.1f, 0,                0.045f, kSkinC, 0.02f),
-    // cabeza
-    E(Head,      0, 0.15f, 0.01f,     0.145f, 0.165f, 0.15f,  kSkinC, 0.03f),
-    E(Head,      0, 0.075f, 0.05f,    0.098f, 0.08f, 0.092f,  kSkinC, 0.04f),
-    E(Head,      0, 0.12f, 0.162f,    0.016f, 0.02f, 0.016f,  kSkinC, 0.015f), // nariz
-    E(Head,      0.148f, 0.14f, 0,    0.024f, 0.04f, 0.03f,   kSkinC, 0.01f),
-    E(Head,     -0.148f, 0.14f, 0,    0.024f, 0.04f, 0.03f,   kSkinC, 0.01f),
-    E(Head,      0, 0.215f, -0.02f,   0.162f, 0.135f, 0.168f, kHairC, 0.005f),
-    E(Head,      0, 0.13f, -0.085f,   0.148f, 0.135f, 0.105f, kHairC, 0.02f),
-    // brazos: hombrera, manga interior, guante con puño claro
-    E(ShoulderL, 0.015f, -0.01f, 0,   0.078f, 0.07f, 0.078f,  kSuit, 0.03f),
-    C(ShoulderL, 0, -0.03f, 0,  0, -0.26f, 0,         0.05f,  kUnder, 0.03f),
-    C(ShoulderL, 0, -0.02f, 0,  0, -0.13f, 0,         0.06f,  kSuit, 0.02f),
-    C(ElbowL,    0, 0, 0,  0, -0.22f, 0,              0.043f, kUnder, 0.03f),
-    E(ElbowL,    0, -0.215f, 0,       0.052f, 0.03f, 0.052f,  kSuit, 0.01f),   // puño
-    E(WristL,    0, -0.06f, 0.006f,   0.048f, 0.072f, 0.058f, kUnder, 0.03f),
-    E(ShoulderR, -0.015f, -0.01f, 0,  0.078f, 0.07f, 0.078f,  kSuit, 0.03f),
-    C(ShoulderR, 0, -0.03f, 0,  0, -0.26f, 0,         0.05f,  kUnder, 0.03f),
-    C(ShoulderR, 0, -0.02f, 0,  0, -0.13f, 0,         0.06f,  kSuit, 0.02f),
-    C(ElbowR,    0, 0, 0,  0, -0.22f, 0,              0.043f, kUnder, 0.03f),
-    E(ElbowR,    0, -0.215f, 0,       0.052f, 0.03f, 0.052f,  kSuit, 0.01f),
-    E(WristR,    0, -0.06f, 0.006f,   0.048f, 0.072f, 0.058f, kUnder, 0.03f),
-    // piernas: protección del muslo, rodillera, bota alta
-    C(HipL,      0, 0, 0,  0, -0.42f, 0,              0.08f,  kUnder, 0.04f),
-    E(HipL,      0, -0.13f, 0.006f,   0.104f, 0.17f, 0.106f,  kSuit, 0.02f),
-    C(KneeL,     0, 0, 0,  0, -0.40f, 0,              0.058f, kUnder, 0.03f),
-    E(KneeL,     0, 0.0f, 0.03f,      0.064f, 0.07f, 0.058f,  kSuit, 0.02f),
-    C(KneeL,     0, -0.22f, 0.005f,  0, -0.40f, 0.01f, 0.072f, kBoot, 0.03f),
-    E(AnkleL,    0, -0.025f, 0.065f,  0.075f, 0.068f, 0.155f, kBoot, 0.04f),
-    E(AnkleL,    0, -0.075f, 0.065f,  0.08f, 0.022f, 0.16f,   kUnder, 0.01f),  // suela
-    C(HipR,      0, 0, 0,  0, -0.42f, 0,              0.08f,  kUnder, 0.04f),
-    E(HipR,      0, -0.13f, 0.006f,   0.104f, 0.17f, 0.106f,  kSuit, 0.02f),
-    C(KneeR,     0, 0, 0,  0, -0.40f, 0,              0.058f, kUnder, 0.03f),
-    E(KneeR,     0, 0.0f, 0.03f,      0.064f, 0.07f, 0.058f,  kSuit, 0.02f),
-    C(KneeR,     0, -0.22f, 0.005f,  0, -0.40f, 0.01f, 0.072f, kBoot, 0.03f),
-    E(AnkleR,    0, -0.025f, 0.065f,  0.075f, 0.068f, 0.155f, kBoot, 0.04f),
-    E(AnkleR,    0, -0.075f, 0.065f,  0.08f, 0.022f, 0.16f,   kUnder, 0.01f),
+    // tronco: abrigo cruzado con cuello alto y faldón hasta las rodillas
+    E(Pelvis,    0, -0.01f, 0,        0.165f, 0.11f, 0.125f,  kCoat, 0.0f),
+    E(Spine,     0, 0.08f, 0,         0.15f, 0.14f, 0.11f,    kCoat, 0.04f),
+    E(Chest,     0, 0.10f, 0.0f,      0.18f, 0.155f, 0.12f,   kCoat, 0.04f),
+    E(Chest,     0.04f, 0.07f, 0.105f, 0.045f, 0.12f, 0.022f, kCoatDark, 0.01f), // solapa cruzada
+    E(Chest,     0, 0.215f, -0.025f,  0.115f, 0.07f, 0.1f,    kCoat, 0.03f),     // cuello alto
+    E(Chest,     0, 0.235f, 0.01f,    0.095f, 0.045f, 0.09f,  kScarf, 0.015f),   // bufanda
+    E(Pelvis,    0, -0.2f, -0.015f,   0.185f, 0.24f, 0.145f,  kCoat, 0.03f),     // faldón
+    E(Pelvis,    0, 0.045f, 0,        0.168f, 0.025f, 0.128f, kCoatDark, 0.01f), // cinturón
+    C(Neck,      0, 0, 0,  0, 0.1f, 0,                0.042f, kSkinC, 0.02f),
+    // cabeza (proporción adulta: más pequeña y de mandíbula marcada)
+    E(Head,      0, 0.125f, 0.01f,    0.112f, 0.135f, 0.122f, kSkinC, 0.03f),
+    E(Head,      0, 0.06f, 0.04f,     0.078f, 0.06f, 0.08f,   kSkinC, 0.035f),
+    E(Head,      0, 0.11f, 0.128f,    0.014f, 0.022f, 0.016f, kSkinC, 0.012f),  // nariz
+    E(Head,      0.112f, 0.12f, 0,    0.018f, 0.032f, 0.024f, kSkinC, 0.01f),
+    E(Head,     -0.112f, 0.12f, 0,    0.018f, 0.032f, 0.024f, kSkinC, 0.01f),
+    E(Head,      0, 0.185f, -0.012f,  0.122f, 0.095f, 0.13f,  kHairC, 0.006f),  // pelo corto
+    E(Head,      0, 0.12f, -0.07f,    0.114f, 0.11f, 0.085f,  kHairC, 0.02f),
+    // brazos: mangas del abrigo, puño oscuro, guantes
+    E(ShoulderL, 0.0f, -0.02f, 0,     0.058f, 0.055f, 0.06f,  kCoat, 0.03f),
+    C(ShoulderL, 0, -0.02f, 0,  0, -0.27f, 0,         0.056f, kCoat, 0.03f),
+    C(ElbowL,    0, 0, 0,  0, -0.2f, 0,               0.049f, kCoat, 0.03f),
+    E(ElbowL,    0, -0.205f, 0,       0.055f, 0.03f, 0.055f,  kCoatDark, 0.01f),
+    E(WristL,    0, -0.06f, 0.006f,   0.044f, 0.068f, 0.054f, kGlove, 0.03f),
+    E(ShoulderR, 0.0f, -0.02f, 0,     0.058f, 0.055f, 0.06f,  kCoat, 0.03f),
+    C(ShoulderR, 0, -0.02f, 0,  0, -0.27f, 0,         0.056f, kCoat, 0.03f),
+    C(ElbowR,    0, 0, 0,  0, -0.2f, 0,               0.049f, kCoat, 0.03f),
+    E(ElbowR,    0, -0.205f, 0,       0.055f, 0.03f, 0.055f,  kCoatDark, 0.01f),
+    E(WristR,    0, -0.06f, 0.006f,   0.044f, 0.068f, 0.054f, kGlove, 0.03f),
+    // piernas: pantalón y botas altas
+    C(HipL,      0, 0, 0,  0, -0.42f, 0,              0.074f, kUnder, 0.04f),
+    C(KneeL,     0, 0, 0,  0, -0.40f, 0,              0.055f, kUnder, 0.03f),
+    C(KneeL,     0, -0.2f, 0.005f,  0, -0.40f, 0.01f, 0.064f, kBoot, 0.03f),
+    E(AnkleL,    0, -0.025f, 0.06f,   0.07f, 0.064f, 0.15f,   kBoot, 0.04f),
+    E(AnkleL,    0, -0.074f, 0.06f,   0.074f, 0.02f, 0.155f,  kCoatDark, 0.01f), // suela
+    C(HipR,      0, 0, 0,  0, -0.42f, 0,              0.074f, kUnder, 0.04f),
+    C(KneeR,     0, 0, 0,  0, -0.40f, 0,              0.055f, kUnder, 0.03f),
+    C(KneeR,     0, -0.2f, 0.005f,  0, -0.40f, 0.01f, 0.064f, kBoot, 0.03f),
+    E(AnkleR,    0, -0.025f, 0.06f,   0.07f, 0.064f, 0.15f,   kBoot, 0.04f),
+    E(AnkleR,    0, -0.074f, 0.06f,   0.074f, 0.02f, 0.155f,  kCoatDark, 0.01f),
 };
 // clang-format on
 #undef E
