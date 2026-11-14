@@ -37,7 +37,19 @@ set(LOGIC_SOURCES
     src/audio/synth.cpp
 )
 
+
+# Shaders: ficheros .glsl/.vert/.frag de verdad, metidos en el binario como cadenas al compilar.
+file(GLOB SHADER_FILES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/render/shaders/*)
+set(SHADERS_INC ${CMAKE_BINARY_DIR}/generated/shaders.inc)
+add_custom_command(
+    OUTPUT ${SHADERS_INC}
+    COMMAND ${CMAKE_COMMAND} -DOUT=${SHADERS_INC} "-DSHADERS=${SHADER_FILES}" -P ${CMAKE_SOURCE_DIR}/cmake/embed_shaders.cmake
+    DEPENDS ${SHADER_FILES} ${CMAKE_SOURCE_DIR}/cmake/embed_shaders.cmake
+    COMMENT "Metiendo los shaders en el binario"
+    VERBATIM)
+
 add_executable(game
+    ${SHADERS_INC}
     ${LOGIC_SOURCES}
     src/main.cpp
     src/core/platform_x11.cpp
@@ -52,7 +64,7 @@ add_executable(game
 )
 
 # ${CMAKE_DL_LIBS}: dlopen de PulseAudio en tiempo de ejecución (sin cabeceras al compilar).
-target_include_directories(game PRIVATE src)
+target_include_directories(game PRIVATE src ${CMAKE_BINARY_DIR}/generated)
 target_link_libraries(game PRIVATE OpenGL::OpenGL OpenGL::GLX X11::X11 X11::Xi Threads::Threads ${CMAKE_DL_LIBS})
 
 target_compile_options(game PRIVATE
