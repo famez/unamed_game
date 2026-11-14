@@ -14,6 +14,15 @@
 constexpr uint32_t rgba(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255) {
     return uint32_t(r) | uint32_t(g) << 8 | uint32_t(b) << 16 | uint32_t(a) << 24;
 }
+// El mismo color con otra opacidad (0..1).
+inline uint32_t withAlpha(uint32_t c, float a) { return (c & 0x00FFFFFFu) | uint32_t(clampf(a, 0, 1) * 255.0f + 0.5f) << 24; }
+// Mezcla de dos colores (t = 0: a, 1: b), conservando el alfa de a.
+inline uint32_t mixRgb(uint32_t a, uint32_t b, float t) {
+    auto ch = [&](int shift) {
+        return uint32_t(lerpf(float((a >> shift) & 0xFF), float((b >> shift) & 0xFF), t)) << shift;
+    };
+    return ch(0) | ch(8) | ch(16) | (a & 0xFF000000u);
+}
 
 struct DebugVertex {
     float x, y, z;

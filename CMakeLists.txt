@@ -58,6 +58,7 @@ add_executable(game
     src/render/text.cpp
     src/ui/menu.cpp
     src/ui/inventory_menu.cpp
+    src/ui/hud.cpp
     src/render/models.cpp
     src/audio/audio.cpp
     src/render/renderer.cpp
