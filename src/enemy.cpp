@@ -365,10 +365,10 @@ Enemy makeEnemy(EnemyKind kind, Vec3 pos, float yaw, float seed) {
     return e;
 }
 
-Vec3 Enemy::center() const { return body.pos + Vec3{0, def().height * 0.5f, 0}; }
+Vec3 Enemy::center() const { return body.pos + Vec3{0, body.height * 0.5f, 0}; }
 
 Mat4 Enemy::modelMatrix() const {
-    Mat4 m = translate(body.pos) * rotateY(yaw);
+    Mat4 m = translate(body.pos) * rotateY(yaw) * scale({size, size, size});
     if (state == AiState::Spawning) {  // crece desde el portal del suelo
         float s = smoothstep01(stateTime / 0.8f);
         return m * scale({s, s, s});
@@ -376,8 +376,8 @@ Mat4 Enemy::modelMatrix() const {
     if (state == AiState::Dying) {  // gira y se encoge hasta desaparecer en luz
         float u = smoothstep01(stateTime / 0.5f);
         float s = 1.0f - 0.85f * u;
-        return m * translate({0, def().height * 0.5f, 0}) * rotateY(u * 6.0f) * scale({s, s, s}) *
-               translate({0, -def().height * 0.5f, 0});
+        float hh = def().height * 0.5f;
+        return m * translate({0, hh, 0}) * rotateY(u * 6.0f) * scale({s, s, s}) * translate({0, -hh, 0});
     }
     return m;
 }

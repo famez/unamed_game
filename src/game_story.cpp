@@ -26,10 +26,15 @@ void Game::storyCommand(const StoryLine& cmd) {
     } else if (c == "nombre") {
         size_t sp = cmd.text.find(' ');
         if (sp != std::string::npos) names_[cmd.text.substr(0, sp)] = cmd.text.substr(sp + 1);
-    } else if (c == "oleadas") {
-        wavesEnabled_ = true;
+    } else if (c == "capitulo") {
         chapterBanner_ = 5.0f;
-        waveTimer_ = chapterBanner_ + 0.5f;  // la primera oleada, cuando se va el cartel
+    } else if (c == "armar") {  // un combate que espera al guion (jefes)
+        for (Encounter& e : encounters_)
+            if (e.id == cmd.text) e.armed = true;
+    } else if (c == "abrir") {
+        setGate(cmd.text, false);
+    } else if (c == "dar") {
+        if (cmd.text == "farolillo") inv_.add(ItemId::BlazeGem);
     } else if (c == "eco_activa") {
         int n = std::atoi(cmd.text.c_str()) - 1;
         if (n >= 0 && n < int(echoes_.size())) {
@@ -79,9 +84,6 @@ void Game::updateStory(float dt) {
             playScene("eco_enemigo");
         }
     }
-    if (croma_ >= 0.5f) playScene("neones");
-    if (croma_ >= 0.8f) playScene("casi");
-    if (croma_ >= 1.0f && enemies_.empty()) playScene("fin_capitulo");
 
     // Ecos de memoria: se recogen al pasar cerca.
     for (MemoryEcho& m : echoes_) {

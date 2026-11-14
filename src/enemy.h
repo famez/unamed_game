@@ -60,6 +60,11 @@ struct Enemy {
     float seed = 0;       // desfase de animación y de la deambulación
     float phase = 0;      // ciclo de pasos / aleteo
     bool attackHit = false;  // el ataque en curso ya ha golpeado
+    bool boss = false;    // jefe: más grande y resistente; invoca ayuda
+    float size = 1;       // escala del cuerpo (jefes)
+    int bossPhase = 0;
+    const char* title = nullptr;  // nombre propio (jefes)
+    const char* name() const { return title ? title : def().name; }
     Vec3 knock;           // empujón recibido, se frena solo
     Pose pose;
     Mat4 joints[kMaxJoints] = {};

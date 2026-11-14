@@ -27,9 +27,6 @@ const SpellDef kSpells[int(Spell::Count)] = {
     {"Hielo", 10, rgba(120, 220, 255)},
     {"Cura", 25, rgba(120, 255, 150)},
 };
-// Oleadas: duendes, setas, polillas. Después de la última se repite con uno más de cada.
-const int kWaves[][3] = {{3, 0, 0}, {2, 1, 0}, {3, 0, 2}, {2, 2, 2}, {4, 2, 3}};
-constexpr int kWaveCount = int(sizeof(kWaves) / sizeof(kWaves[0]));
 // clang-format on
 
 constexpr float kHeroRespawn = 3.0f;
@@ -37,7 +34,6 @@ constexpr float kInvulnAfterHit = 0.8f;
 constexpr float kPerfectGuard = 0.35f;  // bloquear al poco de levantar la guardia rechaza al atacante
 constexpr float kMpRegen = 1.0f;        // PM por segundo
 constexpr float kHpOrb = 8, kMpOrb = 6;
-constexpr float kArena = 15.4f;         // los enemigos no salen de |x|, |z| < esto
 constexpr size_t kMaxParticles = 900;
 
 uint32_t scaleColor(uint32_t c, float k) {
@@ -53,7 +49,7 @@ uint32_t enemyColor(EnemyKind k) {
         default: return rgba(40, 225, 255);
     }
 }
-constexpr float kCromaPerKill = 0.035f, kCromaPerWave = 0.1f;
+constexpr float kCromaPerKill = 0.015f;
 
 }  // namespace
 
@@ -64,204 +60,23 @@ float Game::random01() {
     return float(rng_ >> 8) / float(1u << 24);
 }
 
-// --- Escenario --------------------------------------------------------------------------
-
-void Game::buildLevel() {
-    auto block = [&](Vec3 c, Vec3 h, uint32_t col, Material m = Material::Stone) {
-        blocks_.push_back({boxFromCenter(c, h), col, m});
-    };
-    auto deco = [&](const Mat4& t, Vec3 c, Vec3 h, uint32_t col, Material m, bool sphere) {
-        decor_.push_back({t, c, h, col, m, sphere});
-    };
-    const Mat4 id = Mat4::identity();
-    // Paleta: arquitectura blanca y nacarada; el color lo ponen los neones, las plantas y
-    // los hologramas.
-    const uint32_t white = rgba(226, 230, 240), glass = rgba(40, 92, 130), cyan = rgba(40, 220, 255);
-    const uint32_t magenta = rgba(255, 70, 190), amber = rgba(255, 190, 60), lime = rgba(120, 255, 140);
-    const uint32_t neons[] = {cyan, magenta, amber, lime};
-    // Contorno luminoso de la cara superior de un bloque (cuatro tiras finas).
-    auto rim = [&](Vec3 c, float hx, float hz, uint32_t col) {
-        const float t = 0.025f;
-        deco(id, c + Vec3{0, 0, hz}, {hx + t, t, t}, col, Material::Glow, false);
-        deco(id, c - Vec3{0, 0, hz}, {hx + t, t, t}, col, Material::Glow, false);
-        deco(id, c + Vec3{hx, 0, 0}, {t, t, hz + t}, col, Material::Glow, false);
-        deco(id, c - Vec3{hx, 0, 0}, {t, t, hz + t}, col, Material::Glow, false);
-    };
-
-    // Edificio: bloque blanco con cornisa, franja de neón en lo alto, cristaleras con marco
-    // luminoso, puerta en arco de luz y un cartel holográfico (`in` apunta hacia la plaza).
-    auto building = [&](float cx, float cz, float hx, float hz, float height, Vec3 in, uint32_t tint, uint32_t neon) {
-        block({cx, height * 0.5f, cz}, {hx, height * 0.5f, hz}, tint);
-        deco(id, {cx, height + 0.12f, cz}, {hx + 0.15f, 0.12f, hz + 0.15f}, white, Material::Stone, false);  // cornisa
-        deco(id, {cx, height + 0.02f, cz}, {hx + 0.16f, 0.035f, hz + 0.16f}, neon, Material::Glow, false);
-        bool longX = hx > hz;
-        float shortHalf = longX ? hz : hx, longHalf = longX ? hx : hz;
-        Vec3 along = longX ? Vec3{1, 0, 0} : Vec3{0, 0, 1};
-        Vec3 face = Vec3{cx, 0, cz} + in * (shortHalf + 0.03f);
-        auto panel = [&](Vec3 c, float w, float h, uint32_t col, Material m, float depth = 0.05f) {
-            deco(id, c, longX ? Vec3{w, h, depth} : Vec3{depth, h, w}, col, m, false);
-        };
-        // Cúpula o antena en el tejado.
-        if (int(cx * 3 + cz) % 2 == 0)
-            deco(id, {cx + along.x * longHalf * 0.4f, height + 0.25f, cz + along.z * longHalf * 0.4f}, {1.2f, 0.9f, 1.2f},
-                 white, Material::Stone, true);
-        else {
-            Vec3 a{cx - along.x * longHalf * 0.5f, height, cz - along.z * longHalf * 0.5f};
-            deco(id, a + Vec3{0, 1.0f, 0}, {0.06f, 1.0f, 0.06f}, white, Material::Metal, false);
-            deco(id, a + Vec3{0, 2.05f, 0}, {0.12f, 0.12f, 0.12f}, neon, Material::Glow, true);
-        }
-        // Puerta: arco de luz.
-        panel(face + Vec3{0, 1.15f, 0}, 0.7f, 1.15f, rgba(30, 40, 70), Material::Metal);
-        panel(face + Vec3{0, 2.32f, 0} + in * 0.01f, 0.78f, 0.04f, neon, Material::Glow);
-        panel(face + Vec3{0, 1.15f, 0} + along * 0.74f + in * 0.01f, 0.04f, 1.15f, neon, Material::Glow);
-        panel(face + Vec3{0, 1.15f, 0} - along * 0.74f + in * 0.01f, 0.04f, 1.15f, neon, Material::Glow);
-        // Cartel holográfico encima de la puerta.
-        panel(face + Vec3{0, 3.0f, 0} + in * 0.35f, 0.9f, 0.28f, neons[int(cx + cz + 8) & 3], Material::Glow, 0.015f);
-        for (float side : {-1.0f, 1.0f}) {
-            for (float y : {1.7f, height > 5.0f ? 4.0f : -1.0f}) {
-                if (y < 0) continue;
-                Vec3 w = face + along * (side * longHalf * 0.55f) + Vec3{0, y, 0};
-                panel(w, 0.9f, 0.7f, glass, Material::Metal);
-                panel(w + Vec3{0, -0.72f, 0} + in * 0.02f, 0.9f, 0.025f, neon, Material::Glow);  // repisa luminosa
-            }
-            // Jardinera blanca con plantas y flores de colores.
-            Vec3 box = face + along * (side * longHalf * 0.55f) + in * 0.3f + Vec3{0, 0.3f, 0};
-            deco(id, box, longX ? Vec3{0.9f, 0.3f, 0.25f} : Vec3{0.25f, 0.3f, 0.9f}, white, Material::Stone, false);
-            for (int i = 0; i < 5; ++i) {
-                Vec3 p = box + along * (-0.68f + 0.34f * float(i)) + Vec3{0, 0.36f, 0};
-                deco(id, p, {0.16f, 0.13f, 0.16f}, rgba(70, 190, 120), Material::Cloth, true);
-                deco(id, p + Vec3{0, 0.12f, 0}, {0.06f, 0.05f, 0.06f}, neons[(i + int(cx)) & 3], Material::Glow, true);
-            }
-        }
-    };
-    const uint32_t tints[] = {rgba(226, 230, 240), rgba(205, 212, 250), rgba(200, 238, 222), rgba(250, 210, 228),
-                              rgba(250, 226, 196), rgba(222, 208, 250)};
-    int k = 0;
-    for (float x : {-11.0f, 0.0f, 11.0f}) {
-        building(x, 19, 5.0f, 3.0f, 4.6f + float(k % 3) * 1.0f, {0, 0, -1}, tints[k % 6], neons[k & 3]); ++k;
-        building(x, -19, 5.0f, 3.0f, 4.6f + float(k % 3) * 1.0f, {0, 0, 1}, tints[k % 6], neons[k & 3]); ++k;
-        building(19, x, 3.0f, 5.0f, 4.6f + float(k % 3) * 1.0f, {-1, 0, 0}, tints[k % 6], neons[k & 3]); ++k;
-        building(-19, x, 3.0f, 5.0f, 4.6f + float(k % 3) * 1.0f, {1, 0, 0}, tints[k % 6], neons[k & 3]); ++k;
-    }
-    // Torres en las esquinas con anillos de luz y faro arriba; entre edificios, jardineras
-    // altas: la plaza queda cerrada.
-    for (float sx : {-1.0f, 1.0f})
-        for (float sz : {-1.0f, 1.0f}) {
-            Vec3 c{sx * 18.5f, 0, sz * 18.5f};
-            block(c + Vec3{0, 4.5f, 0}, {2.6f, 4.5f, 2.6f}, white);
-            for (int r = 0; r < 3; ++r)
-                deco(id, c + Vec3{0, 2.5f + 2.5f * float(r), 0}, {2.68f, 0.06f, 2.68f}, neons[(r + int(sx + 2 * sz + 3)) & 3],
-                     Material::Glow, false);
-            deco(id, c + Vec3{0, 9.0f, 0}, {2.4f, 1.4f, 2.4f}, white, Material::Stone, true);
-            deco(id, c + Vec3{0, 10.6f, 0}, {0.3f, 0.3f, 0.3f}, cyan, Material::Glow, true);
-        }
-    for (float g : {-5.5f, 5.5f}) {
-        for (Vec3 c : {Vec3{g, 1.0f, 17.0f}, Vec3{g, 1.0f, -17.0f}, Vec3{17.0f, 1.0f, g}, Vec3{-17.0f, 1.0f, g}}) {
-            Vec3 half{std::fabs(c.x) > 16 ? 1.3f : 0.6f, 1.0f, std::fabs(c.z) > 16 ? 1.3f : 0.6f};
-            block(c, half, white);
-            deco(id, c + Vec3{0, 1.0f, 0}, half + Vec3{0.02f, 0.04f, 0.02f}, magenta, Material::Glow, false);
-            deco(id, c + Vec3{0, 1.35f, 0}, {half.x * 1.1f, 0.45f, half.z * 1.1f}, rgba(70, 200, 120), Material::Cloth, true);
-        }
-    }
-
-    // Fuente de luz: pilón blanco (hay que saltar), agua luminosa, columna con espiral de
-    // neón y un prisma que flota y gira encima (se dibuja aparte, ver drawLevel).
-    block({0, 0.35f, 0}, {2.4f, 0.35f, 2.4f}, white);
-    block({0, 1.0f, 0}, {0.4f, 1.0f, 0.4f}, white);
-    block({0, 2.05f, 0}, {1.0f, 0.12f, 1.0f}, white);
-    deco(id, {0, 0.66f, 0}, {2.15f, 0.05f, 2.15f}, rgba(40, 125, 185), Material::Water, false);
-    deco(id, {0, 2.19f, 0}, {0.88f, 0.03f, 0.88f}, rgba(40, 125, 185), Material::Water, false);
-    rim({0, 0.70f, 0}, 2.4f, 2.4f, cyan);  // borde del pilón
-    for (int i = 0; i < 10; ++i) {
-        float a = float(i) * 0.9f, y = 0.2f + 0.18f * float(i);
-        deco(translate({0, y, 0}) * rotateY(a), {0.41f, 0, 0}, {0.02f, 0.05f, 0.12f}, magenta, Material::Glow, false);
-    }
-    lamps_.push_back({0, 3.0f, 0});
-
-    // Terraza al noreste con dos escalones (se suben andando) y un árbol.
-    block({10.5f, 0.45f, 10.5f}, {3.5f, 0.45f, 3.5f}, rgba(214, 222, 240));
-    block({10.5f, 0.15f, 6.1f}, {1.5f, 0.15f, 0.3f}, rgba(214, 222, 240));
-    block({10.5f, 0.30f, 6.7f}, {1.5f, 0.30f, 0.3f}, rgba(214, 222, 240));
-    rim({10.5f, 0.9f, 10.5f}, 3.5f, 3.5f, cyan);
-    // Plataforma alta al noroeste: se llega saltando por dos bloques; bajos luminosos.
-    block({-6.5f, 0.45f, 7.0f}, {0.8f, 0.45f, 0.8f}, white);
-    block({-8.7f, 1.6f, 9.0f}, {0.8f, 0.15f, 0.8f}, white);
-    block({-11.5f, 2.4f, 11.5f}, {2.2f, 0.2f, 2.2f}, white);
-    block({-11.5f, 1.1f, 11.5f}, {0.35f, 1.1f, 0.35f}, white);
-    rim({-8.7f, 1.75f, 9.0f}, 0.8f, 0.8f, magenta);
-    rim({-11.5f, 2.6f, 11.5f}, 2.2f, 2.2f, magenta);
-    rim({-6.5f, 0.9f, 7.0f}, 0.8f, 0.8f, magenta);
-
-    // Árboles: tronco blanco y copa de colores vivos con frutos de luz.
-    auto tree = [&](Vec3 base, float size, uint32_t leaves) {
-        block(base + Vec3{0, 1.1f * size, 0}, {0.2f * size, 1.1f * size, 0.2f * size}, white, Material::Stone);
-        Vec3 top = base + Vec3{0, 2.5f * size, 0};
-        deco(id, top, Vec3{1.3f, 1.0f, 1.3f} * size, leaves, Material::Cloth, true);
-        deco(id, top + Vec3{0.5f, 0.6f, 0.2f} * size, Vec3{0.9f, 0.75f, 0.9f} * size, scaleColor(leaves, 1.12f), Material::Cloth, true);
-        deco(id, top + Vec3{-0.45f, 0.4f, -0.4f} * size, Vec3{0.9f, 0.75f, 0.9f} * size, scaleColor(leaves, 0.88f), Material::Cloth, true);
-        for (int i = 0; i < 5; ++i) {
-            float a = float(i) * 1.26f;
-            deco(id, top + Vec3{std::cos(a) * 1.1f, -0.45f + 0.2f * float(i % 2), std::sin(a) * 1.1f} * size,
-                 {0.08f, 0.08f, 0.08f}, rgba(255, 245, 160), Material::Glow, true);
-        }
-    };
-    tree({12.0f, 0.9f, 12.5f}, 1.0f, rgba(255, 110, 200));
-    tree({-13.0f, 0, -4.0f}, 1.2f, rgba(170, 110, 255));
-    tree({13.0f, 0, -5.0f}, 1.1f, rgba(255, 120, 170));
-    tree({-4.0f, 0, -13.5f}, 1.0f, rgba(90, 210, 255));
-    tree({4.5f, 0, 13.5f}, 1.1f, rgba(255, 150, 90));
-
-    // Farolas: poste blanco fino y esfera de luz.
-    for (Vec3 p : {Vec3{5.5f, 0, -5.5f}, Vec3{-5.5f, 0, -5.5f}, Vec3{5.5f, 0, 5.0f}, Vec3{-4.0f, 0, 4.0f}}) {
-        block(p + Vec3{0, 1.6f, 0}, {0.08f, 1.6f, 0.08f}, white, Material::Metal);
-        deco(id, p + Vec3{0, 3.35f, 0}, {0.2f, 0.2f, 0.2f}, cyan, Material::Glow, true);
-        deco(id, p + Vec3{0, 3.1f, 0}, {0.16f, 0.03f, 0.16f}, white, Material::Metal, false);
-        lamps_.push_back(p + Vec3{0, 3.35f, 0});
-    }
-
-    // Cajas rompibles y cofres.
-    for (Vec3 c : {Vec3{-12.0f, 0, -12.0f}, Vec3{-11.0f, 0, -12.5f}, Vec3{-12.7f, 0, -10.9f}, Vec3{8.0f, 0, -12.0f},
-                   Vec3{9.0f, 0, -12.4f}, Vec3{-13.0f, 0, 6.0f}})
-        crates_.push_back({boxFromCenter(c + Vec3{0, 0.4f, 0}, {0.4f, 0.4f, 0.4f})});
-    TreasureChest a;
-    a.pos = {13.0f, 0, -12.0f};
-    a.yaw = -kPi * 0.75f;
-    a.contents = {{ItemId::Potion, 2}, {ItemId::Ether, 1}};
-    a.munny = 30;
-    TreasureChest b;
-    b.pos = {11.5f, 0.9f, 12.6f};
-    b.yaw = kPi;
-    b.contents = {{ItemId::StarStaff, 1}, {ItemId::HiPotion, 1}};
-    TreasureChest c;
-    c.pos = {-11.5f, 2.6f, 11.8f};
-    c.yaw = kPi * 0.75f;
-    c.contents = {{ItemId::AuroraBlade, 1}, {ItemId::BlazeGem, 1}, {ItemId::Elixir, 1}};
-    c.munny = 50;
-    chests_ = {a, b, c};
-
-    spawnPoints_ = {{8, 0, -3}, {-8, 0, -3}, {3, 0, -9}, {-3, 0, 8}, {-8, 0, 3}, {0, 0, -12},
-                    {12, 0, 0}, {-12, 0, 0}, {7, 0, 4}, {-6, 0, -9}};
-    heroStart_ = {0, 0, -8};
-}
-
 void Game::rebuildSolids() {
     world_.solids.clear();
     for (const Block& b : blocks_) world_.solids.push_back(b.box);
     for (const Crate& c : crates_)
         if (!c.broken) world_.solids.push_back(c.box);
     for (const TreasureChest& c : chests_) world_.solids.push_back(boxFromCenter(c.pos + Vec3{0, 0.35f, 0}, {0.45f, 0.35f, 0.45f}));
+    for (const Gate& g : gates_)
+        if (g.closed) world_.solids.push_back(g.box);
 }
 
 void Game::init(const char* assetDir) {
-    buildLevel();
-    rebuildSolids();
-    hero_.body.pos = heroStart_;
-    // Historia: el guion del capítulo y los ecos de memoria repartidos por la plaza.
-    names_ = {{"brizna", "???"}, {"prota", "???"}, {"voz", "Una voz"}, {"eco", "Eco"}, {"sistema", ""}};
-    echoes_ = {{{0, 1.3f, -3.3f}, "recuerdo_1"}, {{-11.5f, 3.6f, 11.0f}, "recuerdo_2"}, {{12.5f, 2.2f, 9.2f}, "recuerdo_3"}};
-    if (assetDir && script_.load(std::string(assetDir) + "/story/capitulo1.txt")) {
-        story_ = true;
-        wavesEnabled_ = false;
+    // Historia: el guion del capítulo (sin él, el escenario no tiene combates ni escenas).
+    names_ = {{"brizna", "???"}, {"prota", "???"}, {"voz", "Una voz"}, {"eco", "Eco"}, {"sistema", ""},
+              {"archivera", "???"}, {"nora", "Nora"}};
+    story_ = assetDir && script_.load(std::string(assetDir) + "/story/capitulo1.txt");
+    loadLevel(LevelId::Plaza);
+    if (story_) {
         hero_.body.pos = {0, 0, -3.4f};  // despierta junto a la fuente
         hero_.yaw = kPi;
         hero_.lying = 1;
@@ -299,7 +114,6 @@ void Game::update(float dt, const Controls& c) {
     shake_ = std::max(0.0f, shake_ - dt * 1.5f);
     fovKick_ += ((hero_.dashAmount() > 0 ? 0.08f : 0.0f) + (isFinisher(hero_.move()) ? 0.06f : 0.0f) - fovKick_) *
                 (1.0f - std::exp(-8.0f * dt));
-    waveBanner_ = std::max(0.0f, waveBanner_ - dt);
     lastHitAge_ += dt;
     hpGhost_ = hpGhost_ > hp_ ? (heroFlash_ > 0 ? hpGhost_ : moveTowards(hpGhost_, hp_, 40.0f * dt)) : hp_;
 
@@ -328,7 +142,7 @@ void Game::update(float dt, const Controls& c) {
         if (attackBuffer_ > 0 && heroAttack(length(c.move) > 0.1f ? c.move : bufferedMove_)) attackBuffer_ = 0;
         attackBuffer_ = std::max(0.0f, attackBuffer_ - dt);
         dodgeBuffer_ = std::max(0.0f, dodgeBuffer_ - dt);
-        if (c.interact) tryOpenChest();
+        if (c.interact) tryInteract();
     }
     if (lock_ >= int(enemies_.size()) || (lock_ >= 0 && !enemies_[size_t(lock_)].targetable())) lock_ = -1;
 
@@ -402,46 +216,10 @@ void Game::update(float dt, const Controls& c) {
     for (TreasureChest& ch : chests_)
         if (ch.open) ch.openTime += dt;
 
-    if (enemies_.empty() && waveActive_) {  // oleada superada: la ciudad recupera color
-        waveActive_ = false;
-        if (wave_ == 1) playScene("plaza_luz");
-        croma_ = std::min(1.0f, croma_ + kCromaPerWave);
-        notify(croma_ >= 1.0f ? "La ciudad brilla de nuevo" : "El color vuelve a la ciudad", rgba(110, 255, 190));
-    }
     cromaShown_ = moveTowards(cromaShown_, croma_, 0.25f * dt);
     for (ColorSplash& sp : splashes_) sp.age += dt;
-    if (enemies_.empty() && wavesEnabled_) {
-        waveTimer_ -= dt;
-        if (waveTimer_ <= 0) {
-            spawnWave();
-            waveTimer_ = 4.0f;
-        }
-    }
+    updateLevel(dt);
     updateEffects(dt);
-}
-
-void Game::spawnWave() {
-    const int* w = kWaves[std::min(wave_, kWaveCount - 1)];
-    int extra = std::max(0, wave_ - (kWaveCount - 1));
-    ++wave_;
-    waveBanner_ = 2.5f;
-    waveActive_ = true;
-    uiSound(Sfx::WaveStart, 0.8f);
-    for (int kind = 0; kind < int(EnemyKind::Count); ++kind)
-        for (int n = 0; n < w[kind] + extra; ++n) {
-            // Un punto de aparición lejos del jugador (y no siempre el mismo).
-            Vec3 p = spawnPoints_[0];
-            for (int tries = 0; tries < 12; ++tries) {
-                p = spawnPoints_[size_t(random01() * float(spawnPoints_.size())) % spawnPoints_.size()];
-                p += Vec3{randRange(-1.2f, 1.2f), 0, randRange(-1.2f, 1.2f)};
-                if (length(flat(p - hero_.body.pos)) > 6.0f) break;
-            }
-            Vec3 to = hero_.body.pos - p;
-            Enemy e = makeEnemy(EnemyKind(kind), p, std::atan2(to.x, to.z), random01() * 10.0f);
-            if (e.def().flying) e.body.pos.y = e.def().hoverHeight - e.def().height * 0.5f;
-            enemies_.push_back(e);
-            spawnRing(p + Vec3{0, 0.03f, 0}, 1.2f, 0.9f, rgba(150, 90, 255));
-        }
 }
 
 // --- Combate del protagonista -------------------------------------------------------------
@@ -696,7 +474,7 @@ void Game::hitEnemy(Enemy& e, Vec3 dir, float damage, float knock, float lift, b
         return;
     }
     // Las setas, mientras saltan para aplastar, solo se detienen con un remate.
-    bool armored = e.kind == EnemyKind::Shroom && e.state == AiState::Attack && !heavy;
+    bool armored = (e.kind == EnemyKind::Shroom && e.state == AiState::Attack && !heavy) || (e.boss && !heavy);
     if (armored) return;
     e.state = AiState::Stagger;
     e.stateTime = 0;
@@ -798,14 +576,16 @@ void Game::defeatHero() {
 }
 
 void Game::respawnHero() {
+    resetEncounter();
     hero_.reset();
     applyWeapon();
-    hero_.body.pos = heroStart_;
+    hero_.body.pos = checkpoint_;
+    hero_.yaw = checkpointYaw_;
     hp_ = hpGhost_ = maxHp_;
     mp_ = maxMp_;
     heroInvuln_ = 2.0f;
     playScene("caida");
-    spawnRing(heroStart_ + Vec3{0, 0.05f, 0}, 1.5f, 0.8f, rgba(255, 255, 200));
+    spawnRing(checkpoint_ + Vec3{0, 0.05f, 0}, 1.5f, 0.8f, rgba(255, 255, 200));
 }
 
 // --- Enemigos ------------------------------------------------------------------------
@@ -864,11 +644,11 @@ void Game::updateEnemy(Enemy& e, float dt) {
                 Vec3 tangent{-dirHero.z, 0, dirHero.x};
                 if (std::fmod(e.seed, 2.0f) < 1.0f) tangent = -tangent;
                 desired = (dirHero * radial + tangent * 0.7f) * d.speed;
-            } else if (dist > d.radius + hero_.body.radius + 0.25f) {
+            } else if (dist > e.body.radius + hero_.body.radius + 0.25f) {
                 desired = dirHero * d.speed;
             }
             float dy = std::fabs(hero_.body.pos.y - e.body.pos.y);
-            if (dist < d.attackRange && e.cooldown <= 0 && (d.flying || dy < 1.2f)) {
+            if (dist < d.attackRange * e.size && e.cooldown <= 0 && (d.flying || dy < 1.2f)) {
                 e.state = AiState::Windup;
                 e.stateTime = 0;
             }
@@ -884,7 +664,7 @@ void Game::updateEnemy(Enemy& e, float dt) {
             if (e.kind == EnemyKind::Imp) {
                 if (!e.attackHit && length(e.center() - heroChest) < 0.95f + e.body.radius) {
                     e.attackHit = true;
-                    hurtHero(e.forward(), d.damage, d.knock, &e);
+                    hurtHero(e.forward(), d.damage * (e.boss ? 1.6f : 1.0f), d.knock, &e);
                 }
                 if (e.stateTime > d.attackTime) {
                     e.state = AiState::Recover;
@@ -893,12 +673,12 @@ void Game::updateEnemy(Enemy& e, float dt) {
             } else if (e.kind == EnemyKind::Shroom) {
                 // Aterriza: onda alrededor. Saltar a tiempo la esquiva.
                 if ((e.body.grounded && e.stateTime > 0.2f) || e.stateTime > 2.0f) {
-                    const float radius = 2.6f;
+                    const float radius = 2.6f * e.size;
                     spawnRing(e.body.pos + Vec3{0, 0.05f, 0}, radius, 0.45f, rgba(90, 240, 220));
                     spawnSparks(e.body.pos, {0, 1, 0}, 12, rgba(255, 230, 120), 4.0f, false);
                     shake_ = std::max(shake_, 0.2f);
                     bool heroLow = std::fabs(hero_.body.pos.y - e.body.pos.y) < 0.35f && hero_.body.grounded;
-                    if (heroLow && dist < radius + hero_.body.radius) hurtHero(dirHero, d.damage, d.knock, &e);
+                    if (heroLow && dist < radius + hero_.body.radius) hurtHero(dirHero, d.damage * (e.boss ? 1.6f : 1.0f), d.knock * (e.boss ? 1.4f : 1.0f), &e);
                     e.state = AiState::Recover;
                     e.stateTime = 0;
                     e.knock = {};
@@ -946,14 +726,22 @@ void Game::updateEnemy(Enemy& e, float dt) {
     e.body.vel.z = v.z;
     if (d.flying) {
         // Mantiene la altura sobre el suelo (moveBody añade la gravedad: se compensa).
-        float targetY = groundHeight(e.body.pos + Vec3{0, 0.5f, 0}) + d.hoverHeight - d.height * 0.5f;
+        float targetY = groundHeight(e.body.pos + Vec3{0, 0.5f, 0}) + d.hoverHeight - e.body.height * 0.5f;
         if (e.state == AiState::Stagger) targetY -= 0.4f;
         if (e.state == AiState::Dying) targetY = e.body.pos.y;
         e.body.vel.y = (targetY - e.body.pos.y) * 3.0f + kGravity * dt;
     }
     moveBody(e.body, world_, dt, 0.3f);
-    e.body.pos.x = clampf(e.body.pos.x, -kArena, kArena);
-    e.body.pos.z = clampf(e.body.pos.z, -kArena, kArena);
+    // Jefe: al bajar de 2/3 y de 1/3 de vida llama a dos Rastreros.
+    if (e.boss && e.alive()) {
+        float frac = e.health / (d.maxHealth * 7.0f);
+        int phase = frac < 0.33f ? 2 : frac < 0.66f ? 1 : 0;
+        if (phase > e.bossPhase) {
+            e.bossPhase = phase;
+            for (float sx : {-1.0f, 1.0f}) spawnEnemy({EnemyKind::Imp, e.body.pos + Vec3{sx * 3.0f, 0, -2.0f}});
+            shake_ = std::max(shake_, 0.3f);
+        }
+    }
     animateEnemy(e, time_, dt);
 }
 
@@ -1207,36 +995,6 @@ bool Game::equip(ItemId id) {
     inv_.weapon = id;
     applyWeapon();
     return true;
-}
-
-int Game::nearbyChest() const {
-    for (size_t i = 0; i < chests_.size(); ++i) {
-        const TreasureChest& c = chests_[i];
-        Vec3 d = flat(c.pos - hero_.body.pos);
-        if (!c.open && length(d) < 1.7f && std::fabs(c.pos.y - hero_.body.pos.y) < 0.6f) return int(i);
-    }
-    return -1;
-}
-
-void Game::tryOpenChest() {
-    int i = nearbyChest();
-    if (i < 0 || hero_.busy()) return;
-    TreasureChest& c = chests_[size_t(i)];
-    c.open = true;
-    uiSound(Sfx::Chest);
-    c.openTime = 0;
-    for (const auto& [id, n] : c.contents) {
-        inv_.add(id, n);
-        const ItemDef& d = itemDef(id);
-        std::string text = d.kind == ItemKind::Weapon ? std::string("Nuevo prisma: ") + d.name
-                                                      : std::string("Obtenido: ") + d.name;
-        if (n > 1) text += " ×" + std::to_string(n);
-        notify(text, d.color);
-    }
-    Vec3 top = c.pos + Vec3{0, 0.8f, 0};
-    dropLoot(top, c.munny, 0, 0, ItemId::Potion, false);
-    spawnSparks(top, {0, 1, 0}, 30, rgba(255, 230, 120), 4.0f);
-    spawnRing(c.pos + Vec3{0, 0.05f, 0}, 1.5f, 0.6f, rgba(255, 230, 120));
 }
 
 void Game::breakCrate(Crate& c) {

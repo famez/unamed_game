@@ -33,13 +33,21 @@ Controls press(bool Controls::*flag) {
     return c;
 }
 
-// Partida sin oleadas automáticas: cada test coloca sus enemigos. `place` pone al
-// jugador ahí y le deja posarse en el suelo.
+// Partida sin guion (sin combates de zona ni escenas): cada test coloca sus enemigos.
+// `place` pone al jugador ahí y le deja posarse en el suelo.
 Game fresh() {
     Game g;
     g.init();
-    g.waveTimer_ = 1e9f;
     return g;
+}
+// Pasa todas las escenas que detienen el juego.
+void skipDialogues(Game& g) {
+    Controls adv;
+    adv.advance = true;
+    for (int i = 0; i < 2000 && (g.dialogueBlocking() || !g.sceneQueue_.empty()); ++i) {
+        g.update(dt, adv);
+        g.update(dt, {});
+    }
 }
 void place(Game& g, Vec3 pos, float yaw = 0) {
     g.hero_.body.pos = pos;
@@ -283,34 +291,90 @@ int main() {
         CHECK(g.enemies_.empty() || g.enemies_[0].health < 24, "y golpea a la polilla");
         CHECK(g.hp_ == 100, "sin dano al jugador (PV %.0f)", g.hp_);
     }
-    {  // Oleadas
-        Game g;
-        g.init();
-        run(g, 2.2f);
-        CHECK(g.wave_ == 1 && g.enemies_.size() == 3, "oleada 1: %zu enemigos", g.enemies_.size());
-        for (Enemy& e : g.enemies_) g.killEnemy(e);
-        run(g, 5.0f);
-        CHECK(g.wave_ == 2 && g.enemies_.size() == 3, "oleada 2 al limpiar la 1: %zu enemigos", g.enemies_.size());
-    }
-    {  // El color es energía: cada Gris disipado y cada oleada superada devuelven croma
-        Game g;
-        g.init();
+    {  // El color es energía: cada Gris disipado y cada nodo encendido devuelven croma
+        Game g = fresh();
         float c0 = g.croma_;
-        run(g, 2.2f);
-        for (Enemy& e : g.enemies_) g.killEnemy(e);
-        CHECK(std::fabs(g.croma_ - (c0 + 3 * 0.035f)) < 1e-4f, "3 Grises disipados: croma %.0f%% -> %.0f%%", c0 * 100,
-              g.croma_ * 100);
-        CHECK(g.splashes_.size() == 3, "dejan %zu salpicaduras de color", g.splashes_.size());
-        float c1 = g.croma_;
+        CHECK(std::fabs(c0 - 0.05f) < 1e-4f, "cada escenario empieza casi sin color (croma %.0f%%)", c0 * 100);
+        for (int i = 0; i < 3; ++i) {
+            g.enemies_.push_back(makeEnemy(EnemyKind::Imp, {0, 0, 5}, 0, 0));
+            g.killEnemy(g.enemies_.back());
+        }
+        CHECK(std::fabs(g.croma_ - (c0 + 3 * 0.015f)) < 1e-4f && g.splashes_.size() == 3,
+              "3 Grises disipados: croma %.1f%%, %zu salpicaduras", g.croma_ * 100, g.splashes_.size());
         run(g, 1.0f);
-        CHECK(std::fabs(g.croma_ - (c1 + 0.1f)) < 1e-4f, "oleada superada: +10%% (croma %.0f%%)", g.croma_ * 100);
-        for (int i = 0; i < 60; ++i) {
-            Enemy e = makeEnemy(EnemyKind::Imp, {0, 0, 5}, 0, 0);
-            g.enemies_.push_back(e);
+        g.enemies_.clear();
+        g.enemies_.push_back(makeEnemy(EnemyKind::Imp, g.nodes_[0].pos + Vec3{3, 0, 0}, 0, 0));
+        g.enemies_.back().state = AiState::Recover;
+        g.enemies_.back().stateTime = -100;
+        place(g, g.nodes_[0].pos + Vec3{1.0f, 0, 0});
+        g.update(dt, press(&Controls::interact));
+        CHECK(!g.nodes_[0].lit, "con un Gris cerca el nodo no se enciende");
+        g.enemies_.clear();
+        float c1 = g.croma_;
+        g.update(dt, press(&Controls::interact));
+        CHECK(g.nodes_[0].lit && std::fabs(g.croma_ - (c1 + 0.18f)) < 1e-4f, "nodo encendido: +18%% de croma");
+        for (int i = 0; i < 80; ++i) {
+            g.enemies_.push_back(makeEnemy(EnemyKind::Imp, {0, 0, 5}, 0, 0));
             g.killEnemy(g.enemies_.back());
         }
         CHECK(g.croma_ == 1.0f && g.splashes_.size() == size_t(Renderer::kMaxPaints),
               "el croma se queda en el 100%% y se guardan las %zu salpicaduras mas recientes", g.splashes_.size());
+    }
+    {  // Escenarios por partes: de la plaza al mercado
+        Game g;
+        g.init(GAME_ASSET_DIR);
+        skipDialogues(g);
+        run(g, 0.5f);
+        CHECK(g.level() == LevelId::Plaza && g.partIndex() == 0 && g.enemies_.size() == 2,
+              "plaza, parte 1: el combate del despertar empieza (%zu Grises)", g.enemies_.size());
+        for (Enemy& e : g.enemies_) g.killEnemy(e);
+        run(g, 1.0f);
+        skipDialogues(g);
+        CHECK(g.partIndex() == 1, "combate ganado: parte 2, los nodos");
+        CHECK(g.gates_[0].closed, "la puerta del mercado sigue cerrada");
+        for (Encounter& e : g.encounters_) e.cleared = true;  // sin los guardianes de los nodos
+        for (size_t i = 0; i < g.nodes_.size(); ++i) {
+            place(g, g.nodes_[i].pos + Vec3{0.9f, 0.1f, 0});
+            g.update(dt, press(&Controls::interact));
+            skipDialogues(g);
+        }
+        run(g, 0.2f);
+        skipDialogues(g);
+        CHECK(g.partIndex() == 2 && !g.gates_[0].closed, "tres nodos: se abre la puerta del mercado (parte 3)");
+        place(g, {0, 0, 24});
+        run(g, 2.0f);
+        CHECK(g.level() == LevelId::Mercado && g.levelName() == "Mercado de los Ecos" && std::fabs(g.croma_ - 0.05f) < 1e-3f,
+              "al cruzar la puerta se carga el mercado, otra vez casi sin color");
+        // El jefe espera al guion: no aparece hasta examinar el puesto de Nora.
+        skipDialogues(g);
+        for (Encounter& e : g.encounters_)
+            if (e.id != "jefe_nora") e.cleared = true;
+        g.nodes_[0].lit = true;
+        place(g, {0, 0, 44});
+        run(g, 0.5f);
+        skipDialogues(g);
+        CHECK(g.enemies_.empty(), "el jefe no aparece antes de tiempo");
+        place(g, g.interacts_[0].pos);
+        g.update(dt, press(&Controls::interact));
+        skipDialogues(g);
+        place(g, {0, 0, 44});
+        run(g, 0.5f);
+        bool boss = g.enemies_.size() == 1 && g.enemies_[0].boss && g.enemies_[0].size > 2.0f;
+        CHECK(boss, "tras examinar el puesto aparece «%s»", g.enemies_.empty() ? "-" : g.enemies_[0].name());
+    }
+    {  // Puente: sin suelo, caer devuelve al último farol encendido
+        Game g;
+        g.init(GAME_ASSET_DIR);
+        skipDialogues(g);
+        g.loadLevel(LevelId::Puente);
+        skipDialogues(g);
+        CHECK(!g.world_.ground, "el puente no tiene suelo");
+        place(g, g.lanterns_[0].pos + Vec3{-0.8f, 0.1f, 0});
+        g.update(dt, press(&Controls::interact));
+        CHECK(g.lanterns_[0].lit, "farol encendido");
+        g.hero_.body.pos = {5, 0.5f, 6};  // fuera del tramo: cae
+        run(g, 2.0f);
+        CHECK(length(g.hero_.body.pos - g.checkpoint_) < 1.0f && g.hp_ < 100, "cae al vacío y vuelve al farol (PV %.0f)", g.hp_);
     }
     {  // Guion: escenas, avisos, recuerdos y órdenes
         Script sc;
@@ -341,7 +405,7 @@ int main() {
         g.init(GAME_ASSET_DIR);
         CHECK(g.story_ && g.hero_.lying == 1, "con guion: el Prismero despierta tumbado");
         run(g, 3.0f);
-        CHECK(g.dialogueBlocking() && g.wave_ == 0, "la intro bloquea: sin oleadas todavia");
+        CHECK(g.dialogueBlocking() && g.enemies_.empty(), "la intro bloquea: sin Grises todavia");
         CHECK(g.speakerName("brizna") == "???", "Brizna aun no tiene nombre");
         Controls adv;
         adv.advance = true;
@@ -350,14 +414,14 @@ int main() {
             run(g, 0.05f);
         }
         CHECK(!g.dialogueBlocking() && g.speakerName("brizna") == "Brizna", "tras leer la intro, Brizna tiene nombre");
-        run(g, 6.0f);
-        CHECK(g.wave_ == 1 && g.hero_.lying == 0, "tras el cartel del capitulo empiezan las oleadas y el Prismero esta de pie");
+        run(g, 1.0f);
+        CHECK(!g.enemies_.empty() && g.hero_.lying == 0, "tras la intro empieza el primer combate y el Prismero esta de pie");
         // Eco de memoria: aparece con su orden y se recoge al pasar.
         g.storyCommand({true, "eco_activa", "1"});
         g.hero_.body.pos = g.echoes_[0].pos - Vec3{0, 0.9f, 0};
         g.update(dt, {});
         g.update(dt, {});
-        CHECK(g.echoes_[0].taken && g.dialogue().memory(), "el eco de memoria lanza su recuerdo");
+        CHECK(g.echoes_[0].taken && g.played_.count(g.echoes_[0].scene), "el eco de memoria lanza su recuerdo");
     }
     {  // Sonido sintetizado: todos los efectos suenan, sin saturar, y el WAV va y vuelve
         bool allOk = true;

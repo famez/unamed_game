@@ -49,7 +49,7 @@ void moveBody(Body& b, const World& w, float dt, float stepHeight) {
         }
         b.vel.y = 0;
     }
-    if (b.pos.y <= 0) {
+    if (w.ground && b.pos.y <= 0) {
         b.pos.y = 0;
         b.vel.y = 0;
         b.grounded = true;
@@ -94,7 +94,7 @@ bool segmentVsAABB(Vec3 p0, Vec3 p1, const AABB& box, RayHit& hit) {
 bool segmentVsWorld(Vec3 p0, Vec3 p1, const World& w, RayHit& hit) {
     bool found = false;
     hit.t = 2;
-    if (p1.y < 0 && p0.y >= 0) {
+    if (w.ground && p1.y < 0 && p0.y >= 0) {
         hit.t = p0.y / (p0.y - p1.y);
         hit.normal = {0, 1, 0};
         found = true;

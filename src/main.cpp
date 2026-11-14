@@ -463,10 +463,10 @@ int main(int argc, char** argv) {
         if (statsTimer >= 0.5) {
             char title[256];
             std::snprintf(title, sizeof(title),
-                          "unamed_game | %s | %.0f fps | cpu %.3f ms | %zu instancias %zu verts | oleada %d | "
+                          "unamed_game | %s | %.0f fps | cpu %.3f ms | %zu instancias %zu verts | %s | "
                           "enemigos %zu | botin %zu%s",
                           debugView ? "DEBUG" : "shaders", statsFrames / statsTimer, 1000.0 * cpuTimeSum / statsFrames,
-                          instances, verts, game.wave(), game.enemyCount(), game.pickupCount(),
+                          instances, verts, game.levelName().c_str(), game.enemyCount(), game.pickupCount(),
                           paused ? " | PAUSA" : "");
             platform::setTitle(title);
             statsTimer = cpuTimeSum = 0;

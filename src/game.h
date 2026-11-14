@@ -150,6 +150,82 @@ struct TrailSample {  // estela del arma: base y punta de la hoja en un instante
     float age;
 };
 
+// --- Escenarios -----------------------------------------------------------------------
+// Cada escenario se divide en partes con un objetivo (vencer un combate, encender nodos,
+// encender faroles, usar algo, llegar a un sitio, salir). Al cumplirlo se abren puertas,
+// suena su escena y empieza la siguiente.
+
+enum class LevelId { Plaza, Mercado, Puente, Count };
+
+struct Spawn {
+    EnemyKind kind;
+    Vec3 pos;
+    bool boss = false;
+    const char* name = nullptr;  // jefes: su nombre propio
+};
+
+// Combate de zona: al entrar en `trigger` aparecen los Grises por rondas y se cierran las
+// barreras hasta vencerlos. `armed` = false hasta que el guion lo arme (jefes).
+struct Encounter {
+    std::string id;
+    AABB trigger;
+    std::vector<std::vector<Spawn>> rounds;
+    std::vector<std::string> barriers;
+    std::string sceneStart, sceneClear;
+    bool armed = true;
+    int round = -1;
+    bool started = false, cleared = false;
+};
+
+// Barrera de energía o puerta: sólida mientras está cerrada.
+struct Gate {
+    std::string id;
+    AABB box;
+    bool closed = false;
+    uint32_t color = 0;
+    float openTime = 0;  // para el desvanecido al abrirse
+};
+
+// Nodo cromático: repartía la luz del Faro por el barrio. Encenderlo devuelve el color a
+// su alrededor (zona de color en el render). Solo se puede si no hay Grises cerca.
+struct ColorNode {
+    std::string id;
+    Vec3 pos;
+    float radius = 11;
+    uint32_t color = 0;
+    std::string scene;
+    bool lit = false;
+    float litTime = 0;
+};
+
+// Farol del puente: punto de control.
+struct Lantern {
+    Vec3 pos;
+    bool lit = false;
+    float litTime = 0;
+};
+
+struct Interactable {
+    std::string id;
+    Vec3 pos;
+    std::string label;  // "Examinar el puesto"...
+    std::string scene;
+    bool used = false;
+};
+
+enum class PartKind { Encounter, Nodes, Lanterns, Interact, Reach, Exit };
+
+struct LevelPart {
+    std::string title, objective;
+    PartKind kind;
+    std::string target;  // id del combate o de la interacción
+    int count = 0;       // nodos o faroles necesarios
+    AABB area;           // Reach / Exit
+    Vec3 marker;         // hacia dónde señala el indicador del objetivo
+    std::vector<std::string> openGates;
+    std::string sceneStart, sceneDone;
+};
+
 // Eco de memoria: fragmento de luz que, al tocarlo, reproduce un recuerdo del guion.
 struct MemoryEcho {
     Vec3 pos;
@@ -181,6 +257,7 @@ public:
     // `assetDir`: carpeta assets (para cargar el guion). Sin ella no hay historia: el
     // juego empieza directamente con las oleadas (lo usan los tests).
     void init(const char* assetDir = nullptr);
+    void loadLevel(LevelId id);
     void update(float dt, const Controls& c);
 
     // Con `solid` (render con shaders) los cuerpos van ahí, `glow` recibe los efectos
@@ -202,13 +279,19 @@ public:
     bool useItem(ItemId id);
     bool equip(ItemId id);
     float time() const { return time_; }
-    int wave() const { return wave_; }
     int kills() const { return kills_; }
     size_t enemyCount() const { return enemies_.size(); }
     size_t pickupCount() const { return pickups_.size(); }
     // Posición del objetivo fijado (para la cámara). Falso si no hay.
     bool lockTarget(Vec3& pos) const;
     float cameraShake() const { return shake_; }
+    // Escenario y objetivo actuales.
+    LevelId level() const { return level_; }
+    const std::string& levelName() const { return levelName_; }
+    int partIndex() const { return int(part_); }
+    int partCount() const { return int(parts_.size()); }
+    const LevelPart* currentPart() const { return part_ < parts_.size() ? &parts_[part_] : nullptr; }
+    float transition() const { return transition_; }
     // Historia.
     const Dialogue& dialogue() const { return dialogue_; }
     bool dialogueBlocking() const { return dialogue_.blocking(); }
@@ -230,11 +313,30 @@ public:
     float cameraClear(Vec3 from, Vec3 to) const;
 
 private:
-    void buildLevel();
+    void buildPlaza();
+    void buildMercado();
+    void buildPuente();
+    void addBlock(Vec3 c, Vec3 h, uint32_t col, Material m = Material::Stone);
+    void addDecor(const Mat4& t, Vec3 c, Vec3 h, uint32_t col, Material m, bool sphere);
+    void addRim(Vec3 c, float hx, float hz, uint32_t col);
+    void addBuilding(float cx, float cz, float hx, float hz, float height, Vec3 in, uint32_t tint, uint32_t neon);
+    void addTree(Vec3 base, float size, uint32_t leaves);
+    void addGate(const std::string& id, Vec3 c, Vec3 h, uint32_t color, bool closed);
+    void updateLevel(float dt);
+    bool partDone(const LevelPart& p) const;
+    void setGate(const std::string& id, bool closed);
+    void spawnEnemy(const Spawn& s);
+    void resetEncounter();
+    // Interacción con lo más cercano (cápsula, nodo, farol, objeto). -1 si no hay nada.
+    struct InteractTarget {
+        int kind = -1;  // 0 cápsula, 1 nodo, 2 farol, 3 objeto
+        int index = -1;
+        std::string label;
+    };
+    InteractTarget nearbyInteract() const;
+    void tryInteract();
     void rebuildSolids();
     void applyWeapon();
-    int nearbyChest() const;
-    void spawnWave();
     void cycleLock(Vec3 camForward);
     int pickTarget(Vec3 dir, float range) const;
     bool heroAttack(Vec3 moveInput);
@@ -252,7 +354,6 @@ private:
     void collect(Pickup& p);
     void dropLoot(Vec3 pos, int munny, int hpOrbs, int mpOrbs, ItemId item, bool withItem);
     void updateEffects(float dt);
-    void tryOpenChest();
     void breakCrate(Crate& c);
     void notify(const std::string& text, uint32_t color);
     void heal(float hp, float mp);
@@ -286,8 +387,27 @@ private:
     std::vector<Block> blocks_;  // escenario fijo (world_ = esto + cajas + cofres)
     std::vector<Decor> decor_;
     std::vector<Vec3> lamps_;
-    std::vector<Vec3> spawnPoints_;
     Vec3 heroStart_;
+    float heroStartYaw_ = 0;
+    LevelId level_ = LevelId::Plaza;
+    std::string levelName_;
+    std::vector<LevelPart> parts_;
+    size_t part_ = 0;
+    float partBanner_ = 0;
+    std::vector<Gate> gates_;
+    std::vector<ColorNode> nodes_;
+    std::vector<Lantern> lanterns_;
+    std::vector<Interactable> interacts_;
+    std::vector<Encounter> encounters_;
+    int activeEncounter_ = -1;
+    Vec3 checkpoint_;
+    float checkpointYaw_ = 0;
+    LevelId nextLevel_ = LevelId::Plaza;
+    bool lastLevel_ = false;
+    float transition_ = 0;     // fundido a negro al cambiar de escenario (0..1)
+    bool leaving_ = false;
+    uint32_t floorColor_ = 0;
+    Material floorMaterial_ = Material::Ground;
     Character hero_;
     Inventory inv_;
     float hp_ = 100, maxHp_ = 100;
@@ -317,7 +437,6 @@ private:
     std::deque<std::string> sceneQueue_;
     std::set<std::string> played_;
     std::map<std::string, std::string> names_;
-    bool wavesEnabled_ = true;
     float fade_ = 0;              // 1 = pantalla en negro (despertar)
     float chapterBanner_ = 0;     // cartel de capítulo
     bool chapterEnded_ = false;
@@ -329,10 +448,6 @@ private:
     float croma_ = 0.12f;        // sube al disipar Grises y al superar oleadas
     float cromaShown_ = 0.12f;   // el que se ve: lo sigue suavemente
     std::vector<ColorSplash> splashes_;
-    bool waveActive_ = false;    // hay una oleada en curso (para premiar al limpiarla)
-    int wave_ = 0;
-    float waveTimer_ = 2.0f;  // hasta la siguiente oleada
-    float waveBanner_ = 0;    // cartel "OLEADA N"
     int kills_ = 0;
     float hitStop_ = 0;       // congelación breve al golpear (da peso a los golpes)
     float shake_ = 0;         // temblor de cámara

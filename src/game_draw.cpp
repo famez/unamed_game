@@ -279,17 +279,64 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
         for (const TreasureChest& c : chests_)
             dd.box(translate(c.pos) * rotateY(c.yaw), {0, 0.35f, 0}, {0.45f, 0.35f, 0.3f},
                    c.open ? rgba(120, 110, 60) : rgba(255, 220, 80));
+        for (const Gate& g : gates_)
+            if (g.closed) dd.box(id, g.box.center(), g.box.halfExtents(), rgba(255, 70, 190));
+        for (const ColorNode& n : nodes_) dd.box(id, n.pos + Vec3{0, 0.8f, 0}, {0.3f, 0.8f, 0.3f}, n.lit ? n.color : rgba(140, 140, 150));
+        for (const Lantern& l : lanterns_) dd.line(l.pos, l.pos + Vec3{0, 2.4f, 0}, l.lit ? rgba(255, 200, 120) : rgba(140, 140, 150));
+        for (const Encounter& e : encounters_)
+            if (!e.cleared) dd.box(id, e.trigger.center(), e.trigger.halfExtents(), e.started ? rgba(255, 90, 60) : rgba(90, 90, 120));
         return;
     }
     // Todo el escenario se ve con el croma actual; las salpicaduras de color lo devuelven.
     solid->setWorldColor(cromaShown_);
     solid->setScenery(true);
     for (const ColorSplash& sp : splashes_) solid->paint(sp.pos, sp.radius * smoothstep01(sp.age / 0.3f), sp.color);
-    // Césped alrededor y plaza de adoquines.
-    solid->box(id, {0, -0.5f, 0}, {200, 0.5f, 200}, rgba(80, 200, 140), Material::Grass);
-    solid->box(id, {0, 0.004f, 0}, {16.2f, 0.004f, 16.2f}, rgba(205, 210, 226), Material::Ground);
-    // Prisma de la fuente: flota, gira y proyecta luz cambiante.
-    {
+    // Suelo del escenario o, sobre el vacío, un mar de nubes muy abajo.
+    if (world_.ground)
+        solid->box(id, {0, -0.5f, 0}, {200, 0.5f, 200}, floorColor_, floorMaterial_);
+    else
+        solid->box(id, {0, -40.5f, 0}, {400, 0.5f, 400}, rgba(200, 205, 230), Material::Water);
+    // Barreras de energía cerradas: marco luminoso (y la cortina translúcida, en efectos).
+    for (const Gate& g : gates_) {
+        if (!g.closed) continue;
+        Vec3 c = g.box.center(), hh = g.box.halfExtents();
+        bool alongX = hh.x > hh.z;
+        Vec3 side = alongX ? Vec3{hh.x, 0, 0} : Vec3{0, 0, hh.z};
+        for (float sgn : {-1.0f, 1.0f}) solid->box(id, c + side * sgn, {0.08f, hh.y, 0.08f}, g.color, Material::Glow);
+        solid->box(id, c + Vec3{0, hh.y, 0}, alongX ? Vec3{hh.x, 0.05f, 0.08f} : Vec3{0.08f, 0.05f, hh.z}, g.color, Material::Glow);
+        solid->box(id, c - Vec3{0, hh.y, 0}, alongX ? Vec3{hh.x, 0.05f, 0.08f} : Vec3{0.08f, 0.05f, hh.z}, g.color, Material::Glow);
+    }
+    // Nodos cromáticos: pedestal y cristal; encendido, gira, brilla y devuelve el color a su
+    // alrededor (la zona crece durante unos segundos).
+    for (const ColorNode& n : nodes_) {
+        solid->box(id, n.pos + Vec3{0, 0.5f, 0}, {0.45f, 0.5f, 0.45f}, rgba(226, 230, 240), Material::Stone);
+        solid->box(id, n.pos + Vec3{0, 1.02f, 0}, {0.5f, 0.03f, 0.5f}, n.color, Material::Glow);
+        float bob = n.lit ? 0.12f * std::sin(time_ * 2.0f) : 0.0f;
+        Mat4 m = translate(n.pos + Vec3{0, 1.75f + bob, 0}) * rotateY(n.lit ? time_ * 1.2f : 0.3f);
+        solid->box(m * rotateX(kPi * 0.25f) * rotateZ(kPi * 0.25f), {}, {0.3f, 0.3f, 0.3f}, n.lit ? n.color : rgba(120, 122, 132),
+                   n.lit ? Material::Glow : Material::Metal);
+        if (n.lit) {
+            float grow = smoothstep01(n.litTime / 3.0f);
+            solid->colorZone(n.pos, n.radius * grow);
+            solid->light(n.pos + Vec3{0, 1.8f, 0}, Vec3{1.0f, 0.9f, 0.8f} * 1.5f, 6.0f);
+        }
+    }
+    // Faroles del puente: poste y lámpara (apagada, gris; encendida, cálida).
+    for (const Lantern& l : lanterns_) {
+        solid->box(id, l.pos + Vec3{0, 1.1f, 0}, {0.07f, 1.1f, 0.07f}, rgba(226, 230, 240), Material::Metal);
+        solid->box(id, l.pos + Vec3{0.2f, 2.15f, 0}, {0.25f, 0.03f, 0.03f}, rgba(226, 230, 240), Material::Metal);
+        uint32_t lamp = l.lit ? rgba(255, 190, 110) : rgba(120, 122, 132);
+        solid->ellipsoid(id, l.pos + Vec3{0.42f, 1.95f, 0}, {0.14f, 0.18f, 0.14f}, lamp, l.lit ? Material::Glow : Material::Metal);
+        if (l.lit) {
+            solid->light(l.pos + Vec3{0.42f, 1.95f, 0}, Vec3{1.0f, 0.7f, 0.4f} * 1.6f, 5.0f);
+            solid->colorZone(l.pos, 6.0f * smoothstep01(l.litTime / 2.0f));
+        }
+    }
+    // Objetos con los que se puede interactuar: un destello que invita a acercarse.
+    for (const Interactable& it : interacts_)
+        if (!it.used) solid->light(it.pos + Vec3{0, 1.5f, 0}, Vec3{1.0f, 0.8f, 0.5f} * (0.8f + 0.4f * std::sin(time_ * 3.0f)), 3.0f);
+    // Prisma de la fuente (solo en la plaza): flota, gira y proyecta luz cambiante.
+    if (level_ == LevelId::Plaza) {
         float bob = 0.12f * std::sin(time_ * 1.3f);
         Mat4 m = translate({0, 3.0f + bob, 0}) * rotateY(time_ * 0.8f);
         solid->box(m * rotateX(kPi * 0.25f) * rotateZ(kPi * 0.25f), {}, {0.32f, 0.32f, 0.32f}, rgba(255, 120, 220), Material::Glow);
@@ -516,6 +563,22 @@ void Game::drawEnemies(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Dr
 }
 
 void Game::drawEffects(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const ViewInfo& view) const {
+    // Cortinas de las barreras de energía: bandas que suben.
+    if (solid)
+        for (const Gate& g : gates_) {
+            if (!g.closed) continue;
+            Vec3 c = g.box.center(), hh = g.box.halfExtents();
+            Vec3 side = hh.x > hh.z ? Vec3{hh.x, 0, 0} : Vec3{0, 0, hh.z};
+            const int bands = 8;
+            for (int i = 0; i < bands; ++i) {
+                float y0 = -hh.y + 2.0f * hh.y * float(i) / bands, y1 = y0 + 2.0f * hh.y / bands;
+                float a = 0.12f + 0.1f * std::sin(time_ * 4.0f - float(i) * 0.8f);
+                glow.quad(c + Vec3{0, y0, 0} - side, c + Vec3{0, y0, 0} + side, c + Vec3{0, y1, 0} + side, c + Vec3{0, y1, 0} - side,
+                          withAlpha(g.color, a));
+            }
+        }
+    for (const Interactable& it : interacts_)
+        if (!it.used && solid) glowStar(glow, view, it.pos + Vec3{0, 1.6f + 0.1f * std::sin(time_ * 2.0f), 0}, 0.25f, time_, withAlpha(rgba(255, 220, 150), 0.8f));
     // Botín.
     for (const Pickup& p : pickups_) {
         float limit = p.kind == PickupKind::Item ? 60.0f : 25.0f;
@@ -708,6 +771,8 @@ uint32_t speakerColor(const std::string& id) {
     if (id == "prota") return rgba(255, 120, 205);
     if (id == "eco") return rgba(90, 225, 255);
     if (id == "sistema") return rgba(255, 196, 70);
+    if (id == "nora") return rgba(255, 170, 90);
+    if (id == "archivera") return rgba(200, 200, 225);
     return rgba(240, 240, 255);
 }
 
@@ -877,11 +942,18 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
         const Enemy& e = enemies_[size_t(lock_)];
         const EnemyDef& ed = e.def();
         float right = w - 34;
-        uiText(ui, right, 22, 22, ed.name, kUiPink, FontFace::Title, Align::Right, 0.5f);
-        float f = std::max(0.0f, e.health) / ed.maxHealth;
+        uiText(ui, right, 22, 22, e.name(), kUiPink, FontFace::Title, Align::Right, 0.5f);
+        float f = std::max(0.0f, e.health) / (ed.maxHealth * (e.boss ? 7.0f : 1.0f));
         segBar(d, right, 56, 240, 12, f, f, kUiPink, 0, 10);
     }
 
+    // Jefe: barra grande arriba en el centro.
+    for (const Enemy& e : enemies_)
+        if (e.boss && e.alive()) {
+            float f = std::max(0.0f, e.health) / (e.def().maxHealth * 7.0f);
+            uiText(ui, w * 0.5f, 16, 20, e.name(), rgba(255, 170, 90), FontFace::Title, Align::Center, 0.5f);
+            segBar(d, w * 0.5f + 260, 44, 520, 14, f, f, rgba(255, 150, 80), 0, 20);
+        }
     // Avisos de objetos obtenidos (a la derecha, entran deslizándose y se desvanecen).
     for (size_t i = 0; i < notices_.size(); ++i) {
         const Notice& n = notices_[i];
@@ -894,46 +966,81 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
         uiText(ui, x0 + 38, y + 5, 19, n.text.c_str(), withAlpha(n.color, a));
     }
 
-    // Oleada arriba a la izquierda; cartel grande al empezar cada una.
+    // Escenario, parte y objetivo arriba a la izquierda, con el croma del escenario.
     {
-        skewRect(d, 18, 14, 250, 72, 10, kUiPanel);
-        fillRect(d, 18, 14, 22, 72, kUiCyan);
-        std::snprintf(buf, sizeof(buf), "OLEADA %d", wave_);
-        uiText(ui, 30, 18, 20, buf, kUiText, FontFace::Title);
-        std::snprintf(buf, sizeof(buf), "Grises disipados: %d", kills_);
-        uiText(ui, 30, 46, 16, buf, kUiDim);
+        const LevelPart* p = currentPart();
+        skewRect(d, 18, 14, 380, 96, 10, kUiPanel);
+        fillRect(d, 18, 14, 22, 96, kUiCyan);
+        uiText(ui, 30, 18, 15, levelName_.c_str(), kUiCyan, FontFace::Title);
+        if (p) {
+            std::snprintf(buf, sizeof(buf), "Parte %d/%d · %s", int(part_) + 1, int(parts_.size()), p->title.c_str());
+            uiText(ui, 30, 40, 17, buf, kUiText);
+            std::string obj = "› " + p->objective;
+            if (p->kind == PartKind::Nodes || p->kind == PartKind::Lanterns) {
+                int n = 0;
+                if (p->kind == PartKind::Nodes)
+                    for (const ColorNode& c : nodes_) n += c.lit;
+                else
+                    for (const Lantern& l : lanterns_) n += l.lit;
+                obj += " (" + std::to_string(n) + "/" + std::to_string(p->count) + ")";
+            }
+            uiText(ui, 30, 66, 16, obj.c_str(), kUiAmber);
+        } else {
+            uiText(ui, 30, 44, 17, "Escenario completado", rgba(110, 255, 190));
+        }
         // Croma: barra arcoíris (cada segmento de un color, apagados los que faltan).
-        skewRect(d, 18, 78, 250, 116, 10, kUiPanel);
+        skewRect(d, 18, 102, 250, 140, 10, kUiPanel);
         std::snprintf(buf, sizeof(buf), "CROMA %d%%", int(cromaShown_ * 100.0f + 0.5f));
-        uiText(ui, 30, 81, 14, buf, kUiText, FontFace::Title);
+        uiText(ui, 30, 105, 14, buf, kUiText, FontFace::Title);
         const uint32_t rainbow[] = {rgba(255, 70, 120), rgba(255, 150, 50), rgba(255, 220, 60), rgba(110, 255, 140),
                                     rgba(40, 220, 255), rgba(120, 110, 255), rgba(230, 90, 255)};
         const int segs = 14;
         for (int i = 0; i < segs; ++i) {
             float x0 = 30 + float(i) * 15.0f, lit = clampf(cromaShown_ * segs - float(i), 0, 1);
             uint32_t c = rainbow[i * 7 / segs];
-            skewRect(d, x0, 101, x0 + 12, 109, 3, rgba(50, 50, 70, 220));
-            if (lit > 0) skewRect(d, x0, 101, x0 + 12 * lit, 109, 3, c);
+            skewRect(d, x0, 125, x0 + 12, 133, 3, rgba(50, 50, 70, 220));
+            if (lit > 0) skewRect(d, x0, 125, x0 + 12 * lit, 133, 3, c);
         }
+        // Cartel con el nombre de la parte al empezarla.
         float by = h * 0.2f;
-        if (waveBanner_ > 0) {
-            float a = clampf(std::min((2.5f - waveBanner_) / 0.3f, waveBanner_ / 0.5f), 0, 1);
-            std::snprintf(buf, sizeof(buf), "OLEADA %d", wave_);
-            float tw = textWidth(buf, 64, FontFace::Title);
-            fillRect(d, 0, by - 14, w, by + 108, withAlpha(rgba(12, 16, 42), 0.55f * a));
-            fillRect(d, w * 0.5f - tw * 0.5f - 160, by + 40, w * 0.5f - tw * 0.5f - 30, by + 42, withAlpha(kUiCyan, a));
-            fillRect(d, w * 0.5f + tw * 0.5f + 30, by + 40, w * 0.5f + tw * 0.5f + 160, by + 42, withAlpha(kUiCyan, a));
-            uiText(ui, w * 0.5f, by, 64, buf, withAlpha(kUiText, a), FontFace::Title, Align::Center, 0.8f * a);
-            uiText(ui, w * 0.5f, by + 76, 20, "Los Grises se acercan", withAlpha(kUiDim, a), FontFace::Body, Align::Center);
-        } else if (enemies_.empty() && wave_ > 0) {
-            fillRect(d, 0, by, w, by + 58, withAlpha(rgba(12, 16, 42), 0.5f));
-            uiText(ui, w * 0.5f, by + 10, 34, "OLEADA SUPERADA", rgba(110, 255, 190), FontFace::Title, Align::Center, 0.6f);
+        if (partBanner_ > 0 && p) {
+            float a = clampf(std::min((4.0f - partBanner_) / 0.4f, partBanner_ / 0.6f), 0, 1);
+            fillRect(d, 0, by - 14, w, by + 92, withAlpha(rgba(12, 16, 42), 0.5f * a));
+            uiText(ui, w * 0.5f, by - 4, 16, levelName_.c_str(), withAlpha(kUiCyan, a), FontFace::Title, Align::Center);
+            uiText(ui, w * 0.5f, by + 18, 44, p->title.c_str(), withAlpha(kUiText, a), FontFace::Body, Align::Center, 0.6f * a);
+        }
+        // Indicador del objetivo: rombo sobre su posición o, si está fuera de la pantalla,
+        // flecha en el borde hacia él.
+        if (p && hero_.downTimer < 0) {
+            float sx, sy;
+            Vec3 m = p->marker;
+            if (p->kind == PartKind::Nodes)
+                for (const ColorNode& c : nodes_)
+                    if (!c.lit) { m = c.pos + Vec3{0, 2.6f, 0}; break; }
+            if (p->kind == PartKind::Lanterns)
+                for (const Lantern& l : lanterns_)
+                    if (!l.lit) { m = l.pos + Vec3{0, 2.6f, 0}; break; }
+            float dist = length(m - hero_.body.pos);
+            bool on = project(view, m, sx, sy) && sx > 40 && sx < w - 40 && sy > 40 && sy < h - 40;
+            if (!on) {
+                if (!project(view, m, sx, sy)) {  // detrás de la cámara: al borde inferior
+                    sx = w - sx;
+                    sy = h - 40;
+                }
+                sx = clampf(sx, 40, w - 40);
+                sy = clampf(sy, 160, h - 40);
+            }
+            float pulse = 1.0f + 0.15f * std::sin(time_ * 5.0f);
+            diamond(d, sx, sy, 11 * pulse, withAlpha(kUiAmber, 0.9f));
+            diamond(d, sx, sy, 5, rgba(255, 250, 220));
+            std::snprintf(buf, sizeof(buf), "%.0f m", double(dist));
+            uiText(ui, sx, sy + 14, 14, buf, kUiAmber, FontFace::Title, Align::Center);
         }
     }
 
-    int chest = nearbyChest();
-    if (chest >= 0 && hero_.downTimer < 0) {
-        const char* msg = "Abrir cápsula";
+    InteractTarget it = nearbyInteract();
+    if (it.kind >= 0 && hero_.downTimer < 0) {
+        const char* msg = it.label.c_str();
         float tw = textWidth(msg, 22) + 50;
         float x0 = (w - tw) * 0.5f, y0 = h * 0.7f;
         skewRect(d, x0, y0, x0 + tw, y0 + 38, 10, kUiPanel);

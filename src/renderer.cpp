@@ -95,6 +95,8 @@ uniform float uWorldColor;      // croma del mundo: 0 = gris y apagado, 1 = a to
 uniform int uPaintCount;
 uniform vec4 uPaint[16];        // salpicaduras de color: xyz, radio
 uniform vec3 uPaintColor[16];
+uniform int uZoneCount;
+uniform vec4 uZone[8];          // zonas donde el color ya ha vuelto (nodos encendidos): xyz, radio
 uniform vec4 uOutlineColor;  // a > 0: pasada de silueta (color plano, sin iluminación)
 uniform float uTime;
 out vec4 fragColor;
@@ -152,11 +154,14 @@ void main() {
     }
     // El color es energía: sin croma, el escenario se queda gris y los neones casi apagados.
     // Las salpicaduras que dejan los Grises al disiparse devuelven el color a su alrededor.
+    float sat = uWorldColor;  // croma en este punto: el global o el de una zona cercana
+    for (int i = 0; i < uZoneCount; ++i)
+        sat = max(sat, 1.0 - smoothstep(uZone[i].w * 0.55, uZone[i].w, length(vWorldPos - uZone[i].xyz)));
     if (scenery) {
         float l = dot(base, vec3(0.299, 0.587, 0.114));
-        base = mix(vec3(l), base, mix(0.06, 1.0, uWorldColor)) * mix(0.72, 1.0, uWorldColor);
-        if (material == 4) base *= mix(0.25, 1.0, uWorldColor);
-        seamGlow *= uWorldColor;
+        base = mix(vec3(l), base, mix(0.04, 1.0, sat)) * mix(0.7, 1.0, sat);
+        if (material == 4) base *= mix(0.2, 1.0, sat);
+        seamGlow *= sat;
         if (n.y > 0.5) {
             for (int i = 0; i < uPaintCount; ++i) {
                 vec2 d2 = vWorldPos.xz - uPaint[i].xz;
@@ -175,7 +180,8 @@ void main() {
         vec3 glow = base * (1.05 + 0.35 * rimE);
         glow = mix(glow, vec3(2.0), vParams.y);
         float distE = length(uCameraPos - vWorldPos);
-        glow = mix(glow, kHorizon, 1.0 - exp(-pow(distE * kFogDensity, 2.0)));
+        vec3 fogE = mix(vec3(dot(kHorizon, vec3(0.299, 0.587, 0.114))), kHorizon, mix(0.15, 1.0, sat));
+        glow = mix(glow, fogE, 1.0 - exp(-pow(distE * kFogDensity, 2.0)));
         fragColor = vec4(finish(glow), 1.0);  // alfa = máscara de bloom: brilla
         return;
     }
@@ -252,7 +258,8 @@ void main() {
 
     float dist = length(uCameraPos - vWorldPos);
     float fog = 1.0 - exp(-pow(dist * kFogDensity, 2.0));
-    color = mix(color, kHorizon, fog);
+    vec3 fogColor = mix(vec3(dot(kHorizon, vec3(0.299, 0.587, 0.114))), kHorizon, mix(0.15, 1.0, uWorldColor));
+    color = mix(color, fogColor, fog);
     // Alfa = máscara de bloom: los destellos de golpe y las juntas del suelo brillan.
     fragColor = vec4(finish(color), clamp(vParams.y * 0.6 + seamGlow * (1.0 - fog), 0.0, 1.0));
 }
@@ -340,7 +347,7 @@ out vec4 fragColor;
 void main() {
     vec3 dir = normalize(uCamForward + vNdc.x * uTanHalf.x * uCamRight + vNdc.y * uTanHalf.y * uCamUp);
     vec3 color = mix(kHorizon, kZenith, smoothstep(0.0, 0.5, dir.y));
-    color = mix(vec3(dot(color, vec3(0.299, 0.587, 0.114))), color, mix(0.25, 1.0, uWorldColor));
+    color = mix(vec3(dot(color, vec3(0.299, 0.587, 0.114))), color, mix(0.1, 1.0, uWorldColor)) * mix(0.8, 1.0, uWorldColor);
     // Nubes: ruido sobre un plano alto, más densas hacia el horizonte.
     if (dir.y > 0.0) {
         vec2 uv = dir.xz / (dir.y + 0.15) * 1.6;
@@ -1028,7 +1035,21 @@ void Renderer::smoke(Vec3 center, float size, float seed, float opacity) {
     smoke_.push_back({{center.x, center.y, center.z}, seed, size, opacity, 0, 0});
 }
 
-void Renderer::light(Vec3 pos, Vec3 color, float radius) { lights_.push_back({pos, color, radius}); }
+void Renderer::light(Vec3 pos, Vec3 color, float radius) {
+    // Las luces del escenario también pierden color sin croma.
+    if (scenery_) {
+        float l = color.x * 0.299f + color.y * 0.587f + color.z * 0.114f;
+        float k = 0.15f + 0.85f * worldColor_;
+        color = Vec3{l, l, l} + (color - Vec3{l, l, l}) * k;
+        color = color * (0.5f + 0.5f * worldColor_);
+    }
+    lights_.push_back({pos, color, radius});
+}
+
+void Renderer::colorZone(Vec3 pos, float radius) {
+    if (zones_.size() / 4 >= 8 || radius <= 0) return;
+    zones_.insert(zones_.end(), {pos.x, pos.y, pos.z, radius});
+}
 
 void Renderer::paint(Vec3 pos, float radius, uint32_t color) {
     if (int(paints_.size() / 7) >= kMaxPaints) return;
@@ -1401,6 +1422,9 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
         glUniform1f(glGetUniformLocation(prog, "uInflate"), 0.0f);
         glUniform4f(glGetUniformLocation(prog, "uOutlineColor"), 0, 0, 0, 0);
         glUniform1f(glGetUniformLocation(prog, "uWorldColor"), worldColor_);
+        int zoneCount = int(zones_.size() / 4);
+        glUniform1i(glGetUniformLocation(prog, "uZoneCount"), zoneCount);
+        if (zoneCount > 0) glUniform4fv(glGetUniformLocation(prog, "uZone"), zoneCount, zones_.data());
         int paintCount = int(paints_.size() / 7);
         glUniform1i(glGetUniformLocation(prog, "uPaintCount"), paintCount);
         if (paintCount > 0) {
@@ -1545,4 +1569,5 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
     lights_.clear();
     scorches_.clear();
     paints_.clear();
+    zones_.clear();
 }

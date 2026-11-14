@@ -26,6 +26,7 @@ inline bool overlaps(const AABB& a, const AABB& b) {
 
 struct World {
     std::vector<AABB> solids;
+    bool ground = true;  // suelo infinito en y = 0 (sin él se puede caer al vacío)
 };
 
 // Cuerpo vertical con los pies en `pos`.

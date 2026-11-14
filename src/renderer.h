@@ -97,6 +97,9 @@ public:
     void setScenery(bool on) { scenery_ = on; }
     // Salpicadura de color en el suelo (no le afecta la falta de croma).
     void paint(Vec3 pos, float radius, uint32_t color);
+    // Zona donde el color ya ha vuelto (alrededor de un nodo encendido): el escenario se
+    // ve a todo color dentro del radio, con transición suave en el borde. Máximo 8.
+    void colorZone(Vec3 pos, float radius);
     static constexpr int kMaxPaints = 16;
 
     static constexpr int kMaxLights = 8, kMaxScorches = 8, kMaxBones = 20;
@@ -184,6 +187,7 @@ private:
     bool scenery_ = false;
     float worldColor_ = 1.0f;
     std::vector<float> paints_;  // x, y, z, radio, r, g, b
+    std::vector<float> zones_;   // x, y, z, radio
     uint32_t highlightColor_ = 0;
     std::vector<PointLight> lights_;
     std::vector<float> scorches_;  // x, y, z, radio, intensidad por mancha
