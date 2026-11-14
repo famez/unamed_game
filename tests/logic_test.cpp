@@ -776,7 +776,16 @@ int main() {
         CHECK(g.hero_.downTimer < 0 && g.hp_ == g.maxHp_, "vida infinita: un golpe de 500 no derriba");
         g.mp_ = 0;
         run(g, 0.05f);
-        CHECK(g.mp_ == g.maxMp_, "Luz infinita");
+        CHECK(g.mp_ < 1.0f, "por defecto la Luz no es infinita (para probar su gestión)");
+        g.setTestCheats(true, true, true);
+        g.shadow_ = 0;
+        run(g, 0.05f);
+        CHECK(g.mp_ == g.maxMp_ && g.shadow_ == g.maxShadow_, "con F2 y F3: Luz y Sombra infinitas");
+        g.setTestCheats(false, false, false);
+        g.hp_ = 50;
+        run(g, 0.05f);
+        CHECK(g.hp_ < g.maxHp_, "con F1 apagado la vida ya no se rellena");
+        g.setTestCheats(true, false, false);
         for (int wave = 0; wave < 3; ++wave) {
             for (Enemy& e : g.enemies_)
                 if (e.alive()) g.killEnemy(e);
@@ -786,43 +795,6 @@ int main() {
         for (const Enemy& e : g.enemies_) alive += e.alive();
         CHECK(g.kills_ >= 9 && alive >= 3, "al disiparlos vuelven más (bajas %d, vivos %d)", g.kills_, alive);
         CHECK(g.inv_.count(ItemId::CoreAurora) > 0 && g.inv_.count(ItemId::LightLance) > 0, "con armas y núcleos para probar");
-    }
-    {  // Modo prueba de luz: islas flotantes unidas por balizas a menos de 35 m
-        Game g;
-        g.initTest(TestMode::Light, 3);
-        bool linked = true;
-        for (size_t i = 1; i < g.islands_.size(); ++i) {
-            float best = 1e9f;
-            for (size_t j = 0; j < g.islands_.size(); ++j)
-                if (j != i) best = std::min(best, length(g.islands_[i].lamp - g.islands_[j].lamp));
-            if (best > 35.0f) linked = false;
-        }
-        CHECK(!g.world_.ground && g.islands_.size() >= 10 && linked, "archipiélago de %zu islas, todas al alcance de otra",
-              g.islands_.size());
-        run(g, 0.3f);
-        run(g, 1.0f, press(&Controls::light));  // se empieza junto a la primera baliza
-        CHECK(g.insideLight(), "en el archipiélago se empieza junto a una baliza");
-        // Saltar a la primera baliza de otra isla que se pueda señalar.
-        bool went = false;
-        for (size_t i = 1; i < g.islands_.size() && !went; ++i) {
-            Controls aim;
-            Vec3 chest = g.hostLight();
-            aim.aimOrigin = chest - normalize(g.islands_[i].lamp - chest) * 3.0f;
-            aim.aimDir = normalize(g.islands_[i].lamp - aim.aimOrigin);
-            g.update(dt, aim);
-            if (g.lightTarget() < 0) continue;
-            aim.light = true;
-            run(g, 2.5f, aim);
-            went = true;
-        }
-        run(g, 1.0f, press(&Controls::jump));
-        int visited = 0;
-        for (const auto& t : g.islands_) visited += t.visited;
-        CHECK(went && visited >= 2, "viajando por la luz se alcanza otra isla (%d visitadas)", visited);
-        Vec3 cp = g.checkpoint_;
-        g.hero_.body.pos = {cp.x + 50, -12, cp.z};
-        run(g, 0.2f);
-        CHECK(length(g.hero_.body.pos - cp) < 1.5f && g.hp_ == g.maxHp_, "al caer al vacío vuelve a la última isla");
     }
     {  // Enemigos nuevos: turnos de ataque, oportunistas por la espalda, botín de su familia
         Game g = fresh();
@@ -1022,14 +994,15 @@ int main() {
         for (const Enemy& e : g.enemies_) hounds += e.kind == EnemyKind::Hound;
         CHECK(hounds == 2, "el jefe de sombra llama a dos sabuesos (%d) sin romper nada", hounds);
     }
-    {  // Prueba de sombra: patio casi a oscuras, en modo sombra, con portales
+    {  // El modo prueba sirve también para la luz y la sombra: portales, oscuridad y farolas
         Game g;
-        g.initTest(TestMode::Shadow, 11);
-        CHECK(g.level() == LevelId::PruebaSombra && g.shadowMode() && g.portals_.size() == 2 && g.lamps_.size() <= 4,
-              "patio de sombras: modo sombra, %zu portales, %zu farolas", g.portals_.size(), g.lamps_.size());
+        g.initTest(TestMode::Combat, 11);
         float darkArea = 0;
         for (int i = 0; i < 100; ++i) darkArea += g.shadowAt({float(i % 10) * 3.6f - 18, 0, float(i / 10) * 3.6f - 18}) > 0.6f;
-        CHECK(darkArea > 60, "la mayor parte del patio está a oscuras (%.0f%%)", darkArea);
+        CHECK(g.portals_.size() == 2 && g.lamps_.size() >= 6 && darkArea > 30 && darkArea < 95,
+              "patio de prueba: %zu portales, %zu farolas y un %.0f%% a oscuras", g.portals_.size(), g.lamps_.size(), darkArea);
+        g.update(dt, press(&Controls::swapMode));
+        CHECK(g.shadowMode(), "en la prueba Z cambia de modo");
     }
     {  // Derrota y vuelta a empezar
         Game g = fresh();

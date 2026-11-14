@@ -6,7 +6,7 @@
 
 namespace {
 
-constexpr float kPanelW = 520, kPanelH = 576;
+constexpr float kPanelW = 560, kPanelH = 660;
 constexpr float kItemH = 42, kItemGap = 12, kItemsTop = 110;
 constexpr float kMinSensitivity = 0.25f, kMaxSensitivity = 3.0f, kSensitivityStep = 0.25f;
 
@@ -80,13 +80,20 @@ PauseMenu::Result PauseMenu::update(const Input& in, int width, int height) {
         return Result::None;
     }
 
+    if (selected_ == InfHpItem || selected_ == InfLightItem || selected_ == InfShadowItem) {
+        bool toggle = clicked || in.wasPressed(Key::Enter) || in.wasPressed(Key::Space) || in.wasPressed(Key::A) ||
+                      in.wasPressed(Key::D) || in.wasPressed(Key::Left) || in.wasPressed(Key::Right);
+        if (!toggle) return Result::None;
+        bool& b = selected_ == InfHpItem ? infHp : selected_ == InfLightItem ? infLight : infShadow;
+        b = !b;
+        return Result::CheatsChanged;
+    }
+
     if (clicked || in.wasPressed(Key::Enter) || in.wasPressed(Key::Space)) {
         switch (selected_) {
             case Continue: return Result::Resume;
             case Restart: return Result::Restart;
             case TestCombatItem: return Result::TestCombat;
-            case TestLightItem: return Result::TestLight;
-            case TestShadowItem: return Result::TestShadow;
             case Quit: return Result::Quit;
         }
     }
@@ -112,7 +119,11 @@ void PauseMenu::draw(UiLayer& ui, int width, int height) const {
     const char* qnames[3] = {"baja", "media", "alta"};
     char qual[48];
     std::snprintf(qual, sizeof(qual), "Calidad gráfica   ‹ %s ›", qnames[quality]);
-    const char* labels[ItemCount] = {"Continuar", "Reiniciar nivel", "Prueba: Grises sin fin", "Prueba: viaje por la luz", "Prueba: sombra", sens, qual, "Salir"};
+    char hp[48], lt[48], sh[48];
+    std::snprintf(hp, sizeof(hp), "Prueba · vida infinita   ‹ %s ›", infHp ? "sí" : "no");
+    std::snprintf(lt, sizeof(lt), "Prueba · Luz infinita   ‹ %s ›", infLight ? "sí" : "no");
+    std::snprintf(sh, sizeof(sh), "Prueba · Sombra infinita   ‹ %s ›", infShadow ? "sí" : "no");
+    const char* labels[ItemCount] = {"Continuar", "Reiniciar nivel", "Modo prueba", hp, lt, sh, sens, qual, "Salir"};
     for (int i = 0; i < ItemCount; ++i) {
         Rect r = itemRect(i, width, height);
         bool sel = i == selected_;

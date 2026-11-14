@@ -69,7 +69,7 @@ Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena i
 | C / Ctrl | Voltereta de esquiva (invulnerable); un golpe justo después es un **contraataque** |
 | Q | **Luz**: junto a una farola, **entrar en ella**; dentro, saltar a otra fuente. **Sombra**: en la oscuridad, **fundirse** con el suelo |
 | Mantener Q | **Luz**: absorber luz (nodos, Grises aturdidos) |
-| Portal / Z | Cambiar entre **luz y sombra** cruzando un portal (Z solo en los modos de prueba) |
+| Portal / Z | Cambiar entre **luz y sombra** cruzando un portal (Z solo en el modo prueba) |
 | V | **Supernova** (luz, con la Luz llena) · **Agujero negro** (sombra, 60 de Sombra) |
 | G | **Transformarse** (con un núcleo) |
 | T | **Invocar compañero** (chispa aliada o el eco de Nora) |
@@ -99,7 +99,7 @@ Especiales de combate: atacar corriendo = **embestida**; atacar con la guardia =
   - **La luz también se gasta**: entrar en una fuente cuesta Luz y saltar a otra más; la farola
     que se deja atrás pierde luz y, dentro, se recarga Luz a costa de la farola, que se atenúa
     hasta apagarse. Usar la luz oscurece el mundo; usar la sombra lo ilumina.
-  - Se cambia de luz a sombra **cruzando un portal** (en los modos de prueba, también con Z).
+  - Se cambia de luz a sombra **cruzando un portal** (en el modo prueba, también con Z).
 - **Enemigos de luz y de sombra** (todos fueron personas): *Deslumbrado* (figura alta y
   sobreexpuesta, dos zarpazos), *Vigía* (ojo flotante que dispara luz), *Coloso* (mole de
   sombra que aplasta) y *Sabueso* (cuadrúpedo que caza en manada y muerde por la espalda).
@@ -125,24 +125,24 @@ Especiales de combate: atacar corriendo = **embestida**; atacar con la guardia =
   rodea), aprovechan cuando les das la espalda y se apartan de tus golpes cada vez mejor. El
   jefe aprende muy deprisa durante el combate.
 
-## Modos de prueba
+## Modo prueba
 
-Sin historia, con **vida, Luz y Sombra infinitas**, la sombra ya despierta y todas las armas y núcleos de forma en el inventario.
-Se abren desde el menú de pausa (cada vez con un escenario nuevo) o al arrancar:
+Un solo modo para probarlo todo, sin historia, con la sombra ya despierta y todas las armas,
+núcleos de forma y materiales para forjar en el inventario. Se abre desde el menú de pausa (cada
+vez con un escenario nuevo) o al arrancar:
 
 ```bash
-./build/game --prueba                 # Grises sin fin en un patio aleatorio
-./build/game --prueba luz             # archipiélago de islas flotantes para el viaje por la luz
-./build/game --prueba sombra          # patio casi a oscuras para fundirse con la sombra
-./build/game --prueba combate 1234    # con semilla: la misma semilla da el mismo escenario
+./build/game --prueba          # patio aleatorio
+./build/game --prueba 1234     # con semilla: la misma semilla da el mismo escenario
 ```
 
-- **Grises sin fin**: patio cerrado por edificios, con pilares, plataformas, árboles, cajas, farolas
-  y nodos ya encendidos, todo colocado al azar. Siempre hay Grises (de 3 a 9 a la vez, más cuantos más
-  disipas) y cada 30 bajas aparece un Gris mayor.
-- **Viaje por la luz**: islas sobre el vacío, cada una con su baliza a menos de 35 m de otra y
-  agujas con una luz arriba. El objetivo cuenta las islas alcanzadas y señala la baliza más cercana
-  que falta; al caer vuelves a la última isla pisada.
+- Patio cerrado por edificios, con pilares, plataformas, árboles, cajas, farolas, nodos encendidos
+  y dos portales, todo colocado al azar; entre las farolas queda oscuridad para la sombra.
+- Siempre hay Grises de luz y de sombra (de 3 a 9 a la vez, más cuantos más disipas) y cada 30
+  bajas aparece un Gris mayor.
+- **F1 / F2 / F3**: vida / Luz / Sombra infinitas (también en el menú de pausa). Por defecto solo la
+  vida, para probar la gestión de la Luz y la Sombra: absorber (Q mantenida), los focos de sombra,
+  saltar entre farolas, fundirse y cambiar de modo (portales o Z).
 
 ## Modo debug (F12)
 

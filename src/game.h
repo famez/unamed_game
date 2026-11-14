@@ -178,12 +178,12 @@ struct Companion {
 // encender faroles, usar algo, llegar a un sitio, salir). Al cumplirlo se abren puertas,
 // suena su escena y empieza la siguiente.
 
-enum class LevelId { Plaza, Mercado, Puente, Prueba, PruebaLuz, PruebaSombra, Count };
+enum class LevelId { Plaza, Mercado, Puente, Prueba, Count };
 
 // Modos de prueba (sin historia, con vida, Luz y Sombra infinitas): un escenario aleatorio
 // con Grises sin fin, un archipiélago de islas flotantes para practicar el viaje por la luz,
 // o un patio con charcos de oscuridad para practicar la sombra.
-enum class TestMode { None, Combat, Light, Shadow };
+enum class TestMode { None, Combat };
 
 struct Spawn {
     EnemyKind kind;
@@ -379,6 +379,10 @@ public:
     // Modo de prueba con un escenario generado a partir de `seed`.
     void initTest(TestMode mode, uint32_t seed);
     TestMode testMode() const { return testMode_; }
+    void setTestCheats(bool hp, bool light, bool shadow);
+    bool infiniteHp() const { return infHp_; }
+    bool infiniteLight() const { return infLight_; }
+    bool infiniteShadow() const { return infShadow_; }
     uint32_t testSeed() const { return testSeed_; }
     void update(float dt, const Controls& c);
 
@@ -488,7 +492,6 @@ private:
     void buildMercado();
     void buildPuente();
     void buildPrueba();
-    void buildPruebaLuz();
     void updateTestMode(float dt);
     bool spawnTestEnemy();
     void addLampPost(Vec3 base, uint32_t color);
@@ -740,11 +743,8 @@ private:
     float testArena_ = 20;       // medio lado del escenario de combate
     float testSpawnTimer_ = 0;
     int testBossAt_ = 30;        // bajas con las que aparece el siguiente Gris mayor
-    struct TestIsland {
-        AABB top;   // zona de la cara superior (para saber si se ha llegado)
-        Vec3 lamp;  // su baliza
-        bool visited = false;
-    };
-    std::vector<TestIsland> islands_;
+    // Trucos del modo prueba (F1, F2, F3 o el menú de pausa): por defecto solo la vida es
+    // infinita, para poder probar la gestión de la Luz y la Sombra.
+    bool infHp_ = true, infLight_ = false, infShadow_ = false;
 
 };

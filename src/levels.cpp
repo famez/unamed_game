@@ -549,7 +549,6 @@ void Game::loadLevel(LevelId id) {
     trail_.clear();
     particles_.clear();
     companions_.clear();
-    islands_.clear();
     holes_.clear();
     ghosts_.clear();
     portals_.clear();
@@ -567,8 +566,6 @@ void Game::loadLevel(LevelId id) {
         case LevelId::Mercado: buildMercado(); break;
         case LevelId::Puente: buildPuente(); break;
         case LevelId::Prueba: buildPrueba(); break;
-        case LevelId::PruebaLuz: buildPruebaLuz(); break;
-        case LevelId::PruebaSombra: buildPrueba(); break;
         case LevelId::Count: break;
     }
     rebuildSolids();

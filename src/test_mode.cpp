@@ -1,9 +1,9 @@
-// Modos de prueba: sin historia y con vida y Luz infinitas.
-//   - Combate: un patio generado al azar (edificios alrededor, pilares, plataformas, árboles,
-//     farolas y nodos encendidos) con Grises sin fin, cada vez más numerosos; cada 30 bajas
-//     aparece un Gris mayor.
-//   - Viaje por la luz: un archipiélago de islas flotantes sobre el vacío, cada una con su
-//     baliza; casi ninguna se alcanza saltando, hay que viajar de luz en luz.
+// Modo prueba (uno solo, para probarlo todo): sin historia, en un patio generado al azar
+// (edificios alrededor, pilares, plataformas, árboles, farolas, nodos encendidos y dos
+// portales) con Grises de luz y de sombra sin fin, cada vez más numerosos; cada 30 bajas
+// aparece un Gris mayor. Entre las farolas queda oscuridad de sobra para la sombra.
+// Vida, Luz y Sombra infinitas se encienden y apagan aparte (F1, F2, F3): por defecto solo
+// la vida, para probar la gestión de la Luz y la Sombra (absorber, gastar, focos, portales).
 // Todo sale de una semilla: la misma semilla da el mismo escenario.
 
 #include "game.h"
@@ -20,10 +20,6 @@ const uint32_t kTints[] = {rgba(150, 150, 154), rgba(138, 142, 156), rgba(136, 1
 const uint32_t kLeaves[] = {rgba(255, 110, 200), rgba(170, 110, 255), rgba(90, 210, 255), rgba(255, 150, 90),
                             rgba(110, 230, 150)};
 
-bool inside(const AABB& a, Vec3 p) {
-    return p.x >= a.min.x && p.x <= a.max.x && p.y >= a.min.y && p.y <= a.max.y && p.z >= a.min.z && p.z <= a.max.z;
-}
-
 }  // namespace
 
 void Game::initTest(TestMode mode, uint32_t seed) {
@@ -31,7 +27,7 @@ void Game::initTest(TestMode mode, uint32_t seed) {
     testMode_ = mode;
     testSeed_ = seed;
     rng_ = seed * 2654435761u + 0x9E3779B9u;
-    loadLevel(mode == TestMode::Light ? LevelId::PruebaLuz : mode == TestMode::Shadow ? LevelId::PruebaSombra : LevelId::Prueba);
+    loadLevel(LevelId::Prueba);
     // Todo a mano para probar: armas, núcleos de las formas y el farolillo de Nora.
     for (ItemId w : {ItemId::StarStaff, ItemId::AuroraBlade, ItemId::LightLance, ItemId::LightFists}) inv_.add(w);
     for (ItemId c : {ItemId::CoreAurora, ItemId::CoreColossus, ItemId::CoreEcho}) inv_.add(c, 99);
@@ -44,12 +40,14 @@ void Game::initTest(TestMode mode, uint32_t seed) {
     mp_ = maxMp_;
     shadow_ = maxShadow_;
     shadowUnlocked_ = true;
-    shadowMode_ = mode == TestMode::Shadow;
     applyWeapon();
-    notify(mode == TestMode::Light    ? "Modo prueba · viaje por la luz"
-           : mode == TestMode::Shadow ? "Modo prueba · sombra (Q en un charco: deslizarte)"
-                                      : "Modo prueba · Grises sin fin",
-           kCyan);
+    notify("Modo prueba · F1 vida, F2 Luz, F3 Sombra infinitas · Z cambia de modo", kCyan);
+}
+
+void Game::setTestCheats(bool hp, bool light, bool shadow) {
+    infHp_ = hp;
+    infLight_ = light;
+    infShadow_ = shadow;
 }
 
 // --- Patio de combate aleatorio -------------------------------------------------------------
@@ -119,16 +117,14 @@ void Game::buildPrueba() {
             }
         }
     }
-    // Farolas (la red de luz; entre ellas, la oscuridad) y nodos ya encendidos. En la prueba
-    // de sombra hay pocas: casi todo el patio está a oscuras.
-    bool shadowTest = testMode_ == TestMode::Shadow;
-    int lamps = shadowTest ? 4 : 6 + int(random01() * 4);
+    // Farolas (la red de luz; entre ellas, la oscuridad) y nodos ya encendidos.
+    int lamps = 6 + int(random01() * 4);
     for (int i = 0; i < lamps; ++i)
         if (findSpot(0.6f, p)) addLampPost(p, kNeons[(theme + i) % 5]);
     // Dos portales para cambiar de luz a sombra.
     for (int i = 0; i < 2; ++i)
         if (findSpot(1.5f, p)) addPortal(p);
-    int nodes = shadowTest ? 0 : 2 + int(random01() * 2);
+    int nodes = 2 + int(random01() * 2);
     for (int i = 0; i < nodes; ++i)
         if (findSpot(1.0f, p)) {
             ColorNode n;
@@ -142,9 +138,8 @@ void Game::buildPrueba() {
         }
 
     LevelPart part;
-    part.title = shadowTest ? "De sombra en sombra" : "Grises sin fin";
-    part.objective = shadowTest ? "Q en la oscuridad: fundirte con la sombra" : "Grises disipados: 0";
-    if (shadowTest) levelName_ = "Prueba: Patio de sombras";
+    part.title = "Grises sin fin";
+    part.objective = "Grises disipados: 0";
     part.kind = PartKind::Exit;  // nunca se termina
     part.area = AABB{{1e6f, 1e6f, 1e6f}, {1e6f, 1e6f, 1e6f}};
     parts_ = {part};
@@ -153,65 +148,6 @@ void Game::buildPrueba() {
     croma_ = cromaShown_ = 0.3f;
     testSpawnTimer_ = 1.5f;
     testBossAt_ = 30;
-}
-
-// --- Archipiélago de luz ---------------------------------------------------------------------
-
-void Game::buildPruebaLuz() {
-    levelName_ = "Prueba: Archipiélago de luz";
-    world_.ground = false;
-    const Mat4 id = Mat4::identity();
-    islands_.clear();
-    auto island = [&](Vec3 c, float hx, float hz, uint32_t rim, bool lamp) {
-        addBlock(c - Vec3{0, 0.3f, 0}, {hx, 0.3f, hz}, kWhite);
-        addRim(c, hx, hz, rim);
-        addDecor(id, c - Vec3{0, 0.8f, 0}, {hx * 0.6f, 0.25f, hz * 0.6f}, kTints[1], Material::Stone, false);
-        TestIsland t;
-        t.top = AABB{{c.x - hx, c.y - 0.2f, c.z - hz}, {c.x + hx, c.y + 1.5f, c.z + hz}};
-        if (lamp) {
-            Vec3 base = c + Vec3{randRange(-hx, hx) * 0.6f, 0, randRange(-hz, hz) * 0.6f};
-            addLampPost(base, rim);
-            t.lamp = lamps_.back().pos;
-        }
-        islands_.push_back(t);
-    };
-    island({0, 0, 0}, 5, 5, kCyan, true);  // la de salida
-    islands_[0].visited = true;
-    // Cada isla nueva sale de una anterior a 12–28 m (dentro del alcance del viaje).
-    int count = 14 + int(random01() * 6);
-    for (int i = 0, tries = 0; i < count && tries < 600; ++tries) {
-        const TestIsland& from = islands_[size_t(random01() * float(islands_.size())) % islands_.size()];
-        Vec3 fc = (from.top.min + from.top.max) * 0.5f;
-        float a = random01() * 2.0f * kPi, d = randRange(12, 28);
-        float hx = randRange(1.5f, 4.0f), hz = randRange(1.5f, 4.0f);
-        Vec3 c{fc.x + std::cos(a) * d, clampf(from.top.min.y + 0.2f + randRange(-3, 6), -2, 22), fc.z + std::sin(a) * d};
-        bool ok = true;
-        for (const TestIsland& t : islands_) {
-            Vec3 tc = (t.top.min + t.top.max) * 0.5f;
-            if (length(flat(c - tc)) < std::max(hx, hz) + std::max(t.top.max.x - tc.x, t.top.max.z - tc.z) + 4.0f) ok = false;
-        }
-        if (!ok) continue;
-        island(c, hx, hz, kNeons[i % 5], true);
-        ++i;
-    }
-    // Agujas altas con una luz arriba: solo se sube viajando.
-    for (int i = 0; i < 4; ++i) {
-        const TestIsland& t = islands_[1 + size_t(random01() * float(islands_.size() - 1)) % (islands_.size() - 1)];
-        Vec3 corner{t.top.max.x - 0.5f, t.top.min.y + 0.2f, t.top.min.z + 0.5f};
-        float h = randRange(4, 8);
-        addBlock(corner + Vec3{0, h * 0.5f, 0}, {0.35f, h * 0.5f, 0.35f}, kWhite);
-        lamps_.push_back({corner + Vec3{0, h + 0.3f, 0}, kMagenta});
-    }
-
-    LevelPart part;
-    part.title = "De luz en luz";
-    part.kind = PartKind::Exit;
-    part.area = AABB{{1e6f, 1e6f, 1e6f}, {1e6f, 1e6f, 1e6f}};
-    parts_ = {part};
-    heroStart_ = islands_[0].lamp - Vec3{0, 3.35f, 1.6f};  // junto a la primera baliza
-    addPortal(Vec3{-3.0f, 0, 3.0f});
-    heroStartYaw_ = 0;
-    croma_ = cromaShown_ = 0.4f;
 }
 
 // --- Lógica de los modos de prueba -----------------------------------------------------------
@@ -229,11 +165,10 @@ bool Game::spawnTestEnemy() {
         Spawn s;
         float r = random01();
         s.kind = r < 0.3f ? EnemyKind::Dazzled : r < 0.5f ? EnemyKind::Watcher : r < 0.8f ? EnemyKind::Hound : EnemyKind::Brute;
-        if (testMode_ == TestMode::Shadow) s.kind = r < 0.6f ? EnemyKind::Dazzled : EnemyKind::Watcher;  // solo de luz
         s.pos = p;
         bool bossAlive = false;
         for (const Enemy& e : enemies_) bossAlive |= e.boss && e.alive();
-        if (kills_ >= testBossAt_ && !bossAlive && testMode_ == TestMode::Combat) {  // Gris mayor
+        if (kills_ >= testBossAt_ && !bossAlive) {  // Gris mayor
             s.kind = EnemyKind::Brute;
             s.boss = true;
             s.name = "Gris mayor";
@@ -248,49 +183,15 @@ bool Game::spawnTestEnemy() {
 
 void Game::updateTestMode(float dt) {
     if (testMode_ == TestMode::None) return;
-    if (testMode_ == TestMode::Shadow) {
-        // Unos pocos de luz rondando: para probar que, fundido en la sombra, no te ven.
-        int alive = 0;
-        for (const Enemy& e : enemies_) alive += e.alive();
-        testSpawnTimer_ -= dt;
-        if (alive < 3 && testSpawnTimer_ <= 0 && hero_.downTimer < 0 && spawnTestEnemy()) testSpawnTimer_ = 3.0f;
-        if (!parts_.empty())
-            parts_[0].objective = diving_ ? "Sombra: " + std::to_string(int(shadow_)) + " · se gasta y enciende farolas"
-                                          : "Q en la oscuridad: fundirte con la sombra";
-        return;
-    }
-    if (testMode_ == TestMode::Combat) {
-        // Siempre hay Grises: más cuantos más se disipan (de 3 a 9 a la vez).
-        int alive = 0;
-        for (const Enemy& e : enemies_) alive += e.alive();
-        int want = std::min(9, 3 + kills_ / 8);
-        testSpawnTimer_ -= dt;
-        if (alive < want && testSpawnTimer_ <= 0 && hero_.downTimer < 0 && spawnTestEnemy()) testSpawnTimer_ = 0.8f;
-        if (!parts_.empty()) parts_[0].objective = "Grises disipados: " + std::to_string(kills_);
-        return;
-    }
-    // Archipiélago: al posarse en una isla nueva se marca y pasa a ser el punto de control.
-    int visited = 0;
-    for (TestIsland& t : islands_) {
-        bool here = (hero_.body.grounded && !travel_ && inside(t.top, hero_.body.pos)) ||
-                    (inLight_ && length(hostPos_ - t.lamp) < 0.1f);
-        if (!t.visited && here) {
-            t.visited = true;
-            spawnRing(hero_.body.pos + Vec3{0, 0.05f, 0}, 2.0f, 0.6f, kAmber);
-            uiSound(Sfx::ItemGet, 0.6f, 1.2f);
-        }
-        visited += t.visited;
-    }
-    if (hero_.body.grounded && !travel_ && !inLight_ && hero_.downTimer < 0)
-        for (const TestIsland& t : islands_)
-            if (inside(t.top, hero_.body.pos)) checkpoint_ = hero_.body.pos;
+    // Siempre hay Grises: más cuantos más se disipan (de 3 a 9 a la vez).
+    int alive = 0;
+    for (const Enemy& e : enemies_) alive += e.alive();
+    int want = std::min(9, 3 + kills_ / 8);
+    testSpawnTimer_ -= dt;
+    if (alive < want && testSpawnTimer_ <= 0 && hero_.downTimer < 0 && spawnTestEnemy()) testSpawnTimer_ = 0.8f;
     if (!parts_.empty()) {
-        LevelPart& p = parts_[0];
-        p.objective = "Islas alcanzadas: " + std::to_string(visited) + "/" + std::to_string(islands_.size());
-        // El indicador señala la baliza sin visitar más cercana.
-        float best = 1e9f;
-        for (const TestIsland& t : islands_)
-            if (!t.visited && length(t.lamp - hero_.body.pos) < best) best = length(t.lamp - hero_.body.pos), p.marker = t.lamp;
-        if (best > 1e8f) p.marker = hero_.body.pos + Vec3{0, 3, 0};
+        auto mark = [](bool on) { return on ? "infinita" : "no"; };
+        parts_[0].objective = "Grises: " + std::to_string(kills_) + " · F1 vida " + mark(infHp_) + " · F2 Luz " +
+                              mark(infLight_) + " · F3 Sombra " + mark(infShadow_);
     }
 }

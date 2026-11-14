@@ -87,9 +87,8 @@ const char kHelp[] =
     "  --silencio                    sin audio\n"
     "\n"
     "Pruebas\n"
-    "  --prueba [combate|luz|sombra] [semilla]\n"
-    "                                escenario aleatorio con vida, Luz y Sombra infinitas\n"
-    "                                (combate por defecto; Z cambia de modo dentro)\n"
+    "  --prueba [semilla]            modo prueba: patio aleatorio con enemigos sin fin; F1, F2 y F3\n"
+    "                                hacen infinitas la vida, la Luz y la Sombra; Z cambia de modo\n"
     "  --escena ID                   empieza reproduciendo esa escena del guion\n"
     "\n"
     "Desarrollo\n"
@@ -168,16 +167,13 @@ int main(int argc, char** argv) {
     if (platform::msaaEnabled()) glEnable(GL_MULTISAMPLE);
     glClearColor(0.08f, 0.09f, 0.11f, 1.0f);
 
-    // --prueba [combate|luz|sombra] [semilla]: modo de prueba (vida, Luz y Sombra infinitas) en un
-    // escenario aleatorio; sin semilla, una distinta cada vez.
+    // --prueba [semilla]: modo prueba en un escenario aleatorio; sin semilla, una distinta cada vez.
     TestMode testMode = TestMode::None;
     uint32_t testSeed = uint32_t(platform::timeSeconds() * 1000.0) ^ 0x5bd1e995u;
     for (int i = 1; i < argc; ++i)
         if (std::strcmp(argv[i], "--prueba") == 0) {
             testMode = TestMode::Combat;
-            if (i + 1 < argc && std::strcmp(argv[i + 1], "luz") == 0) testMode = TestMode::Light, ++i;
-            else if (i + 1 < argc && std::strcmp(argv[i + 1], "sombra") == 0) testMode = TestMode::Shadow, ++i;
-            else if (i + 1 < argc && std::strcmp(argv[i + 1], "combate") == 0) ++i;
+            if (i + 1 < argc && std::strcmp(argv[i + 1], "combate") == 0) ++i;  // (nombre antiguo)
             if (i + 1 < argc && argv[i + 1][0] != '-') testSeed = uint32_t(std::strtoul(argv[++i], nullptr, 10));
         }
     Game game;
@@ -186,7 +182,7 @@ int main(int argc, char** argv) {
         game = Game{};
         if (testMode != TestMode::None) {
             game.initTest(testMode, testSeed);
-            std::printf("modo prueba (%s), semilla %u\n", testMode == TestMode::Light ? "luz" : testMode == TestMode::Shadow ? "sombra" : "combate", testSeed);
+            std::printf("modo prueba, semilla %u\n", testSeed);
         } else {
             game.init(assetDir);
         }
@@ -295,20 +291,18 @@ int main(int argc, char** argv) {
                 case PauseMenu::Result::Resume: closeMenu(); break;
                 case PauseMenu::Result::Restart:
                 case PauseMenu::Result::TestCombat:
-                case PauseMenu::Result::TestLight:
-                case PauseMenu::Result::TestShadow:
-                    // Las opciones de prueba generan un escenario nuevo; reiniciar repite el actual.
+                    // El modo prueba genera un escenario nuevo; reiniciar repite el actual.
                     if (result != PauseMenu::Result::Restart) {
-                        testMode = result == PauseMenu::Result::TestLight    ? TestMode::Light
-                                   : result == PauseMenu::Result::TestShadow ? TestMode::Shadow
-                                                                             : TestMode::Combat;
+                        testMode = TestMode::Combat;
                         testSeed = uint32_t(platform::timeSeconds() * 1000.0) ^ 0x5bd1e995u;
                     }
                     startGame();
+                    game.setTestCheats(menu.infHp, menu.infLight, menu.infShadow);
                     cam = OrbitCamera{};
                     cam.target = game.hero().body.pos + Vec3{0, 1.0f, 0};
                     closeMenu();
                     break;
+                case PauseMenu::Result::CheatsChanged: game.setTestCheats(menu.infHp, menu.infLight, menu.infShadow); break;
                 case PauseMenu::Result::Quit: quit = true; break;
                 case PauseMenu::Result::QualityChanged: renderer.setQuality(Quality(menu.quality)); break;
                 case PauseMenu::Result::None: break;
@@ -329,6 +323,13 @@ int main(int argc, char** argv) {
             if (input.wasPressed(Key::F2)) flags.joints = !flags.joints;
             if (input.wasPressed(Key::F3)) flags.body = !flags.body;
             if (input.wasPressed(Key::F4)) flags.grid = !flags.grid;
+        } else if (game.testMode() != TestMode::None && !menu.open) {  // modo prueba: F1-F3, qué es infinito
+            bool changed = true;
+            if (input.wasPressed(Key::F1)) menu.infHp = !menu.infHp;
+            else if (input.wasPressed(Key::F2)) menu.infLight = !menu.infLight;
+            else if (input.wasPressed(Key::F3)) menu.infShadow = !menu.infShadow;
+            else changed = false;
+            if (changed) game.setTestCheats(menu.infHp, menu.infLight, menu.infShadow);
         }
 
         bool guardHeld = false;
@@ -458,12 +459,6 @@ int main(int argc, char** argv) {
                     }
                     // En los modos de prueba también cambia a sombra y lanza agujeros negros.
                     if (fociBot || turnsBot) {
-                    } else if (game.testMode() == TestMode::Shadow) {  // se funde con la sombra y la recorre
-                        c.light = botStep % 240 == 40 || botStep % 240 == 200;
-                        if (game.diving()) {
-                            float a = float(botStep) * 0.02f;
-                            c.move = Vec3{std::cos(a), 0, std::sin(a)};
-                        }
                     } else if (game.testMode() != TestMode::None) {
                         c.swapMode = botStep == 30;
                         c.nova = c.nova || botStep % 240 == 120;
@@ -657,8 +652,8 @@ int main(int argc, char** argv) {
             // Una pista por escenario; la del jefe mientras haya uno.
             TrackId track = game.bossAlive() ? TrackId::Jefe
                             : game.level() == LevelId::Mercado ? TrackId::Mercado
-                            : game.level() == LevelId::Puente || game.level() == LevelId::PruebaLuz ? TrackId::Puente
-                            : game.level() == LevelId::Prueba || game.level() == LevelId::PruebaSombra ? TrackId(game.testSeed() % 3)
+                            : game.level() == LevelId::Puente ? TrackId::Puente
+                            : game.level() == LevelId::Prueba ? TrackId(game.testSeed() % 3)
                                                               : TrackId::Plaza;
             audio.playTrack(track);
             audio.setMasterVolume((paused ? 0.35f : 0.8f) * masterVolume);

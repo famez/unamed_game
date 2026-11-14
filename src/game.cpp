@@ -285,10 +285,10 @@ void Game::update(float dt, const Controls& input) {
     for (ColorSplash& sp : splashes_) sp.age += dt;
     updateLevel(dt);
     updateEffects(dt);
-    if (testMode_ != TestMode::None) {  // modo prueba: vida, Luz y Sombra infinitas
-        hp_ = maxHp_;
-        mp_ = maxMp_;
-        shadow_ = maxShadow_;
+    if (testMode_ != TestMode::None) {  // modo prueba: lo que esté marcado como infinito
+        if (infHp_) hp_ = maxHp_;
+        if (infLight_) mp_ = maxMp_;
+        if (infShadow_) shadow_ = maxShadow_;
     }
 }
 
@@ -689,7 +689,7 @@ void Game::hurtHero(Vec3 dir, float damage, float knock, Enemy* source) {
         knock *= 0.2f;
     }
     hp_ = std::max(0.0f, hp_ - damage);
-    if (testMode_ != TestMode::None) hp_ = maxHp_;  // modo prueba: vida infinita
+    if (testMode_ != TestMode::None && infHp_) hp_ = maxHp_;  // modo prueba: vida infinita
     if (source) source->rlReward += damage / 10.0f;  // le ha hecho daño: buena táctica
     sound(Sfx::HeroHurt, chest);
     heroInvuln_ = kInvulnAfterHit;
