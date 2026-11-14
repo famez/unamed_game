@@ -127,7 +127,7 @@ void Game::update(float dt, const Controls& input) {
     modeFlash_ = std::max(0.0f, modeFlash_ - dt);
     absorbHint_ = std::max(0.0f, absorbHint_ - dt);
     lightHint_ = std::max(0.0f, lightHint_ - dt);
-    for (ShadowPool& p : pools_) p.age += dt;
+    updatePortals(dt);
     guardFlash_ = std::max(0.0f, guardFlash_ - dt);
     heroInvuln_ = std::max(0.0f, heroInvuln_ - dt);
     shake_ = std::max(0.0f, shake_ - dt * 1.5f);
@@ -146,8 +146,12 @@ void Game::update(float dt, const Controls& input) {
         if (inLight_) updateInsideLight(dt, c);
         lock_ = -1;
         if (c.advance && dialogue_.active()) dialogue_.advance();
+    } else if (diving_) {  // fundido con la sombra: solo se mueve, sale o embosca
+        updateShadow(dt, c);
+        lock_ = -1;
+        if (c.advance && dialogue_.active()) dialogue_.advance();
     } else {
-        if (c.swapMode) swapMode();
+        if (c.swapMode && testMode_ != TestMode::None) swapMode();  // en la historia se cambia con los portales
         updateLightTarget(c);
         if (shadowMode_) updateShadow(dt, c);
         else updateLight(dt, c);
@@ -205,11 +209,11 @@ void Game::update(float dt, const Controls& input) {
     hero_.setAttackHeld(c.attackHeld);
     bool light = inLight_ || travel_;
     // Fundido con la sombra: dentro de un charco, en modo sombra, corre más.
-    hero_.speedScale = formSpeed() * (shadowMode_ && shadowAt(hero_.body.pos) > 0.5f ? 1.4f : 1.0f) *
-                       (powers_.strong ? 1.0f : 0.4f);  // sin fuerzas, apenas camina
-    hero_.update(dt, down || light ? Vec3{} : c.move, !down && !light && c.jump, world_, std::atan2(c.camForward.x, c.camForward.z));
+    hero_.speedScale = formSpeed() * (diving_ ? 1.7f : 1.0f) * (powers_.strong ? 1.0f : 0.4f);  // sin fuerzas, apenas camina
+    hero_.update(dt, down || light ? Vec3{} : c.move, !down && !light && !diving_ && c.jump, world_, std::atan2(c.camForward.x, c.camForward.z));
     if (c.jump && wasGrounded && hero_.body.vel.y > 1.0f) sound(Sfx::Jump, hero_.body.pos, 0.7f);
     updateTravel(dt);
+    constrainDive();
     updateBrizna(dt);
     Move impact = hero_.takeImpact();
     if (impact != Move::None) resolveImpact(impact);
@@ -556,10 +560,9 @@ void Game::resolveImpact(Move m) {
 }
 
 void Game::hitEnemy(Enemy& e, Vec3 dir, float damage, float knock, float lift, bool heavy) {
-    // La luz debilita a los de sombra y endurece a los de luz; la oscuridad, al revés. Y la
-    // mitad que usa el protagonista hiere más a la familia contraria.
+    // La luz debilita a los de sombra y endurece a los de luz. Y la mitad que usa el
+    // protagonista hiere más a la familia contraria.
     if (lightAt(e.body.pos) > 0.3f) damage *= e.def().shadow ? 1.5f : 0.8f;
-    if (shadowAt(e.body.pos) > 0.3f) damage *= e.def().shadow ? 0.8f : 1.5f;
     damage *= familyDamage(e);
     if (shadowMode_ && !e.def().shadow) shadow_ = std::min(maxShadow_, shadow_ + 1.5f);  // le arranca sombra
     e.health -= damage;
@@ -643,7 +646,7 @@ void Game::killEnemy(Enemy& e) {
 }
 
 void Game::hurtHero(Vec3 dir, float damage, float knock, Enemy* source) {
-    if (hero_.downTimer >= 0 || hero_.rolling() || inLight_ || travel_ || heroInvuln_ > 0) return;
+    if (hero_.downTimer >= 0 || hero_.rolling() || inLight_ || travel_ || diving_ || heroInvuln_ > 0) return;
     Vec3 chest = hero_.body.pos + Vec3{0, 1.0f, 0};
     // Guardia de frente: no hace daño. Si se acaba de levantar, rechaza al atacante.
     if (hero_.guarding() && dot(dir, hero_.forward()) < -0.2f) {
@@ -681,7 +684,7 @@ void Game::hurtHero(Vec3 dir, float damage, float knock, Enemy* source) {
 
 void Game::defeatHero() {
     hp_ = 0;
-    inLight_ = travel_ = lightLock_ = false;
+    inLight_ = travel_ = lightLock_ = diving_ = false;
     hero_.downTimer = 0;
     lock_ = -1;
     trail_.clear();
@@ -714,7 +717,7 @@ Brain& Game::brainFor(const Enemy& e) { return e.boss ? bossBrain_ : brains_[int
 
 // Qué está haciendo el Prismero, tal como lo ve un Gris.
 int Game::heroActionCode() const {
-    if (hero_.rolling() || inLight_ || travel_) return 3;
+    if (hero_.rolling() || inLight_ || travel_ || diving_) return 3;
     if (!hero_.body.grounded) return 4;
     if (hero_.guarding()) return 2;
     if (isAttack(hero_.move())) return 1;
@@ -749,7 +752,6 @@ void Game::updateEnemy(Enemy& e, float dt) {
     e.prevPos = e.body.pos;
     float slow = e.freeze > 0 ? 0.45f : 1.0f;  // congelado: todo más lento
     if (lightAt(e.body.pos) > 0.3f) slow *= d.shadow ? 0.8f : 1.1f;  // la luz pesa a los de sombra y aviva a los de luz
-    if (shadowAt(e.body.pos) > 0.3f) slow *= d.shadow ? 1.1f : 0.8f;  // y la oscuridad, al revés
     e.dodgeCooldown = std::max(0.0f, e.dodgeCooldown - dt);
     float edt = dt * slow;
     e.stateTime += edt;
@@ -769,8 +771,7 @@ void Game::updateEnemy(Enemy& e, float dt) {
     float dist = length(toHero);
     Vec3 dirHero = dist > 1e-4f ? toHero * (1.0f / dist) : e.forward();
     // Dentro de la luz no le ven; fundido con la sombra, solo muy de cerca.
-    bool heroOk = hero_.downTimer < 0 && !inLight_ && !travel_ &&
-                  !(shadowMode_ && shadowAt(hero_.body.pos) > 0.5f && dist > 2.0f);
+    bool heroOk = hero_.downTimer < 0 && !inLight_ && !travel_ && !diving_;
     Vec3 desired;  // velocidad horizontal deseada
     bool faceHero = false;
 

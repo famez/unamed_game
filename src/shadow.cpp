@@ -1,10 +1,11 @@
-// La sombra, la otra mitad del protagonista (Z para cambiar cuando ya la ha despertado):
-//   - Fundirse: dentro de un charco de oscuridad corre más, los enemigos no le ven salvo
-//     muy de cerca y recupera Sombra poco a poco.
-//   - Beber la luz (mantener Q junto a una farola encendida): la farola se apaga y deja un
-//     charco de oscuridad a su alrededor. En modo luz se puede volver a encender (F).
-//   - Deslizarse (pulsar Q dentro de un charco): viaja por el suelo hasta otro charco que
-//     señale la cámara.
+// La sombra, la otra mitad del protagonista. Se cambia de luz a sombra (y al revés)
+// cruzando un portal del escenario.
+//   - La oscuridad es donde no llega la luz: lejos de las farolas encendidas (cada una alumbra
+//     según la energía que le queda), de los nodos y de los faroles.
+//   - Fundirse (Q en la oscuridad): el protagonista se hace sombra en el suelo y se mueve
+//     por toda la zona oscura, rápido e invisible; la luz no le deja pasar. Gasta Sombra, y la
+//     sombra que gasta se convierte en luz: las farolas apagadas que roza se van encendiendo.
+//     Sale con Q o Espacio, o con el clic en emboscada sobre el enemigo más cercano.
 //   - Agujero negro (V, 60 de Sombra): atrae a los enemigos y a sus proyectiles, los va
 //     deshaciendo y acaba en una implosión.
 //   - Golpes cruzados: la sombra hiere más a los de luz (y les arranca Sombra); la luz, a los
@@ -16,22 +17,27 @@
 
 namespace {
 constexpr float kSwapCooldown = 0.8f;
-constexpr float kPoolRegen = 4.0f;        // Sombra por segundo dentro de un charco
-constexpr float kDrinkTime = 0.9f;        // segundos bebiendo para apagar una farola
-constexpr float kDrinkGain = 30.0f;
-constexpr float kRelightCost = 15.0f;
+constexpr float kDiveCost = 6.0f;          // Sombra por segundo fundido en la sombra
+constexpr float kDiveSpeed = 1.7f;         // multiplicador de la carrera
+constexpr float kRelightRate = 0.35f;      // energía por segundo que recuperan las farolas cercanas
+constexpr float kRelightRange = 5.0f;
 constexpr float kHoleCost = 60.0f, kHoleLife = 2.6f, kHolePull = 7.0f;
 const uint32_t kShadowCol = rgba(150, 80, 255), kShadowDark = rgba(30, 16, 48);
 }  // namespace
 
+// Radio que alumbra una farola según su energía.
+float lampRadius(const Lamp& l) { return 2.5f + 4.0f * l.energy; }
+
 float Game::shadowAt(Vec3 p) const {
-    float s = 0;
-    for (const ShadowPool& pl : pools_) {
-        if (std::fabs(p.y - pl.pos.y) > 3.0f) continue;
-        float r = pl.radius * smoothstep01(pl.age / 0.8f);
-        if (r > 0) s = std::max(s, 1.0f - smoothstep01((length(flat(p - pl.pos)) - r * 0.6f) / (r * 0.4f)));
+    float light = lightAt(p);
+    for (const Lamp& l : lamps_) {
+        if (!l.on || !l.bulb) continue;
+        float dy = l.pos.y - p.y;
+        if (dy < -1.0f || dy > 9.0f) continue;
+        float r = lampRadius(l);
+        light = std::max(light, 1.0f - smoothstep01((length(flat(p - l.pos)) - r * 0.6f) / (r * 0.4f)));
     }
-    return s;
+    return 1.0f - light;
 }
 
 // Multiplicador de daño según la mitad que usa el protagonista y la familia del enemigo
@@ -53,29 +59,34 @@ int Game::nearLamp(float range, bool lit) const {
     return best;
 }
 
-void Game::addPool(Vec3 pos, float radius) {
-    // El suelo se mide algo apartado del centro (ahí suele estar el poste de la farola).
-    pools_.push_back({Vec3{pos.x, groundHeight(pos + Vec3{0.6f, 0.5f, 0}), pos.z}, radius, 0});
+// Gastar luz de una farola: se atenúa y, sin energía, se apaga.
+void Game::drainLamp(int i, float amount) {
+    if (i < 0 || i >= int(lamps_.size())) return;
+    Lamp& l = lamps_[size_t(i)];
+    l.energy = std::max(0.0f, l.energy - amount);
+    if (l.energy <= 0.02f && l.on) {
+        l.on = false;
+        l.energy = 0;
+        spawnSparks(l.pos, {0, -1, 0}, 14, rgba(120, 110, 140), 2.0f);
+        sound(Sfx::Crate, l.pos, 0.5f, 0.6f);
+    }
 }
 
 void Game::relightLamp(int i) {
     Lamp& l = lamps_[size_t(i)];
     l.on = true;
+    l.energy = 1.0f;
     Vec3 base{l.pos.x, groundHeight(l.pos + Vec3{0.6f, 0, 0}), l.pos.z};
-    pools_.erase(std::remove_if(pools_.begin(), pools_.end(),
-                                [&](const ShadowPool& p) { return length(flat(p.pos - base)) < 1.5f; }),
-                 pools_.end());
     spawnSparks(l.pos, {0, -1, 0}, 24, l.color, 3.0f);
     spawnRing(base + Vec3{0, 0.05f, 0}, 4.0f, 0.6f, rgba(255, 226, 160));
     sound(Sfx::ItemGet, l.pos, 0.7f, 1.2f);
 }
 
 void Game::swapMode() {
-    if (!shadowUnlocked_ || swapCooldown_ > 0 || inLight_ || travel_) return;
+    if (!shadowUnlocked_ || swapCooldown_ > 0 || inLight_ || travel_ || diving_) return;
     shadowMode_ = !shadowMode_;
     swapCooldown_ = kSwapCooldown;
     modeFlash_ = 0.5f;
-    drink_ = 0;
     lightLock_ = false;
     uint32_t col = shadowMode_ ? kShadowCol : rgba(255, 226, 160);
     spawnRing(hero_.body.pos + Vec3{0, 0.05f, 0}, 2.2f, 0.45f, col);
@@ -83,60 +94,101 @@ void Game::swapMode() {
     sound(Sfx::Echo, hero_.body.pos, 0.6f, shadowMode_ ? 0.6f : 1.3f);
 }
 
-void Game::updateShadow(float dt, const Controls& c) {
-    Vec3 chest = hero_.body.pos + Vec3{0, 1.0f, 0};
-    float dark = shadowAt(hero_.body.pos);
-    if (dark > 0.5f) shadow_ = std::min(maxShadow_, shadow_ + kPoolRegen * dark * dt);
-    // Fundido con la sombra: deja un rastro de humo oscuro al moverse.
-    if (dark > 0.5f && length(flat(hero_.body.vel)) > 1.0f && random01() < dt * 30.0f && particles_.size() < 900)
-        particles_.push_back({hero_.body.pos + Vec3{randRange(-0.3f, 0.3f), randRange(0.1f, 1.4f), randRange(-0.3f, 0.3f)},
-                              {0, 0.4f, 0}, 0.6f, 0.6f, 0.12f, kShadowDark, 0, false});
+// Portales: cruzarlos cambia de luz a sombra o al revés (una vez por cruce).
+void Game::updatePortals(float dt) {
+    for (Portal& p : portals_) {
+        p.spin += dt;
+        bool in = length(flat(hero_.body.pos - p.pos)) < 1.1f && std::fabs(hero_.body.pos.y - p.pos.y) < 2.0f;
+        if (in && !p.inside && !inLight_ && !travel_ && !diving_ && shadowUnlocked_) {
+            swapCooldown_ = 0;
+            swapMode();
+            shake_ = std::max(shake_, 0.2f);
+        }
+        p.inside = in;
+    }
+}
 
-    // Deslizarse hasta otro charco.
-    if (c.light && lightTarget_ >= 0) {
-        startTravel(lightPoints_[size_t(lightTarget_)].arrive, 3);
-        sound(Sfx::Dodge, hero_.body.pos, 0.8f, 0.6f);
+void Game::startDive() {
+    diving_ = true;
+    diveFrom_ = hero_.body.pos;
+    lastDark_ = hero_.body.pos;
+    lock_ = -1;
+    hero_.setGuard(false);
+    spawnRing(hero_.body.pos + Vec3{0, 0.04f, 0}, 1.4f, 0.4f, kShadowCol);
+    sound(Sfx::Dodge, hero_.body.pos, 0.8f, 0.5f);
+}
+
+// Salir de la sombra: de pie donde está o, con el clic, golpeando desde abajo al enemigo
+// más cercano.
+void Game::endDive(bool ambush) {
+    diving_ = false;
+    Vec3 at = hero_.body.pos;
+    spawnRing(at + Vec3{0, 0.04f, 0}, ambush ? 3.0f : 1.6f, 0.45f, kShadowCol);
+    spawnSparks(at + Vec3{0, 0.5f, 0}, {0, 1, 0}, 20, kShadowDark, 4.0f, false);
+    sound(Sfx::Dodge, at, 0.8f, 0.7f);
+    if (!ambush) return;
+    const WeaponStats& w = inv_.weaponStats();
+    for (Enemy& e : enemies_) {
+        if (!e.targetable()) continue;
+        Vec3 to = flat(e.body.pos - at);
+        if (length(to) > 3.0f + e.body.radius) continue;
+        hitEnemy(e, length(to) > 0.1f ? normalize(to) : hero_.forward(), (w.power + inv_.powerBonus) * 2.2f, 3.0f, 7.0f, true);
+    }
+    hero_.body.vel.y = 6.0f;  // sale de la sombra de un salto
+    shake_ = std::max(shake_, 0.4f);
+    sound(Sfx::HitHeavy, at, 0.9f, 0.8f);
+}
+
+void Game::updateShadow(float dt, const Controls& c) {
+    float dark = shadowAt(hero_.body.pos);
+    if (diving_) {
+        shadow_ -= kDiveCost * dt;
+        // La sombra que se gasta se hace luz: las farolas apagadas cercanas se van encendiendo.
+        for (size_t i = 0; i < lamps_.size(); ++i) {
+            Lamp& l = lamps_[i];
+            if (!l.bulb || l.on || length(flat(l.pos - hero_.body.pos)) > kRelightRange) continue;
+            l.energy += kRelightRate * dt;
+            if (random01() < dt * 10.0f && particles_.size() < 900)
+                particles_.push_back({hero_.body.pos + Vec3{0, 0.1f, 0}, (l.pos - hero_.body.pos) * 1.2f, 0.8f, 0.8f, 0.05f,
+                                      rgba(255, 226, 170), 0, true});
+            if (l.energy >= 1.0f) relightLamp(int(i));
+        }
+        if (random01() < dt * 40.0f && particles_.size() < 900)
+            particles_.push_back({hero_.body.pos + Vec3{randRange(-0.4f, 0.4f), 0.05f, randRange(-0.4f, 0.4f)}, {0, 0.6f, 0},
+                                  0.7f, 0.7f, 0.14f, kShadowDark, 0, false});
+        if (shadow_ <= 0) {
+            shadow_ = 0;
+            endDive(false);
+            notify("Sin Sombra", rgba(180, 160, 210));
+        } else if (c.attack) {
+            endDive(true);
+        } else if (c.light || c.jump) {
+            endDive(false);
+        }
         return;
     }
-    if (c.light && lightHint_ <= 0) {
-        notify(dark > 0.5f ? "Apunta a otra sombra para deslizarte" : "Solo puedes deslizarte desde la sombra",
-               rgba(180, 160, 210));
-        lightHint_ = 2.5f;
-    }
-
-    // Beber la luz de una farola: la apaga y deja oscuridad.
-    int lamp = c.absorb ? nearLamp(4.0f, true) : -1;
-    hero_.setAbsorb(lamp >= 0);
-    if (lamp >= 0) {
-        if (lamp != drinkLamp_) drink_ = 0;
-        drinkLamp_ = lamp;
-        drink_ += dt / kDrinkTime;
-        Lamp& l = lamps_[size_t(lamp)];
-        if (random01() < dt * 50.0f && particles_.size() < 900) {
-            Vec3 from = l.pos + Vec3{randRange(-0.2f, 0.2f), randRange(-0.2f, 0.2f), randRange(-0.2f, 0.2f)};
-            particles_.push_back({from, (chest - from) * 2.0f, 0.5f, 0.5f, 0.06f, l.color, 0, true});
-        }
-        if (drink_ >= 1.0f) {
-            l.on = false;
-            drink_ = 0;
-            addPool(Vec3{l.pos.x, l.pos.y - 3.0f, l.pos.z}, 5.5f);
-            shadow_ = std::min(maxShadow_, shadow_ + kDrinkGain);
-            spawnRing(pools_.back().pos + Vec3{0, 0.05f, 0}, 5.0f, 0.7f, kShadowCol);
-            sound(Sfx::Crate, l.pos, 0.8f, 0.6f);
-            sound(Sfx::Echo, l.pos, 0.5f, 0.5f);
-        }
-    } else {
-        drink_ = 0;
-        drinkLamp_ = -1;
-        if (c.absorb && absorbHint_ <= 0) {
-            notify("Acércate a una farola encendida para beber su luz", rgba(180, 160, 210));
-            absorbHint_ = 3.0f;
+    if (c.light) {
+        if (dark > 0.6f && shadow_ > 1.0f) startDive();
+        else if (lightHint_ <= 0) {
+            notify(shadow_ <= 1.0f ? "Sin Sombra" : "Busca la oscuridad: lejos de las farolas encendidas", rgba(180, 160, 210));
+            lightHint_ = 2.5f;
         }
     }
-
     if (c.nova) {
         if (shadow_ < kHoleCost) notify("El agujero negro necesita 60 de Sombra", rgba(180, 160, 210));
         else spawnBlackHole();
+    }
+}
+
+// Fundido con la sombra, la luz no deja pasar: si el movimiento le lleva a una zona
+// iluminada, vuelve al último punto oscuro.
+void Game::constrainDive() {
+    if (!diving_) return;
+    if (shadowAt(hero_.body.pos) < 0.45f) {
+        hero_.body.pos.x = lastDark_.x;
+        hero_.body.pos.z = lastDark_.z;
+    } else {
+        lastDark_ = hero_.body.pos;
     }
 }
 

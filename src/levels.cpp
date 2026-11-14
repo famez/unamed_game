@@ -557,10 +557,10 @@ void Game::loadLevel(LevelId id) {
     particles_.clear();
     companions_.clear();
     islands_.clear();
-    pools_.clear();
     holes_.clear();
     ghosts_.clear();
-    drink_ = 0;
+    portals_.clear();
+    diving_ = false;
     level_ = id;
     part_ = 0;
     activeEncounter_ = -1;

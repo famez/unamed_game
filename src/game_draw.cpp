@@ -339,7 +339,6 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
     solid->setWorldColor(cromaShown_);
     solid->setScenery(true);
     // Charcos de oscuridad (antes que las salpicaduras: tienen prioridad en el límite).
-    for (const ShadowPool& p : pools_) solid->paint(p.pos, p.radius * 0.85f * smoothstep01(p.age / 0.8f), rgba(12, 10, 18));
     for (const ColorSplash& sp : splashes_) solid->paint(sp.pos, sp.radius * smoothstep01(sp.age / 0.3f), sp.color);
     // Suelo del escenario o, sobre el vacío, un mar de nubes muy abajo.
     if (world_.ground)
@@ -467,8 +466,8 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
     for (size_t i = 0; i < lamps_.size(); ++i) {
         const Lamp& l = lamps_[i];
         uint32_t bulb = l.color;
-        if (int(i) == drinkLamp_ && drink_ > 0)  // se la están bebiendo: parpadea y se apaga
-            bulb = mixRgb(l.color, rgba(40, 30, 60), drink_ * (0.6f + 0.4f * std::sin(time_ * 40.0f)));
+        if (l.on && l.energy < 0.5f)  // queda poca luz: parpadea
+            bulb = mixRgb(l.color, rgba(40, 30, 60), (0.5f - l.energy) * (1.2f + 0.8f * std::sin(time_ * 25.0f + float(i))));
         if (l.bulb)
             solid->ellipsoid(translate(l.pos), {}, {0.2f, 0.2f, 0.2f}, l.on ? bulb : rgba(70, 72, 80),
                              l.on ? Material::Glow : Material::Metal);
@@ -552,12 +551,12 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
         solid->light(hostPos_, Vec3{1.0f, 0.95f, 0.8f} * 3.5f, 8.0f);
         return;
     }
-    if (travel_ && travelMode_ == 3) {  // hecho sombra: una mancha oscura que se desliza por el suelo
-        Vec3 c = hero_.interpolatedPos(alpha) + Vec3{0, 0.06f, 0};
-        Vec3 d = normalize(flat(travelTo_ - travelFrom_));
-        Mat4 m = translate(c) * rotateY(std::atan2(d.x, d.z));
-        solid->ellipsoid(m, {}, {0.45f, 0.05f, 1.2f}, rgba(14, 10, 22), Material::Cloth);
-        solid->ellipsoid(m, {0, 0.02f, 0}, {0.2f, 0.04f, 0.8f}, rgba(150, 80, 255), Material::Glow);
+    if (diving_) {  // fundido con la sombra: una mancha oscura en el suelo, con un filo violeta
+        Vec3 c = hero_.interpolatedPos(alpha) + Vec3{0, 0.04f, 0};
+        float pulse = 1.0f + 0.06f * std::sin(time_ * 7.0f);
+        Mat4 m = translate(c) * rotateY(hero_.yaw);
+        solid->ellipsoid(m, {}, Vec3{0.55f, 0.04f, 0.75f} * pulse, rgba(10, 8, 16), Material::Cloth);
+        solid->ellipsoid(m, {0, 0.03f, 0}, Vec3{0.3f, 0.03f, 0.45f} * pulse, rgba(150, 80, 255), Material::Glow);
         return;
     }
     if (travel_) {  // hecho luz: una estela alargada en lugar del cuerpo
@@ -741,18 +740,30 @@ void Game::drawEffects(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Vi
             glowStar(glow, view, p, 0.12f, a, withAlpha(rgba(220, 190, 255), 0.7f * k));
         }
     }
-    // Charcos de oscuridad: jirones que suben despacio (en debug, su borde).
-    for (const ShadowPool& p : pools_) {
-        if (!solid) {
-            dd.circleXZ(p.pos + Vec3{0, 0.02f, 0}, p.radius, 28, rgba(120, 70, 200));
-            continue;
+    // En modo sombra se ve dónde alumbra cada farola (ahí no se puede pasar fundido).
+    if (shadowMode_)
+        for (const Lamp& l : lamps_) {
+            if (!l.on || !l.bulb) continue;
+            Vec3 base{l.pos.x, groundHeight(l.pos + Vec3{0.6f, 0, 0}) + 0.03f, l.pos.z};
+            float r = lampRadius(l) * 0.8f;
+            if (!solid) dd.circleXZ(base, r, 28, rgba(255, 220, 160));
+            else glowRing(glow, base, r * 0.96f, r, withAlpha(rgba(255, 220, 160), 0.4f));
         }
-        float r = p.radius * smoothstep01(p.age / 0.8f);  // borde violeta tenue: que se lea en el suelo
-        glowRing(glow, p.pos + Vec3{0, 0.03f, 0}, r * 0.78f, r * 0.86f, withAlpha(rgba(120, 70, 200), 0.35f));
-        for (int i = 0; i < 4; ++i) {
-            float a = float(i) * 1.7f + p.pos.x, ph = std::fmod(time_ * 0.25f + float(i) * 0.25f, 1.0f);
-            Vec3 q = p.pos + Vec3{std::cos(a) * p.radius * 0.45f, 0.2f + ph * 1.6f, std::sin(a) * p.radius * 0.45f};
-            glowDot(glow, view, q, 0.35f, withAlpha(rgba(60, 30, 100), 0.25f * std::sin(ph * kPi)));
+    // Portales: un aro vertical mitad luz, mitad sombra, que gira.
+    for (const Portal& p : portals_) {
+        Vec3 c = p.pos + Vec3{0, 1.3f, 0};
+        const int n = 24;
+        for (int i = 0; i < n; ++i) {
+            float a = 2.0f * kPi * float(i) / float(n) + p.spin * 0.8f;
+            Vec3 q = c + Vec3{std::cos(a) * 0.95f, std::sin(a) * 1.15f, 0};
+            bool lightHalf = std::cos(a - p.spin * 0.8f) > 0;
+            uint32_t col = lightHalf ? rgba(255, 228, 170) : rgba(150, 80, 255);
+            if (!solid) dd.line(q, q + Vec3{0, 0.1f, 0}, col);
+            else glowDot(glow, view, q, 0.16f, withAlpha(col, 0.85f));
+        }
+        if (solid) {
+            glowDot(glow, view, c, 1.1f, withAlpha(shadowMode_ ? rgba(255, 228, 170) : rgba(150, 80, 255), 0.18f));
+            solid->light(c, shadowMode_ ? Vec3{1.0f, 0.9f, 0.7f} : Vec3{0.6f, 0.35f, 1.0f}, 4.0f);
         }
     }
     // Cortinas de las barreras de energía: bandas que suben.

@@ -2,7 +2,7 @@
 # Ver docs/historia.md. Casi sin palabras: planos, ecos y tutoriales de una tecla.
 #
 # Órdenes: negro, levantarse, capitulo, pausa <s>, plano fx fy fz ex ey ez <s>,
-#          eco <nombre>, eco_activa <n>, ilse x y z, ilse_gesto, ilse_fuera,
+#          eco <nombre>, eco_activa <n>, ilse x y z, ilse_gesto, ilse_fuera, portal x y z,
 #          tutorial <tecla> <acción> <palabra>, poder <nombre>, armar <combate>,
 #          abrir <puerta>, dar <objeto>, apagar_luces, fin_capitulo.
 # Hablantes (los pocos que hay): voz (un recuerdo), objeto (lo que pone en algo), ilse.
@@ -136,11 +136,13 @@ objeto: «Para Lía. No se vende.»
 !pausa 1.0
 ilse: Olvidar también es una forma de descansar.
 !poder sombra
-!plano 0 1.4 66  3.0 2.6 60.0 2.5
+!portal 0 1.0 66
+!plano 0 2.0 66  3.0 2.8 60.0 3.0
 !ilse_fuera
 !pausa 1.0
 !armar sabuesos_ilse
-!tutorial Z cambiar Sombra
+!tutorial Portal cambiar Cruza el portal
+!tutorial Q fundirse Fúndete con la sombra
 
 == fin
 !plano 0 2.0 72  0 3.0 60 4.0

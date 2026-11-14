@@ -67,9 +67,9 @@ Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena i
 | Clic izquierdo | Atacar (combo según el arma). **Mantener**: corte cargado (lanza una onda) |
 | Clic derecho (mantener) | Guardia (se puede andar mirando a la cámara). Justo a tiempo: bloqueo perfecto |
 | C / Ctrl | Voltereta de esquiva (invulnerable); un golpe justo después es un **contraataque** |
-| Q | **Luz**: junto a una farola, **entrar en ella**; dentro, saltar a otra fuente. **Sombra**: desde un charco oscuro, **deslizarse** a otro |
-| Mantener Q | **Luz**: absorber luz (nodos, Grises aturdidos). **Sombra**: **beber la luz** de una farola (se apaga y deja oscuridad) |
-| Z | Cambiar entre **luz y sombra** (cuando la sombra ya ha despertado) |
+| Q | **Luz**: junto a una farola, **entrar en ella**; dentro, saltar a otra fuente. **Sombra**: en la oscuridad, **fundirse** con el suelo |
+| Mantener Q | **Luz**: absorber luz (nodos, Grises aturdidos) |
+| Portal / Z | Cambiar entre **luz y sombra** cruzando un portal (Z solo en los modos de prueba) |
 | V | **Supernova** (luz, con la Luz llena) · **Agujero negro** (sombra, 60 de Sombra) |
 | G | **Transformarse** (con un núcleo) |
 | T | **Invocar compañero** (chispa aliada o el eco de Nora) |
@@ -90,12 +90,16 @@ Especiales de combate: atacar corriendo = **embestida**; atacar con la guardia =
     encendida, Q **entra en ella**: dentro no te ven ni te hieren, recuperas Luz, saltas a
     otras fuentes a la vista (R elige cuál), sales con Espacio o **emboscas** con el clic
     al Gris más cercano. Técnicas (*Lanza de luz*, *Refracción*, *Calidez*) y Supernova.
-  - **Sombra**: se consigue de los Vaciados y bebiendo la luz de las farolas, que se apagan
-    y dejan un **charco de oscuridad**. Dentro de uno te **fundes** (corres más, solo te ven
-    de muy cerca, recuperas Sombra) y te **deslizas** a otros charcos. **Agujero negro**:
-    atrae a los enemigos y sus proyectiles y acaba en implosión.
-  - Romper una farola para tener sombra te quita ese camino de luz (y se puede volver a
-    encender en modo luz): de ahí salen los acertijos.
+  - **Sombra**: la oscuridad es donde no llega la luz de ninguna farola encendida (cada
+    farola alumbra según la energía que le queda). Q en la oscuridad **funde** al protagonista
+    con el suelo: se mueve rápido e invisible por toda la zona oscura, la luz no le deja pasar,
+    gasta Sombra y esa sombra se convierte en luz: las farolas apagadas que roza se vuelven a
+    encender. Sale con Q o Espacio, o con el clic en emboscada. **Agujero negro** (V, 60 de
+    Sombra): atrae a los enemigos y sus proyectiles y acaba en implosión.
+  - **La luz también se gasta**: entrar en una fuente cuesta Luz y saltar a otra más; la farola
+    que se deja atrás pierde luz y, dentro, se recarga Luz a costa de la farola, que se atenúa
+    hasta apagarse. Usar la luz oscurece el mundo; usar la sombra lo ilumina.
+  - Se cambia de luz a sombra **cruzando un portal** (en los modos de prueba, también con Z).
 - **Enemigos de luz y de sombra** (todos fueron personas): *Deslumbrado* (figura alta y
   sobreexpuesta, dos zarpazos), *Vigía* (ojo flotante que dispara luz), *Coloso* (mole de
   sombra que aplasta) y *Sabueso* (cuadrúpedo que caza en manada y muerde por la espalda).
@@ -129,7 +133,7 @@ Se abren desde el menú de pausa (cada vez con un escenario nuevo) o al arrancar
 ```bash
 ./build/game --prueba                 # Grises sin fin en un patio aleatorio
 ./build/game --prueba luz             # archipiélago de islas flotantes para el viaje por la luz
-./build/game --prueba sombra          # patio con charcos de oscuridad para deslizarse y fundirse
+./build/game --prueba sombra          # patio casi a oscuras para fundirse con la sombra
 ./build/game --prueba combate 1234    # con semilla: la misma semilla da el mismo escenario
 ```
 

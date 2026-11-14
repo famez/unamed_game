@@ -164,16 +164,15 @@ bool Game::cinemaCommand(const StoryLine& cmd) {
         else if (p == "supernova") powers_.nova = true;
         else if (p == "sombra") shadowUnlocked_ = true;
         spawnRing(hero_.body.pos + Vec3{0, 0.05f, 0}, 2.5f, 0.6f, p == "sombra" ? rgba(150, 80, 255) : rgba(255, 226, 160));
+    } else if (c == "portal") {  // un portal entre la luz y la sombra
+        addPortal(parseVec(in));
     } else if (c == "apagar_luces") {  // la luz entera del escenario, bebida de golpe
         for (Lamp& l : lamps_)
-            if (l.on && l.bulb) {
+            if (l.bulb) {
                 l.on = false;
-                addPool(Vec3{l.pos.x, l.pos.y - 2.0f, l.pos.z}, 5.0f);
+                l.energy = 0;
             }
-        for (Lantern& l : lanterns_) {
-            if (l.lit) addPool(l.pos, 4.5f);
-            l.lit = false;
-        }
+        for (Lantern& l : lanterns_) l.lit = false;
         croma_ = cromaShown_ = 0.0f;
         shake_ = std::max(shake_, 0.4f);
         sound(Sfx::FireBoom, hero_.body.pos, 0.6f, 0.4f);
@@ -256,7 +255,7 @@ void Game::updateCinema(float dt, const Controls& c) {
                         (a == "absorber" && hero_.absorbing()) || (a == "entrar" && inLight_) ||
                         (a == "salir" && !inLight_ && !travel_ && t.age > 0.5f) ||
                         (a == "saltar_luz" && travel_ && travelMode_ == 0 && t.age > 0.5f) || (a == "cambiar" && shadowMode_) ||
-                        (a == "beber" && drink_ > 0.5f) || (a == "girar" && c.interact) || (a == "supernova" && c.nova) ||
+                        (a == "fundirse" && diving_) || (a == "girar" && c.interact) || (a == "supernova" && c.nova) ||
                         (a == "fijar" && lock_ >= 0) || t.age > 40.0f;
             if (done) t.doneTime = t.age;
         } else if (t.age - t.doneTime > 0.8f) {

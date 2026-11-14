@@ -735,7 +735,8 @@ int main() {
         bool dark = true;
         for (const Lantern& l : g.lanterns_) dark = dark && !l.lit;
         for (const Lamp& l : g.lamps_) dark = dark && !l.on;
-        CHECK(dark && !g.pools_.empty() && g.shadowUnlocked(), "apaga todas las luces; queda la oscuridad y la sombra despierta");
+        CHECK(dark && g.shadowAt({0, 1.0f, 66}) > 0.9f && g.shadowUnlocked() && !g.portals_.empty(),
+              "apaga todas las luces: queda la oscuridad, la sombra despierta y un portal");
         bool armed = false;
         for (const Encounter& e : g.encounters_) armed |= e.id == "sabuesos_ilse" && e.armed;
         CHECK(armed, "y suelta a su jauría");
@@ -868,52 +869,54 @@ int main() {
         run(k, 3.0f);
         CHECK(k.shadow_ > s0, "recoger Sombra la suma (%.0f)", k.shadow_);
     }
-    {  // La sombra: cambiar (Z), beber la luz de una farola, fundirse, deslizarse, agujero negro
+    {  // La sombra: portales, oscuridad lejos de las farolas, fundirse y moverse por ella
         Game g = fresh();
-        g.update(dt, press(&Controls::swapMode));
-        CHECK(!g.shadowMode(), "sin despertar la sombra, Z no hace nada");
         g.unlockShadow();
-        run(g, 0.1f, press(&Controls::swapMode));
-        CHECK(g.shadowMode(), "con la sombra despierta, Z cambia a sombra");
-        Vec3 lampA = g.lamps_[1].pos, lampB = g.lamps_[2].pos;
-        place(g, {lampA.x, 0, lampA.z - 2.0f});
-        g.shadow_ = 0;
-        Controls hold;
-        hold.absorb = true;
-        run(g, 1.2f, hold);
-        CHECK(!g.lamps_[1].on && g.pools_.size() == 1 && g.shadow_ >= 30, "mantener Q: se bebe la luz de la farola (Sombra %.0f)", g.shadow_);
-        run(g, 1.0f);
-        CHECK(g.shadowAt(g.hero_.body.pos) > 0.5f, "y deja un charco de oscuridad alrededor");
-        // Fundido: un Gris a 5 m no le ve.
-        Enemy& imp = addEnemy(g, EnemyKind::Dazzled, g.hero_.body.pos + Vec3{5, 0, 0}, AiState::Idle);
-        (void)imp;
+        g.update(dt, press(&Controls::swapMode));
+        CHECK(!g.shadowMode(), "en la historia, Z no cambia de modo (se cambia en los portales)");
+        g.addPortal({0, 0, -12});
+        place(g, {0, 0, -14});
+        Controls fwd;
+        fwd.move = {0, 0, 1};
+        run(g, 0.8f, fwd);
+        CHECK(g.shadowMode(), "cruzar el portal: modo sombra");
+        Vec3 lamp = g.lamps_[1].pos;  // farola encendida
+        CHECK(g.shadowAt({lamp.x, 0, lamp.z}) < 0.1f && g.shadowAt({0, 0, -14}) > 0.9f,
+              "junto a una farola encendida hay luz; lejos de ellas, oscuridad");
+        place(g, {-2, 0, -14});
+        g.shadow_ = 50;
+        run(g, 0.1f, press(&Controls::light));
+        CHECK(g.diving(), "Q en la oscuridad: se funde con la sombra");
+        float s0 = g.shadow_;
+        Controls go;
+        go.move = {1, 0, 0};
+        run(g, 1.0f, go);
+        CHECK(g.shadow_ < s0 && g.hero_.body.pos.x > 2.0f, "fundido se mueve rápido por la oscuridad y gasta Sombra (%.0f)", g.shadow_);
+        // La luz no deja pasar: hacia la farola se queda en el borde de su luz.
+        Controls toLamp;
+        toLamp.move = normalize(flat(Vec3{lamp.x, 0, lamp.z} - g.hero_.body.pos));
+        run(g, 3.0f, toLamp);
+        CHECK(g.shadowAt(g.hero_.body.pos) > 0.4f && length(flat(g.hero_.body.pos - lamp)) > 2.0f, "la luz no le deja pasar");
+        // Enemigos: fundido no le ven.
+        Enemy& d = addEnemy(g, EnemyKind::Dazzled, g.hero_.body.pos + Vec3{3, 0, 0}, AiState::Idle);
+        (void)d;
         run(g, 0.5f);
-        CHECK(g.enemies_[0].state == AiState::Idle, "fundido con la sombra, el Deslumbrado no le ve");
+        CHECK(g.enemies_[0].state == AiState::Idle, "fundido con la sombra no le ven");
+        // La sombra que gasta se hace luz: una farola apagada cercana se enciende.
+        g.lamps_[2].on = false;
+        g.lamps_[2].energy = 0;
         g.enemies_.clear();
-        // Otra farola bebida: deslizarse de un charco a otro.
-        place(g, {lampB.x, 0, lampB.z - 2.0f});
-        run(g, 1.2f, hold);
-        place(g, {lampA.x, 0, lampA.z - 1.0f});
-        run(g, 0.5f);
-        Controls aim;
-        aim.aimOrigin = g.hero_.body.pos + Vec3{0, 2.5f, -3};
-        aim.aimDir = normalize(Vec3{lampB.x, 0, lampB.z} - aim.aimOrigin);
-        g.update(dt, aim);
-        CHECK(g.lightTarget() >= 0, "en la sombra, la cámara señala otra sombra");
-        aim.light = true;
-        run(g, 1.5f, aim);
-        float dB = length(flat(g.hero_.body.pos - Vec3{lampB.x, 0, lampB.z}));
-        CHECK(dB < 1.5f, "Q: se desliza por el suelo hasta la otra sombra (a %.1f m)", dB);
-        // Golpes cruzados: la sombra hiere más a los de luz.
-        addEnemy(g, EnemyKind::Dazzled, {0, 0, 10});
-        addEnemy(g, EnemyKind::Brute, {3, 0, 10});
-        float hd = g.enemies_[0].health, hb = g.enemies_[1].health;
-        g.hitEnemy(g.enemies_[0], {1, 0, 0}, 10, 0, 0, false);
-        g.hitEnemy(g.enemies_[1], {1, 0, 0}, 10, 0, 0, false);
-        CHECK(hd - g.enemies_[0].health > hb - g.enemies_[1].health, "en modo sombra se hiere más a los de luz (%.1f frente a %.1f)",
-              hd - g.enemies_[0].health, hb - g.enemies_[1].health);
+        place(g, {g.lamps_[2].pos.x + 1.0f, 0, g.lamps_[2].pos.z + 1.0f});
+        g.diving_ = false;
+        g.shadow_ = 100;
+        run(g, 0.1f, press(&Controls::light));
+        run(g, 3.5f);
+        CHECK(g.lamps_[2].on, "fundido junto a una farola apagada, la vuelve a encender");
+        // Salir en emboscada.
+        run(g, 0.1f, press(&Controls::light));
+        CHECK(!g.diving(), "Q otra vez: sale de la sombra");
         // Agujero negro.
-        g.enemies_.clear();
+        g.portals_.clear();
         place(g, {0, 0, -12}, 0);
         addEnemy(g, EnemyKind::Dazzled, {0, 0, -8.5f});
         addEnemy(g, EnemyKind::Hound, {1.5f, 0, -8});
@@ -923,12 +926,41 @@ int main() {
         float h1 = 0;
         for (const Enemy& e : g.enemies_) h1 += std::max(0.0f, e.health);
         CHECK(g.shadow_ < 50 && h1 < h0 * 0.6f, "V: el agujero negro atrae y deshace (vida %.0f → %.0f)", h0, h1);
-        // De vuelta a la luz: encender una farola apagada (F).
-        run(g, 0.1f, press(&Controls::swapMode));
+        // Golpes cruzados.
+        g.enemies_.clear();
+        addEnemy(g, EnemyKind::Dazzled, {0, 0, 10});
+        addEnemy(g, EnemyKind::Brute, {3, 0, 10});
+        float hd = g.enemies_[0].health, hb = g.enemies_[1].health;
+        g.hitEnemy(g.enemies_[0], {1, 0, 0}, 10, 0, 0, false);
+        g.hitEnemy(g.enemies_[1], {1, 0, 0}, 10, 0, 0, false);
+        CHECK(hd - g.enemies_[0].health > hb - g.enemies_[1].health, "en modo sombra se hiere más a los de luz");
+    }
+    {  // La luz se gasta: saltar de farola en farola cuesta Luz y apaga las farolas que se usan
+        Game g = fresh();
+        Vec3 lampA = g.lamps_[1].pos, lampB = g.lamps_[2].pos;
+        place(g, {lampA.x, 0, lampA.z - 2.0f});
         g.mp_ = 50;
-        place(g, Vec3{lampA.x, 0, lampA.z} + Vec3{0.6f, 0, 0});
-        run(g, 0.2f, press(&Controls::interact));
-        CHECK(g.lamps_[1].on && g.mp_ == 35, "en modo luz, F enciende la farola (cuesta 15 de Luz)");
+        run(g, 1.0f, press(&Controls::light));
+        CHECK(g.insideLight() && g.mp_ < 60, "entrar cuesta Luz (queda %.0f tras recargar)", g.mp_);
+        float e0 = g.lamps_[1].energy;
+        run(g, 2.0f);
+        CHECK(g.lamps_[1].energy < e0, "dentro, la farola se va gastando (%.2f)", g.lamps_[1].energy);
+        Controls aim;
+        aim.aimOrigin = lampA + Vec3{3, 0.5f, -2};
+        aim.aimDir = normalize(lampB - aim.aimOrigin);
+        g.update(dt, aim);
+        aim.light = true;
+        float before = g.mp_;
+        run(g, 1.0f, aim);
+        CHECK(g.insideLight() && length(g.hostLight() - lampB) < 0.01f && g.mp_ < before + 12 && g.lamps_[1].energy < e0 - 0.4f,
+              "saltar cuesta Luz y la farola que deja atrás pierde luz (%.2f)", g.lamps_[1].energy);
+        g.mp_ = 2;
+        Controls back = aim;
+        back.aimOrigin = lampB + Vec3{-3, 0.5f, -2};
+        back.aimDir = normalize(lampA - back.aimOrigin);
+        g.lamps_[2].energy = 0.01f;  // la de dentro, sin luz que dar
+        run(g, 1.0f, back);
+        CHECK(length(g.hostLight() - lampA) > 0.1f || !g.insideLight(), "sin Luz no se puede saltar");
     }
     {  // Un jefe que llama a su jauría en mitad del combate (antes corrompía la memoria)
         Game g = fresh();
@@ -942,31 +974,14 @@ int main() {
         for (const Enemy& e : g.enemies_) hounds += e.kind == EnemyKind::Hound;
         CHECK(hounds == 2, "el jefe de sombra llama a dos sabuesos (%d) sin romper nada", hounds);
     }
-    {  // Prueba de sombra: charcos repartidos, se empieza en modo sombra y se desliza de uno a otro
+    {  // Prueba de sombra: patio casi a oscuras, en modo sombra, con portales
         Game g;
         g.initTest(TestMode::Shadow, 11);
-        CHECK(g.level() == LevelId::PruebaSombra && g.shadowMode() && g.pools_.size() >= 6, "patio de sombras: %zu charcos, en modo sombra",
-              g.pools_.size());
-        Game c;
-        c.initTest(TestMode::Combat, 11);
-        CHECK(!c.pools_.empty(), "el patio de combate también tiene charcos (%zu)", c.pools_.size());
-        // Ponerse en un charco y deslizarse al más cercano que se pueda señalar.
-        place(g, g.pools_[0].pos);
-        bool went = false;
-        for (size_t i = 1; i < g.pools_.size() && !went; ++i) {
-            Controls aim;
-            Vec3 chest = g.hero_.body.pos + Vec3{0, 1, 0};
-            aim.aimOrigin = chest - normalize(g.pools_[i].pos - chest) * 3.0f;
-            aim.aimDir = normalize(g.pools_[i].pos - aim.aimOrigin);
-            g.update(dt, aim);
-            if (g.lightTarget() < 0) continue;
-            aim.light = true;
-            run(g, 2.0f, aim);
-            went = length(flat(g.hero_.body.pos - g.pools_[i].pos)) < 2.0f;
-        }
-        CHECK(went, "Q: se desliza de un charco a otro");
-        run(g, 0.2f);
-        CHECK(g.parts_[0].objective.find("Sombras alcanzadas: 2") == 0, "cuenta las sombras alcanzadas (%s)", g.parts_[0].objective.c_str());
+        CHECK(g.level() == LevelId::PruebaSombra && g.shadowMode() && g.portals_.size() == 2 && g.lamps_.size() <= 4,
+              "patio de sombras: modo sombra, %zu portales, %zu farolas", g.portals_.size(), g.lamps_.size());
+        float darkArea = 0;
+        for (int i = 0; i < 100; ++i) darkArea += g.shadowAt({float(i % 10) * 3.6f - 18, 0, float(i / 10) * 3.6f - 18}) > 0.6f;
+        CHECK(darkArea > 60, "la mayor parte del patio está a oscuras (%.0f%%)", darkArea);
     }
     {  // Derrota y vuelta a empezar
         Game g = fresh();

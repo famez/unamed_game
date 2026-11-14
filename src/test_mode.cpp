@@ -116,18 +116,16 @@ void Game::buildPrueba() {
             }
         }
     }
-    // Farolas (la red de luz) y nodos ya encendidos (zonas de luz donde absorber).
-    int lamps = 6 + int(random01() * 4);
+    // Farolas (la red de luz; entre ellas, la oscuridad) y nodos ya encendidos. En la prueba
+    // de sombra hay pocas: casi todo el patio está a oscuras.
+    bool shadowTest = testMode_ == TestMode::Shadow;
+    int lamps = shadowTest ? 4 : 6 + int(random01() * 4);
     for (int i = 0; i < lamps; ++i)
         if (findSpot(0.6f, p)) addLampPost(p, kNeons[(theme + i) % 5]);
-    // Charcos de oscuridad: unos pocos en el patio de combate; muchos en la prueba de sombra.
-    bool shadowTest = testMode_ == TestMode::Shadow;
-    int pools = shadowTest ? 9 : 3;
-    for (int i = 0; i < pools; ++i)
-        if (findSpot(2.6f, p)) addPool(p, randRange(3.5f, 5.0f));
-    for (ShadowPool& pl : pools_) pl.age = 5;  // ya formados
-    poolVisited_.assign(pools_.size(), false);
-    int nodes = shadowTest ? 1 : 2 + int(random01() * 2);
+    // Dos portales para cambiar de luz a sombra.
+    for (int i = 0; i < 2; ++i)
+        if (findSpot(1.5f, p)) addPortal(p);
+    int nodes = shadowTest ? 0 : 2 + int(random01() * 2);
     for (int i = 0; i < nodes; ++i)
         if (findSpot(1.0f, p)) {
             ColorNode n;
@@ -142,7 +140,7 @@ void Game::buildPrueba() {
 
     LevelPart part;
     part.title = shadowTest ? "De sombra en sombra" : "Grises sin fin";
-    part.objective = shadowTest ? "" : "Grises disipados: 0";
+    part.objective = shadowTest ? "Q en la oscuridad: fundirte con la sombra" : "Grises disipados: 0";
     if (shadowTest) levelName_ = "Prueba: Patio de sombras";
     part.kind = PartKind::Exit;  // nunca se termina
     part.area = AABB{{1e6f, 1e6f, 1e6f}, {1e6f, 1e6f, 1e6f}};
@@ -208,6 +206,7 @@ void Game::buildPruebaLuz() {
     part.area = AABB{{1e6f, 1e6f, 1e6f}, {1e6f, 1e6f, 1e6f}};
     parts_ = {part};
     heroStart_ = islands_[0].lamp - Vec3{0, 3.35f, 1.6f};  // junto a la primera baliza
+    addPortal(Vec3{-3.0f, 0, 3.0f});
     heroStartYaw_ = 0;
     croma_ = cromaShown_ = 0.4f;
 }
@@ -252,22 +251,9 @@ void Game::updateTestMode(float dt) {
         for (const Enemy& e : enemies_) alive += e.alive();
         testSpawnTimer_ -= dt;
         if (alive < 3 && testSpawnTimer_ <= 0 && hero_.downTimer < 0 && spawnTestEnemy()) testSpawnTimer_ = 3.0f;
-        int visited = 0;
-        float best = 1e9f;
-        poolVisited_.resize(pools_.size(), false);
-        for (size_t i = 0; i < pools_.size(); ++i) {
-            float d = length(flat(pools_[i].pos - hero_.body.pos));
-            if (!poolVisited_[i] && d < pools_[i].radius * 0.6f && !travel_) {
-                poolVisited_[i] = true;
-                spawnRing(pools_[i].pos + Vec3{0, 0.05f, 0}, 2.0f, 0.5f, rgba(150, 80, 255));
-            }
-            visited += poolVisited_[i];
-            if (!poolVisited_[i] && d < best && !parts_.empty()) best = d, parts_[0].marker = pools_[i].pos + Vec3{0, 1.5f, 0};
-        }
-        if (!parts_.empty()) {
-            parts_[0].objective = "Sombras alcanzadas: " + std::to_string(visited) + "/" + std::to_string(pools_.size());
-            if (best > 1e8f) parts_[0].marker = hero_.body.pos + Vec3{0, 3, 0};
-        }
+        if (!parts_.empty())
+            parts_[0].objective = diving_ ? "Sombra: " + std::to_string(int(shadow_)) + " · se gasta y enciende farolas"
+                                          : "Q en la oscuridad: fundirte con la sombra";
         return;
     }
     if (testMode_ == TestMode::Combat) {

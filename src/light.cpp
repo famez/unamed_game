@@ -20,18 +20,20 @@ constexpr float kNovaRadius = 7.5f;
 constexpr float kLightRecharge = 3.0f;          // Luz por segundo en una zona con luz
 constexpr float kEnterRange = 4.0f;             // distancia horizontal para entrar en una fuente
 constexpr float kJumpRange = 30.0f;             // de fuente a fuente
-constexpr float kInsideRecharge = 12.0f;        // Luz por segundo dentro de una fuente
+constexpr float kInsideRecharge = 12.0f;        // Luz por segundo dentro de una fuente (a costa de ella)
+constexpr float kEnterCost = 5.0f, kJumpCost = 8.0f;  // Luz por entrar en una fuente y por saltar a otra
+constexpr float kJumpDrain = 0.5f;              // energía que pierde la farola que se deja atrás
+constexpr float kInsideDrain = 0.06f;           // y la que la hospeda, por segundo
 constexpr float kAmbushRange = 9.0f;            // emboscada: Grises a esta distancia de la fuente
 constexpr float kHostGlow = 5.0f;               // radio que alumbra la fuente ocupada
-constexpr float kGlideRange = 25.0f;            // de sombra en sombra
 }  // namespace
 
 // Fuentes de luz a las que se puede viajar: farolas (y el prisma de la fuente), nodos y
 // faroles encendidos, emisores de los rompecabezas.
 void Game::gatherLightPoints() {
     lightPoints_.clear();
-    for (const Lamp& l : lamps_)
-        if (l.on) lightPoints_.push_back({l.pos, {}});
+    for (size_t i = 0; i < lamps_.size(); ++i)
+        if (lamps_[i].on) lightPoints_.push_back({lamps_[i].pos, {}, int(i)});
     for (const ColorNode& n : nodes_)
         if (n.lit) lightPoints_.push_back({n.pos + Vec3{0, 1.75f, 0}, {}});
     for (const Lantern& ln : lanterns_)
@@ -58,30 +60,7 @@ void Game::updateLightTarget(const Controls& c) {
     gatherLightPoints();
     Vec3 chest = hero_.body.pos + Vec3{0, 1.0f, 0};
     RayHit h;
-    if (shadowMode_) {  // en modo sombra: desde un charco, otro charco que señale la cámara
-        if (hero_.busy() || shadowAt(hero_.body.pos) < 0.5f) return;
-        lightPoints_.clear();
-        for (const ShadowPool& p : pools_) {  // se llega a un metro del centro, del lado del protagonista
-            Vec3 side = normalize(flat(hero_.body.pos - p.pos));
-            lightPoints_.push_back({p.pos + Vec3{0, 0.1f, 0}, p.pos + side * 1.0f});
-        }
-        Vec3 dir = normalize(c.aimDir);
-        float best = 1e9f;
-        for (size_t i = 0; i < lightPoints_.size(); ++i) {
-            const LightPoint& p = lightPoints_[i];
-            float d = length(p.pos - hero_.body.pos);
-            if (d > kGlideRange || length(flat(p.pos - hero_.body.pos)) < pools_[i].radius * 0.6f) continue;
-            Vec3 v = p.pos - c.aimOrigin;
-            float along = dot(v, dir);
-            if (along <= 0) continue;
-            float off = length(v - dir * along);
-            if (off > 1.5f + along * 0.12f) continue;
-            if (segmentVsWorld(chest, p.arrive + Vec3{0, 1.0f, 0}, world_, h)) continue;
-            float score = off / along;
-            if (score < best) best = score, lightTarget_ = int(i);
-        }
-        return;
-    }
+    if (shadowMode_) return;  // en modo sombra no hay fuentes de luz a las que ir
     if (!inLight_) {
         if (hero_.busy()) return;
         float best = kEnterRange;
@@ -238,7 +217,12 @@ void Game::updateLight(float dt, const Controls& c) {
 
     // Entrar en la fuente de luz de al lado.
     if (c.light && !hero_.absorbing()) {
-        if (lightTarget_ >= 0) {
+        if (lightTarget_ >= 0 && mp_ < kEnterCost) {
+            if (lightHint_ <= 0) notify("Sin Luz", rgba(200, 200, 215));
+            lightHint_ = 2.5f;
+        } else if (lightTarget_ >= 0) {
+            mp_ -= kEnterCost;
+            travelLamp_ = lightPoints_[size_t(lightTarget_)].lamp;
             startTravel(lightPoints_[size_t(lightTarget_)].pos, 0);
             lock_ = -1;
             sound(Sfx::Echo, hero_.body.pos, 0.7f, 1.6f);
@@ -301,7 +285,10 @@ void Game::supernova() {
 // Dentro de una fuente: invisible e intocable, recupera Luz. Q salta a la fuente elegida,
 // Espacio (o esquivar) sale junto a la farola y el clic cae sobre el Gris más cercano.
 void Game::updateInsideLight(float dt, const Controls& c) {
-    mp_ = std::min(maxMp_, mp_ + kInsideRecharge * dt);
+    // Recupera Luz a costa de la fuente, que se va atenuando (y acaba apagándose).
+    if (hostLamp_ < 0 || lamps_[size_t(hostLamp_)].energy > 0.05f) mp_ = std::min(maxMp_, mp_ + kInsideRecharge * dt);
+    drainLamp(hostLamp_, kInsideDrain * dt);
+    gatherLightPoints();
     hero_.setAbsorb(false);
     // La fuente puede apagarse o romperse con el Prismero dentro: sale despedido.
     bool hostOn = false;
@@ -314,10 +301,17 @@ void Game::updateInsideLight(float dt, const Controls& c) {
     if (c.lockOn) cycleLightLock(c.camForward);
     if (c.unlock) lightLock_ = false;
     if (c.light && lightTarget_ >= 0) {
-        startTravel(lightPoints_[size_t(lightTarget_)].pos, 0);
-        lightLock_ = false;
-        sound(Sfx::Echo, hostPos_, 0.6f, 1.8f);
-        return;
+        if (mp_ < kJumpCost) {
+            notify("Sin Luz para saltar", rgba(200, 200, 215));
+        } else {
+            mp_ -= kJumpCost;
+            drainLamp(hostLamp_, kJumpDrain);  // la que se deja atrás pierde luz
+            travelLamp_ = lightPoints_[size_t(lightTarget_)].lamp;
+            startTravel(lightPoints_[size_t(lightTarget_)].pos, 0);
+            lightLock_ = false;
+            sound(Sfx::Echo, hostPos_, 0.6f, 1.8f);
+            return;
+        }
     }
     if (c.attack && ambushTarget() >= 0) {
         leaveLight(true);
@@ -376,27 +370,18 @@ void Game::updateTravel(float dt) {
     travelTime_ += dt;
     float u = clampf(travelTime_ / travelDur_, 0, 1);
     float e = smoothstep01(u);
-    float arc = travelMode_ == 0 ? std::min(3.0f, length(travelTo_ - travelFrom_) * 0.15f) : travelMode_ == 3 ? 0.0f : 0.4f;
+    float arc = travelMode_ == 0 ? std::min(3.0f, length(travelTo_ - travelFrom_) * 0.15f) : 0.4f;
     hero_.body.pos = travelFrom_ + (travelTo_ - travelFrom_) * e + Vec3{0, std::sin(u * kPi) * arc, 0};
     hero_.body.vel = {};
-    if (random01() < dt * 60.0f && particles_.size() < 900) {
-        if (travelMode_ == 3)  // por el suelo, hecho sombra
-            particles_.push_back({hero_.body.pos + Vec3{0, 0.1f, 0}, {0, 0.5f, 0}, 0.6f, 0.6f, 0.14f, rgba(30, 16, 48), 0, false});
-        else
-            particles_.push_back({hero_.body.pos + Vec3{0, 1, 0}, {0, 0.2f, 0}, 0.4f, 0.4f, 0.08f, rgba(255, 240, 200), 0, true});
-    }
+    if (random01() < dt * 60.0f && particles_.size() < 900)
+        particles_.push_back({hero_.body.pos + Vec3{0, 1, 0}, {0, 0.2f, 0}, 0.4f, 0.4f, 0.08f, rgba(255, 240, 200), 0, true});
     if (u < 1.0f) return;
     travel_ = false;
-    if (travelMode_ == 3) {  // emerge de la sombra
-        hero_.body.pos = travelTo_ + Vec3{0, 0.05f, 0};
-        spawnRing(travelTo_ + Vec3{0, 0.05f, 0}, 1.8f, 0.5f, rgba(150, 80, 255));
-        sound(Sfx::Dodge, travelTo_, 0.6f, 0.5f);
-        return;
-    }
     Vec3 chest = travelTo_ + Vec3{0, 1.0f, 0};
     if (travelMode_ == 0) {  // dentro de la fuente
         inLight_ = true;
         hostPos_ = chest;
+        hostLamp_ = travelLamp_;
         hero_.body.pos = travelTo_;
         spawnSparks(chest, {0, 1, 0}, 16, rgba(255, 245, 210), 3.0f);
         sound(Sfx::PerfectGuard, chest, 0.4f, 1.5f);

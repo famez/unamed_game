@@ -289,15 +289,16 @@ struct Lamp {
     Vec3 pos;            // la bombilla
     uint32_t color = 0;
     bool bulb = true;    // dibujar la bombilla (el prisma de la fuente se dibuja aparte)
-    bool on = true;      // apagada o rota: no se puede usar
+    bool on = true;      // apagada: no se puede usar
+    float energy = 1;    // luz que le queda: se gasta al usarla; a 0 se apaga
 };
+float lampRadius(const Lamp& l);  // lo que alumbra (según su energía)
 
-// Charco de oscuridad: donde se ha bebido la luz de una farola (o sombra del escenario). En
-// modo sombra, dentro de él el protagonista se funde: más rápido, invisible, recupera Sombra.
-struct ShadowPool {
+// Portal: cruzarlo cambia de luz a sombra o al revés.
+struct Portal {
     Vec3 pos;
-    float radius = 5;
-    float age = 0;
+    float spin = 0;
+    bool inside = false;
 };
 
 // Agujero negro (V en modo sombra): atrae a los enemigos y los proyectiles y acaba en implosión.
@@ -416,8 +417,10 @@ public:
     bool shadowMode() const { return shadowMode_; }
     bool shadowUnlocked() const { return shadowUnlocked_; }
     void unlockShadow() { shadowUnlocked_ = true; }
-    // Oscuridad (0..1) en un punto: charcos de sombra.
+    // Oscuridad (0..1) en un punto: donde no llega la luz de las farolas, nodos y faroles.
     float shadowAt(Vec3 p) const;
+    bool diving() const { return diving_; }
+    void addPortal(Vec3 pos) { portals_.push_back({pos}); }
     Vec3 hostLight() const { return hostPos_; }
     int lightTarget() const { return lightTarget_; }
     Vec3 lightTargetPos() const { return lightTarget_ >= 0 ? lightPoints_[size_t(lightTarget_)].pos : Vec3{}; }
@@ -527,6 +530,7 @@ private:
     struct LightPoint {
         Vec3 pos;     // la luz
         Vec3 arrive;  // dónde se llega al viajar hasta ella
+        int lamp = -1;  // farola (para gastar su energía), si lo es
     };
     void gatherLightPoints();
     void updateLightTarget(const Controls& c);
@@ -537,7 +541,11 @@ private:
     void cycleLightLock(Vec3 camForward);
     void updateShadow(float dt, const Controls& c);
     void swapMode();
-    void addPool(Vec3 pos, float radius);
+    void drainLamp(int lamp, float amount);
+    void updatePortals(float dt);
+    void startDive();
+    void endDive(bool ambush);
+    void constrainDive();
     void relightLamp(int lamp);
     void spawnBlackHole();
     void updateBlackHoles(float dt);
@@ -626,13 +634,14 @@ private:
     int travelMode_ = 0;      // 0 entrar o saltar a una fuente, 1 salir, 2 emboscada
     int ambushEnemy_ = -1;
     bool inLight_ = false;    // dentro de una fuente de luz
+    int hostLamp_ = -1, travelLamp_ = -1;  // farola en la que está / a la que va
     Vec3 hostPos_;            // la fuente en la que está
     bool lightLock_ = false;  // fuente elegida con R estando dentro
     bool shadowMode_ = false, shadowUnlocked_ = false;
     float swapCooldown_ = 0, modeFlash_ = 0;
-    float drink_ = 0;          // progreso al beber la luz de una farola (0..1)
-    int drinkLamp_ = -1;
-    std::vector<ShadowPool> pools_;
+    bool diving_ = false;      // fundido con la sombra del suelo
+    Vec3 diveFrom_, lastDark_;
+    std::vector<Portal> portals_;
     std::vector<BlackHole> holes_;
     Vec3 lightLockPos_;
     float lightHint_ = 0;
@@ -708,5 +717,5 @@ private:
         bool visited = false;
     };
     std::vector<TestIsland> islands_;
-    std::vector<bool> poolVisited_;  // prueba de sombra: charcos alcanzados
+
 };
