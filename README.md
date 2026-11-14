@@ -1,23 +1,16 @@
 # unamed_game
 
-Action-RPG en tercera persona en C++17 + OpenGL 3.3 Core, sin motor. **El color es
-energía**: los *Grises*, criaturas de estática, han robado el color de una ciudad
-flotante. El protagonista, un *Prismero*, lleva un arma de luz sólida que cambia de
-forma; cada Gris que disipa devuelve su color al mundo, y la ciudad pasa del gris a los
-neones a medida que se limpian oleadas.
+Action-RPG en tercera persona en C++17 + OpenGL 3.3 Core, sin motor. **La Hora Detenida**:
+la ciudad de Iridia se quedó parada en el crepúsculo y la luz y la sombra se separaron. El
+protagonista, hecho de las dos, despierta sin fuerzas en una plaza gris y va recuperando
+poderes de ambos lados para volver a poner en marcha la hora. Tono adulto y sobrio, casi sin
+diálogo: la historia se cuenta con escenas e imágenes (ver `docs/historia.md`).
 
 ## Historia
 
-Capítulo 1, *La primera luz*: el Prismero despierta junto a la fuente sin recordar su
-nombre. Le acompaña **Brizna**, una chispa de luz que parece saber más de lo que dice.
-Los Grises fueron personas; al disiparlos su color vuelve al mundo. Tres **ecos de
-memoria** escondidos por la plaza dejan pistas sobre el origen del protagonista.
-
-Los guiones son ficheros de texto en `assets/story/` (formato explicado en `src/story.h`):
-escenas que detienen el juego, avisos que pasan como subtítulos, recuerdos y órdenes
-(`!levantarse`, `!nombre`, `!oleadas`, `!eco_activa`, `!fin_capitulo`). Las escenas se
-disparan una sola vez: el despertar, el primer Gris disipado, la primera aparición de cada
-especie, la primera oleada, el croma, la primera caída y los ecos.
+La biblia está en `docs/historia.md`. Los guiones son ficheros de texto en `assets/story/`
+(formato explicado en `src/story.h`). *El capítulo 1 está pendiente de reescribirse con el
+enfoque nuevo (escenas visuales y tutoriales mínimos).*
 
 ## Música y sonido
 
@@ -27,8 +20,9 @@ instrumentos, y melodías generadas por frases a partir de la armonía); cada pi
 sincronizadas cuyo volumen decide el juego: el **colchón** siempre, la **melodía** cuando
 vuelve el color, el **pulso** (bajo y percusión) en combate y el **brillo** (arpegio) cuando
 la ciudad ya brilla. Se genera la primera vez en segundo plano (~2 s) y se guarda en
-`~/.cache/unamed_game/`. Los 26 efectos (golpes de cristal, látigo, martillo, guardia,
-magias, botín, ecos, el "tecleo" de los diálogos...) se generan al arrancar.
+`~/.cache/unamed_game/`. Los 26 efectos se generan al arrancar: golpes en capas (chasquido de
+impacto, cuerpo grave, crujido y timbre metálico, con saturación), guardia, explosiones,
+enemigos que gruñen al preparar el ataque y se deshacen al morir, sin campanitas.
 
 La salida usa PulseAudio/PipeWire cargado con `dlopen` en tiempo de ejecución: no hace falta
 ninguna cabecera para compilar y, si no está, el juego va en silencio.
@@ -62,13 +56,15 @@ Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--autoplay
 | Clic izquierdo | Atacar (combo según el arma). **Mantener**: corte cargado (lanza una onda) |
 | Clic derecho (mantener) | Guardia (se puede andar mirando a la cámara). Justo a tiempo: bloqueo perfecto |
 | C / Ctrl | Voltereta de esquiva (invulnerable); un golpe justo después es un **contraataque** |
-| Q | Mirando a una luz: **viajar hasta ella**. Si no: **hacerse luz** (haz que atraviesa Grises y cruza vacíos). **Mantener Q**: absorber luz |
-| V | **Supernova** (con la Luz llena) |
+| Q | **Luz**: junto a una farola, **entrar en ella**; dentro, saltar a otra fuente. **Sombra**: desde un charco oscuro, **deslizarse** a otro |
+| Mantener Q | **Luz**: absorber luz (nodos, Grises aturdidos). **Sombra**: **beber la luz** de una farola (se apaga y deja oscuridad) |
+| Z | Cambiar entre **luz y sombra** (cuando la sombra ya ha despertado) |
+| V | **Supernova** (luz, con la Luz llena) · **Agujero negro** (sombra, 60 de Sombra) |
 | G | **Transformarse** (con un núcleo) |
 | T | **Invocar compañero** (chispa aliada o el eco de Nora) |
-| R / clic central | Fijar objetivo / pasar al siguiente · X: soltarlo |
+| R | Fijar objetivo / **soltarlo** (dentro de una fuente: elegir a qué fuente saltar) · clic central: siguiente objetivo · X: soltar |
 | 1 2 3 · 4 5 6 · Rueda + E | Técnicas de luz · atajos de objetos · menú de comandos |
-| F | Interactuar: cápsulas, nodos, faroles, espejos, objetos |
+| F | Interactuar: cápsulas, nodos, faroles, espejos, objetos; en modo luz, **encender una farola apagada** (15 de Luz) |
 | Tab / I | Inventario y **taller** (pausa) |
 | Esc / P | Pausa: sensibilidad, calidad gráfica, reiniciar, salir |
 | F12 / º | Modo debug (esqueletos, zonas, haces y la táctica de cada Gris) |
@@ -78,15 +74,22 @@ Especiales de combate: atacar corriendo = **embestida**; atacar con la guardia =
 
 ## Jugabilidad
 
-- **La Luz** (mecánica propia): no se regenera sola; se absorbe junto a nodos encendidos
-  y faroles, o arrancándole el color a un Gris aturdido. Con ella: hacerse luz (gratis y
-  más lejos dentro de las zonas con color: se salta de luz en luz), las técnicas (*Lanza de
-  luz*, *Refracción*, *Calidez*) y la Supernova (explosión de área que devuelve croma).
-- **Viaje por la luz**: al mirar a una farola, un nodo o farol encendido, un emisor o las
-  luces de las torres del puente aparece «Q · viajar»; el Prismero se vuelve luz y vuela
-  en arco hasta ella (35 m, a la vista; 10 de Luz o gratis desde la luz). Encadenando
-  fuentes se cruza el mapa y se llega a sitios altos. En la luz, los Grises reciben un 50 %
-  más de daño y van más lentos, y la Luz del Prismero se recarga sola.
+- **Luz y sombra**: dos mitades del mismo protagonista, sin bando bueno ni malo.
+  - **Luz**: se absorbe junto a nodos y faroles o de un Gris aturdido. Junto a una farola
+    encendida, Q **entra en ella**: dentro no te ven ni te hieren, recuperas Luz, saltas a
+    otras fuentes a la vista (R elige cuál), sales con Espacio o **emboscas** con el clic
+    al Gris más cercano. Técnicas (*Lanza de luz*, *Refracción*, *Calidez*) y Supernova.
+  - **Sombra**: se consigue de los Vaciados y bebiendo la luz de las farolas, que se apagan
+    y dejan un **charco de oscuridad**. Dentro de uno te **fundes** (corres más, solo te ven
+    de muy cerca, recuperas Sombra) y te **deslizas** a otros charcos. **Agujero negro**:
+    atrae a los enemigos y sus proyectiles y acaba en implosión.
+  - Romper una farola para tener sombra te quita ese camino de luz (y se puede volver a
+    encender en modo luz): de ahí salen los acertijos.
+- **Enemigos de luz y de sombra** (todos fueron personas): *Deslumbrado* (figura alta y
+  sobreexpuesta, dos zarpazos), *Vigía* (ojo flotante que dispara luz), *Coloso* (mole de
+  sombra que aplasta) y *Sabueso* (cuadrúpedo que caza en manada y muerde por la espalda).
+  Sueltan Luz o Sombra; la luz debilita a los de sombra y la oscuridad a los de luz, y la
+  mitad contraria del protagonista les hace más daño.
 - **Croma**: cada escenario empieza casi gris; encender nodos y faroles devuelve el color
   en una zona que crece a su alrededor; cada Gris disipado deja una salpicadura.
 - **Escenarios por partes** con objetivos, combates de zona con barreras, un jefe, faroles
@@ -101,13 +104,15 @@ Especiales de combate: atacar corriendo = **embestida**; atacar con la guardia =
   onda, no se inmuta) y Eco (casi sin gravedad, orbes con cada golpe).
 - **Compañeros**: chispa aliada (40 de Luz) y el eco de Nora (cura y aturde).
 - **IA con aprendizaje por refuerzo** (Q-learning): cada especie elige tácticas (acercarse,
-  atacar, retroceder, rodear, esperar, amagar) según lo que haces, aprende de lo que le
-  funciona contra ti y lo recuerda entre partidas (`~/.cache/unamed_game/ia_*.q`). El
-  jefe aprende muy deprisa durante el combate y avisa cuando cambia de táctica.
+  atacar, retroceder, rodear, esperar, amagar, flanquear) según lo que haces y si les estás
+  mirando, aprende deprisa de lo que le funciona contra ti y lo recuerda entre partidas
+  (`~/.cache/unamed_game/ia_*.q`). Atacan por turnos (como mucho dos a la vez; el resto
+  rodea), aprovechan cuando les das la espalda y se apartan de tus golpes cada vez mejor. El
+  jefe aprende muy deprisa durante el combate.
 
 ## Modos de prueba
 
-Sin historia, con **vida y Luz infinitas** y todas las armas y núcleos de forma en el inventario.
+Sin historia, con **vida, Luz y Sombra infinitas**, la sombra ya despierta y todas las armas y núcleos de forma en el inventario.
 Se abren desde el menú de pausa (cada vez con un escenario nuevo) o al arrancar:
 
 ```bash
