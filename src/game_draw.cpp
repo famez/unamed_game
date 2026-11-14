@@ -628,8 +628,16 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
     solid->box(j[Chest] * translate({0.04f, 0.115f, 0.124f}) * rotateZ(0.78f), {}, {0.018f, 0.014f, 0.004f}, rgba(120, 112, 100),
                Material::Metal, flash);  // hebilla
     if (powers_.attack) {  // hasta que la recoge, no lleva arma
-        drawWeapon(*solid, j[WristR], ws, hero_.move(), hero_.moveU(), time_);
-        if (ws.style == WeaponStyle::Fists) drawWeapon(*solid, j[WristL], ws, hero_.move(), hero_.moveU(), time_);
+        if (ws.style == WeaponStyle::Fists) {  // los guanteletes van siempre puestos
+            drawWeapon(*solid, j[WristR], ws, hero_.move(), hero_.moveU(), time_);
+            drawWeapon(*solid, j[WristL], ws, hero_.move(), hero_.moveU(), time_);
+        } else if (hero_.weaponInHand()) {
+            drawWeapon(*solid, j[WristR], ws, hero_.move(), hero_.moveU(), time_);
+        } else {  // envainada a la espalda, en diagonal: empuñadura sobre el hombro derecho
+            Mat4 back = j[Chest] * translate({-0.1f, 0.25f, -0.14f}) * basisY(normalize(Vec3{0.45f, -1.0f, -0.05f})) *
+                        rotateX(-kPi * 0.5f);
+            drawWeapon(*solid, back, ws, Move::None, 0, time_);
+        }
     }
     // Cinta de la espalda: segmentos alargados entre los puntos de la cadena, que se
     // estrechan hacia la punta.

@@ -24,6 +24,7 @@ struct BodyPrim {
     uint32_t color;
     float blend;     // radio de la unión suave con lo anterior (m); negativo: talla (resta suave)
     bool paint = false;  // solo pinta (sombreado pintado en los colores), no cambia la forma
+    uint8_t mat = 0;     // material del sombreado de personajes (7 = pelo: brillo en banda)
 };
 
 struct ModelDef {
@@ -39,6 +40,12 @@ struct ModelDef {
     // > 0: los colores de las primitivas se mezclan en esta distancia (m) en lugar de cortarse
     // en seco (piel, barba y labios de una cara); 0: bordes limpios (prendas).
     float colorBlend = 0;
+    // > 0: las normales de la piel se acercan a las de una esfera con centro `roundCenter`
+    // (espacio de la articulación `roundJoint`): la sombra de la cara cae limpia, sin manchas
+    // de la nariz o el mentón (el truco de los juegos con estilo anime).
+    float roundNormals = 0;
+    int roundJoint = 0;
+    Vec3 roundCenter{};
 };
 
 // Malla generada + la inversa de la pose de reposo de cada hueso (para el skinning).

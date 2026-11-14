@@ -72,6 +72,16 @@ public:
     // al empezar el golpe. Si llega durante otro golpe queda en cola y se encadena.
     bool attack(float faceYaw, float dash);
     bool cast(float faceYaw);
+    // Arma en la mano (combate) o a la espalda (explorando). Cambiar hace el gesto de
+    // llevarse la mano al hombro; a mitad del gesto el arma cambia de sitio.
+    void setArmed(bool a, bool instant = false) {
+        if (a == armed_) return;
+        armed_ = a;
+        drawTime_ = instant ? kDrawTime : 0.0f;
+    }
+    bool armed() const { return armed_; }
+    bool weaponInHand() const { return drawTime_ < kDrawTime * 0.5f ? !armed_ : armed_; }
+    static constexpr float kDrawTime = 0.35f;
     // La Luz. Absorber (mantener): quieto, brazos abiertos.
     void setAbsorb(bool held) { absorbHeld_ = held; }
     bool absorbing() const;
@@ -159,6 +169,13 @@ private:
     float lean_ = 0, bank_ = 0;  // inclinación hacia delante (aceleración) y lateral (giro)
     float prevSpeed_ = 0, prevYaw_ = 0;
     Vec3 moveVel_;        // velocidad propia en el plano (con inercia)
+    bool armed_ = true;
+    float drawTime_ = 1.0f, armedBlend_ = 1.0f;
+    // Animación limitada (como el anime): en los golpes la pose se renueva a 20 fps y se
+    // mantiene entre medias; el cuerpo se sigue desplazando con suavidad.
+    bool stepping_ = false;
+    Pose heldPose_;
+    float holdTimer_ = 0;
     float idleTime_ = 0;  // segundos sin hacer nada (para el reposo)
     float landTimer_ = 0, landStrength_ = 0;
     bool wasGrounded_ = true;

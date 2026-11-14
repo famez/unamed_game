@@ -174,12 +174,24 @@ void Game::update(float dt, const Controls& input) {
             dodgeBuffer_ = 0;
             attackBuffer_ = 0;
         }
+        if (attackBuffer_ > 0 && !hero_.armed()) {  // atacar con el arma envainada la saca de golpe
+            hero_.setArmed(true, true);
+            combatTimer_ = 5.0f;
+        }
         if (attackBuffer_ > 0 && heroAttack(length(c.move) > 0.1f ? c.move : bufferedMove_)) attackBuffer_ = 0;
         attackBuffer_ = std::max(0.0f, attackBuffer_ - dt);
         dodgeBuffer_ = std::max(0.0f, dodgeBuffer_ - dt);
         if (c.interact) tryInteract();
     }
     if (lock_ >= int(enemies_.size()) || (lock_ >= 0 && !enemies_[size_t(lock_)].targetable())) lock_ = -1;
+    // El arma: en la mano si hay peligro cerca (o acaba de pelear); si no, a la espalda.
+    {
+        bool danger = lock_ >= 0 || isAttack(hero_.move());
+        for (const Enemy& e : enemies_)
+            danger = danger || (e.targetable() && length(flat(e.body.pos - hero_.body.pos)) < 16.0f);
+        combatTimer_ = danger ? 5.0f : std::max(0.0f, combatTimer_ - dt);
+        hero_.setArmed(powers_.attack && combatTimer_ > 0);
+    }
 
     // Parón al golpear: todo se congela un instante salvo los efectos.
     if (hitStop_ > 0) {

@@ -130,7 +130,10 @@ float gridLine(vec2 p) {
 
 void main() {
     if (uOutlineColor.a > 0.0) {
-        fragColor = vec4(uOutlineColor.rgb, 0.0);
+        // Contorno: con el color oscuro por defecto, un tono oscuro del propio color (líneas de
+        // color, como en el anime); con un color propio (las formas), ese color.
+        bool dark = dot(uOutlineColor.rgb, vec3(1.0)) < 0.35;
+        fragColor = vec4(dark ? vColor.rgb * 0.22 + uOutlineColor.rgb * 0.3 : uOutlineColor.rgb, 0.0);
         return;
     }
     bool scenery = vParams.x > 15.5;  // el escenario lleva el material + 16
@@ -191,6 +194,42 @@ void main() {
         vec3 fogE = mix(vec3(dot(kHorizon, vec3(0.299, 0.587, 0.114))), kHorizon, mix(0.15, 1.0, sat));
         glow = mix(glow, fogE, 1.0 - exp(-pow(distE * kWorldFog, 2.0)));
         fragColor = vec4(finish(glow), 1.0);  // alfa = máscara de bloom: brilla
+        return;
+    }
+    // Personajes (todo lo que no es escenario): sombreado anime. Luz principal propia (entre
+    // el sol y la cámara, para que siempre estén bien iluminados), dos tonos con un corte casi
+    // seco y la sombra teñida (no gris), una banda cálida en el borde de la sombra, borde de luz
+    // nítido de ancho constante, brillo en banda en el pelo y duro en el metal.
+    if (!scenery && material != 6) {
+        vec3 Vc = normalize(uCameraPos - vWorldPos);
+        vec3 key = normalize(uSunDir * 0.6 + Vc * 0.55 + vec3(0.0, 0.45, 0.0));
+        float ndk = dot(n, key);
+        float castSh = shadowFactor(max(ndk, 0.0));
+        float lit = smoothstep(0.0, 0.07, ndk) * mix(0.45, 1.0, castSh);
+        vec3 color = mix(base * vec3(0.58, 0.5, 0.68), base * 1.08, lit);
+        float edgeBand = smoothstep(-0.06, 0.0, ndk) * (1.0 - smoothstep(0.0, 0.07, ndk));
+        color += base * vec3(0.2, 0.06, 0.04) * edgeBand;
+        float fr = 1.0 - max(dot(n, Vc), 0.0);
+        float rim = smoothstep(0.66, 0.7, fr) * smoothstep(-0.1, 0.25, ndk + 0.25);
+        color += rim * (base * 0.55 + vec3(0.08));
+        if (material == 7) {  // pelo: el «anillo» de brillo
+            float hb = dot(n, normalize(Vc + vec3(0.0, 0.8, 0.0)));
+            color += smoothstep(0.8, 0.84, hb) * (1.0 - smoothstep(0.9, 0.94, hb)) * lit * vec3(0.24, 0.22, 0.26);
+        }
+        if (material == 2)  // metal: un brillo duro
+            color += step(0.93, max(dot(reflect(-key, n), Vc), 0.0)) * lit * vec3(0.7);
+        for (int i = 0; i < uLightCount; ++i) {
+            vec3 Lv = uLightPos[i].xyz - vWorldPos;
+            float d = length(Lv);
+            float att = clamp(1.0 - d / uLightPos[i].w, 0.0, 1.0);
+            color += base * uLightColor[i] * att * att * 0.7 * max(dot(n, Lv / max(d, 1e-3)) * 0.5 + 0.5, 0.0);
+        }
+        color *= mix(0.82, 1.0, uWorldColor);
+        color = mix(color, vec3(1.6), vParams.y);  // destello de impacto
+        float distC = length(uCameraPos - vWorldPos);
+        float fogC = 1.0 - exp(-pow(distC * kWorldFog, 2.0));
+        color = mix(color, mix(vec3(dot(kHorizon, vec3(0.299, 0.587, 0.114))), kHorizon, mix(0.15, 1.0, uWorldColor)), fogC);
+        fragColor = vec4(finish(color), clamp(vParams.y * 0.6, 0.0, 1.0));
         return;
     }
     if (material == 6) {  // agua: ondas que se mueven y reflejo del cielo según el ángulo

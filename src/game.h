@@ -683,6 +683,7 @@ private:
     float cromaShown_ = 0.12f;   // el que se ve: lo sigue suavemente
     std::vector<ColorSplash> splashes_;
     int kills_ = 0;
+    float combatTimer_ = 0;   // > 0: el arma sigue en la mano
     float hitStop_ = 0;       // congelación breve al golpear (da peso a los golpes)
     float shake_ = 0;         // temblor de cámara
     float fovKick_ = 0;

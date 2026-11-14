@@ -588,9 +588,23 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
         lastKey_ = key;
     }
     blendTime_ += dt;
+    drawTime_ = std::min(kDrawTime, drawTime_ + dt);
+    armedBlend_ = moveTowards(armedBlend_, weaponInHand() ? 1.0f : 0.0f, dt / 0.2f);
     Pose target;
     animate(target);
     pose = blendTime_ >= blendDur_ ? target : lerpPose(blendFrom_, target, smoothstep01(blendTime_ / blendDur_), JointCount);
+    // Animación limitada en los golpes: poses mantenidas a 20 fps.
+    if (isAttack(move_) || move_ == Move::Cast) {
+        holdTimer_ -= dt;
+        if (!stepping_ || holdTimer_ <= 0) {
+            heldPose_ = pose;
+            holdTimer_ = 1.0f / 20.0f;
+        }
+        pose = heldPose_;
+        stepping_ = true;
+    } else {
+        stepping_ = false;
+    }
     computeWorldMatrices(pose, modelMatrix(), joints);
     updateSecondary(dt);
 }
@@ -645,6 +659,11 @@ void Character::ribbon(float alpha, Vec3 out[kRibbonPoints]) const {
 }
 
 void Character::interpolatedJoints(float alpha, Mat4 out[JointCount]) const {
+    if (stepping_) {  // pose mantenida: sin mezclar poses, solo se desplaza el cuerpo
+        Mat4 shift = translate(interpolatedPos(alpha) - body.pos);
+        for (int i = 0; i < JointCount; ++i) out[i] = shift * joints[i];
+        return;
+    }
     for (int i = 0; i < JointCount; ++i) out[i] = lerpMat(prevJoints_[i], joints[i], alpha);
 }
 
@@ -684,6 +703,13 @@ void Character::animate(Pose& out) const {
     r[ElbowR].x = lerpf(-1.3f, -0.5f, run);
     r[WristR].x = lerpf(0.75f, 0.9f, run);  // en reposo la hoja apunta al frente y abajo; corriendo, atrás
 
+    // Sin el arma en la mano (explorando): el brazo derecho se balancea como el izquierdo.
+    float unarmed = 1.0f - armedBlend_;
+    r[ShoulderR].x = lerpf(r[ShoulderR].x, -0.9f * run * s, unarmed);
+    r[ShoulderR].z = lerpf(r[ShoulderR].z, -0.1f - 0.15f * run, unarmed);
+    r[ElbowR].x = lerpf(r[ElbowR].x, -0.25f - 1.1f * run - 0.25f * run * s, unarmed);
+    r[WristR].x = lerpf(r[WristR].x, 0.0f, unarmed);
+
     // Torso: inclinado al correr (más al acelerar), ladeado en las curvas, con torsión
     // pelvis/pecho contrapuesta y la cabeza compensando para mirar al frente.
     r[Spine].x = 0.28f * run + lean_;
@@ -711,7 +737,17 @@ void Character::animate(Pose& out) const {
     float idle = (1.0f - run) * (1.0f - airBlend_);
     float breath = std::sin(time_ * 1.7f);
     float weight = std::sin(time_ * 0.42f);  // peso de una pierna a otra (~15 s el ciclo)
-    float relax = smoothstep01((idleTime_ - 4.0f) / 1.5f) * idle;
+    float relax = smoothstep01((idleTime_ - 4.0f) / 1.5f) * idle * (1.0f - armedBlend_);
+    // Con el arma en la mano: guardia de combate, agachado y con un rebote ligero (listo).
+    float ready = armedBlend_ * idle;
+    out.rootOffset.y -= (0.04f + 0.014f * std::sin(time_ * 6.0f)) * ready;
+    r[KneeL].x += 0.2f * ready;
+    r[KneeR].x += 0.2f * ready;
+    r[HipL].x -= 0.1f * ready;
+    r[HipR].x -= 0.1f * ready;
+    r[Spine].x += 0.1f * ready;
+    r[ShoulderL].z += 0.1f * ready;
+    r[ElbowL].x -= 0.5f * ready;  // el otro puño, arriba
     r[HipL].z += (0.12f - 0.04f * relax) * idle;
     r[HipR].z -= (0.12f - 0.04f * relax) * idle;
     r[KneeL].x += (0.18f + 0.14f * std::max(0.0f, -weight)) * idle;  // se dobla la rodilla que descansa
@@ -749,6 +785,15 @@ void Character::animate(Pose& out) const {
     r[ShoulderL].z += 0.12f * roll;
     r[ShoulderR].z -= 0.12f * roll;
     r[Neck].x -= 0.25f * roll;
+
+    // Gesto de desenvainar o envainar: la mano derecha va al hombro (donde está la empuñadura).
+    if (drawTime_ < kDrawTime) {
+        float w = std::sin(drawTime_ / kDrawTime * kPi);
+        r[ShoulderR].x = lerpf(r[ShoulderR].x, -2.7f, w);
+        r[ShoulderR].z = lerpf(r[ShoulderR].z, -0.3f, w);
+        r[ElbowR].x = lerpf(r[ElbowR].x, -1.9f, w);
+        r[Chest].y += 0.25f * w;
+    }
 
     // En el aire: piernas recogidas (más al subir), brazos abiertos.
     float a = airBlend_;
