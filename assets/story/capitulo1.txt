@@ -91,7 +91,12 @@ brizna: Las chispas no tenemos voz. Solo hacemos ruido.
 
 == plaza_nodos
 brizna: La plaza vuelve a tener color. Mira el agua de la fuente: azul. Azul de verdad.
-brizna: Y la puerta del mercado se ha abierto. El Mercado de los Ecos.
+brizna: Pero la puerta del mercado sigue sellada. Funciona con luz del Faro… y el Faro está apagado.
+brizna: El prisma de la fuente aún brilla un poco. ¿Ves el haz? Si lo llevamos hasta la puerta, se abrirá.
+sistema: Acércate a un espejo y pulsa F para girarlo. Lleva el haz hasta el receptor de la puerta.
+
+== puerta_abierta
+brizna: ¡Abierta! El Mercado de los Ecos.
 brizna: Allí vendían farolillos. Los mejores de Iridia los hacía una tal Nora.
 
 == caida
@@ -124,6 +129,10 @@ voz: Lía, vuelve antes de que enciendan los faroles, ¿me oyes?
 voz: Te guardo el farolillo de luna. El que te gusta. No se lo vendo a nadie.
 prota: Una madre.
 brizna: Nora. Era la de los farolillos.
+
+== camara_abierta
+!aviso
+brizna: Luz magenta… Esta cámara la cerró alguien que sabía lo que hacía. Mira qué guardaba.
 
 == nodo_mercado
 brizna: El mercado respira. Los toldos tienen color otra vez.

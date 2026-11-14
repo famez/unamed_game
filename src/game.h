@@ -232,7 +232,29 @@ struct Interactable {
     bool used = false;
 };
 
-enum class PartKind { Encounter, Nodes, Lanterns, Interact, Reach, Exit };
+// Rompecabezas de luz: un emisor lanza un haz; los espejos (F: girar 45°) lo desvían y
+// los que llevan un cristal de color lo tiñen; un receptor iluminado (del color pedido)
+// abre su puerta.
+struct LightEmitter {
+    Vec3 pos;
+    Vec3 dir;
+    uint32_t color = 0;
+};
+struct Mirror {
+    Vec3 pos;         // base del pedestal
+    int angle = 0;    // orientación de la normal: angle × 45°
+    uint32_t filter = 0;  // tiñe el haz (0 = espejo normal)
+};
+struct Receptor {
+    std::string id;
+    Vec3 pos;
+    uint32_t needColor = 0;  // 0 = cualquier luz
+    std::string gate, scene;
+    bool lit = false;
+    float litTime = 0;
+};
+
+enum class PartKind { Encounter, Nodes, Lanterns, Interact, Reach, Exit, Puzzle };
 
 struct LevelPart {
     std::string title, objective;
@@ -362,9 +384,10 @@ private:
     void setGate(const std::string& id, bool closed);
     void spawnEnemy(const Spawn& s);
     void resetEncounter();
-    // Interacción con lo más cercano (cápsula, nodo, farol, objeto). -1 si no hay nada.
+    void traceBeams();
+    // Interacción con lo más cercano (cápsula, nodo, farol, objeto, espejo). -1 si no hay nada.
     struct InteractTarget {
-        int kind = -1;  // 0 cápsula, 1 nodo, 2 farol, 3 objeto
+        int kind = -1;  // 0 cápsula, 1 nodo, 2 farol, 3 objeto, 4 espejo
         int index = -1;
         std::string label;
     };
@@ -444,6 +467,11 @@ private:
     std::vector<Lantern> lanterns_;
     std::vector<Interactable> interacts_;
     std::vector<Encounter> encounters_;
+    std::vector<LightEmitter> emitters_;
+    std::vector<Mirror> mirrors_;
+    std::vector<Receptor> receptors_;
+    std::vector<std::vector<Vec3>> beamPaths_;     // recorrido de cada haz (para dibujarlo)
+    std::vector<std::vector<uint32_t>> beamColors_;  // color de cada tramo
     int activeEncounter_ = -1;
     Vec3 checkpoint_;
     float checkpointYaw_ = 0;

@@ -238,15 +238,26 @@ void Game::buildPlaza() {
     p2.kind = PartKind::Nodes;
     p2.count = 3;
     p2.marker = nodes_[0].pos;
-    p2.openGates = {"puerta_mercado"};
     p2.sceneDone = "plaza_nodos";
     LevelPart p3;
-    p3.title = "La puerta del mercado";
-    p3.objective = "Cruza la puerta del mercado";
-    p3.kind = PartKind::Exit;
-    p3.area = area({-2.5f, -1, 22}, {2.5f, 5, 28});
-    p3.marker = {0, 1.5f, 22};
-    parts_ = {p1, p2, p3};
+    p3.title = "La puerta sellada";
+    p3.objective = "Lleva la luz del prisma hasta la puerta (F: girar espejos)";
+    p3.kind = PartKind::Puzzle;
+    p3.target = "receptor_puerta";
+    p3.marker = {6, 1.5f, 0};
+    p3.sceneDone = "puerta_abierta";
+    LevelPart p4;
+    p4.title = "La puerta del mercado";
+    p4.objective = "Cruza la puerta del mercado";
+    p4.kind = PartKind::Exit;
+    p4.area = area({-2.5f, -1, 22}, {2.5f, 5, 28});
+    p4.marker = {0, 1.5f, 22};
+    parts_ = {p1, p2, p3, p4};
+    // El haz sale del pie de la fuente hacia el este; tres espejos (mal orientados al
+    // principio) pueden llevarlo hasta la puerta.
+    emitters_ = {{{0.55f, 1.4f, 0}, {1, 0, 0}, rgba(255, 200, 90)}};
+    mirrors_ = {{{6.0f, 0, 0}, 0, 0}, {{6.0f, 0, 12.0f}, 2, 0}, {{0, 0, 12.0f}, 1, 0}};
+    receptors_ = {{"receptor_puerta", {0, 1.4f, 15.6f}, 0, "puerta_mercado", ""}};
     heroStart_ = {0, 0, -8};
     heroStartYaw_ = 0;
     nextLevel_ = LevelId::Mercado;
@@ -313,6 +324,14 @@ void Game::buildMercado() {
     interacts_ = {{"puesto_nora", nora + Vec3{0, 0, -1.0f}, "Examinar el puesto", "nora_puesto"}};
 
     nodes_ = {{"nodo_mercado", {0, 0, 40}, 14, kAmber, "nodo_mercado"}};
+    // Cámara del tesoro (opcional): solo se abre con luz magenta.
+    addBlock({-12, 1.5f, 46.6f}, {2.0f, 1.5f, 0.2f}, kWhite);
+    addBlock({-12, 1.5f, 51.4f}, {2.0f, 1.5f, 0.2f}, kWhite);
+    addBlock({-12, 3.1f, 49}, {2.0f, 0.1f, 2.6f}, kWhite);
+    addGate("camara", {-10.1f, 1.5f, 49}, {0.15f, 1.5f, 2.2f}, kMagenta, true);
+    emitters_ = {{{10.5f, 1.4f, 31.5f}, {-1, 0, 0}, rgba(255, 200, 90)}};
+    mirrors_ = {{{-6.0f, 0, 31.5f}, 0, 0}, {{-6.0f, 0, 47.0f}, 3, kMagenta}};
+    receptors_ = {{"receptor_camara", {-9.75f, 1.4f, 47.0f}, kMagenta, "camara", "camara_abierta"}};
     TreasureChest ch;
     ch.pos = {-12, 0, 49};
     ch.yaw = kPi * 0.75f;
@@ -470,6 +489,11 @@ void Game::loadLevel(LevelId id) {
     gates_.clear();
     nodes_.clear();
     lanterns_.clear();
+    emitters_.clear();
+    mirrors_.clear();
+    receptors_.clear();
+    beamPaths_.clear();
+    beamColors_.clear();
     interacts_.clear();
     encounters_.clear();
     parts_.clear();
@@ -564,6 +588,10 @@ bool Game::partDone(const LevelPart& p) const {
                 if (i.id == p.target) return i.used;
             return true;
         case PartKind::Reach: return inside(p.area, hero_.body.pos);
+        case PartKind::Puzzle:
+            for (const Receptor& r : receptors_)
+                if (r.id == p.target) return r.lit;
+            return true;
         case PartKind::Exit: return false;  // se sale con la transición
     }
     return false;
@@ -574,6 +602,9 @@ void Game::updateLevel(float dt) {
     for (Gate& g : gates_) g.openTime += dt;
     for (ColorNode& n : nodes_)
         if (n.lit) n.litTime += dt;
+    traceBeams();
+    for (Receptor& r : receptors_)
+        if (r.lit) r.litTime += dt;
     for (Lantern& l : lanterns_)
         if (l.lit) l.litTime += dt;
 
@@ -669,6 +700,7 @@ Game::InteractTarget Game::nearbyInteract() const {
         if (!lanterns_[i].lit) consider(2, int(i), lanterns_[i].pos, "Encender el farol");
     for (size_t i = 0; i < interacts_.size(); ++i)
         if (!interacts_[i].used) consider(3, int(i), interacts_[i].pos, interacts_[i].label);
+    for (size_t i = 0; i < mirrors_.size(); ++i) consider(4, int(i), mirrors_[i].pos, "Girar el espejo");
     return best;
 }
 
@@ -716,9 +748,81 @@ void Game::tryInteract() {
         uiSound(Sfx::ItemGet, 0.7f, 1.1f);
         spawnSparks(l.pos + Vec3{0, 2.2f, 0}, {0, 1, 0}, 24, rgba(255, 200, 120), 3.0f);
         notify("Farol encendido · punto de control", rgba(255, 200, 120));
-    } else {
+    } else if (t.kind == 3) {
         Interactable& it = interacts_[size_t(t.index)];
         it.used = true;
         playScene(it.scene);
+    } else {
+        Mirror& m = mirrors_[size_t(t.index)];
+        m.angle = (m.angle + 1) % 4;  // la normal gira 45° (un espejo tiene dos caras)
+        uiSound(Sfx::MenuOk, 0.6f, 0.8f + 0.1f * float(m.angle));
+    }
+}
+
+// Recorre cada haz: avanza en línea recta, se refleja en los espejos (y toma el color de
+// su cristal), se detiene en los sólidos y enciende los receptores que alcanza.
+void Game::traceBeams() {
+    beamPaths_.assign(emitters_.size(), {});
+    beamColors_.assign(emitters_.size(), {});
+    std::vector<bool> lit(receptors_.size(), false);
+    for (size_t ei = 0; ei < emitters_.size(); ++ei) {
+        const LightEmitter& em = emitters_[ei];
+        Vec3 p = em.pos, d = normalize(em.dir);
+        uint32_t color = em.color;
+        std::vector<Vec3>& path = beamPaths_[ei];
+        path.push_back(p);
+        int lastMirror = -1;
+        for (int bounce = 0; bounce < 12; ++bounce) {
+            float bestT = 60.0f;
+            int hitMirror = -1, hitReceptor = -1;
+            for (size_t i = 0; i < mirrors_.size(); ++i) {
+                if (int(i) == lastMirror) continue;
+                Vec3 c{mirrors_[i].pos.x, p.y, mirrors_[i].pos.z};
+                float t = dot(c - p, d);
+                if (t > 0.05f && t < bestT && length(p + d * t - c) < 0.45f) bestT = t, hitMirror = int(i);
+            }
+            for (size_t i = 0; i < receptors_.size(); ++i) {
+                float t = dot(receptors_[i].pos - p, d);
+                if (t > 0.05f && t < bestT && length(p + d * t - receptors_[i].pos) < 0.5f) {
+                    bestT = t;
+                    hitReceptor = int(i);
+                    hitMirror = -1;
+                }
+            }
+            RayHit h;
+            Vec3 end = p + d * bestT;
+            if (segmentVsWorld(p, end, world_, h)) {  // algo sólido corta el haz
+                path.push_back(p + (end - p) * h.t);
+                beamColors_[ei].push_back(color);
+                break;
+            }
+            path.push_back(end);
+            beamColors_[ei].push_back(color);
+            if (hitReceptor >= 0) {
+                const Receptor& r = receptors_[size_t(hitReceptor)];
+                if (r.needColor == 0 || r.needColor == color) lit[size_t(hitReceptor)] = true;
+                break;
+            }
+            if (hitMirror < 0) break;
+            const Mirror& m = mirrors_[size_t(hitMirror)];
+            float a = float(m.angle) * kPi * 0.25f;
+            Vec3 n{std::cos(a), 0, std::sin(a)};
+            d = normalize(d - n * (2.0f * dot(d, n)));
+            if (m.filter) color = m.filter;
+            p = end;
+            lastMirror = hitMirror;
+        }
+    }
+    for (size_t i = 0; i < receptors_.size(); ++i) {
+        Receptor& r = receptors_[i];
+        if (lit[i] && !r.lit) {  // se enciende: abre su puerta (y queda abierta)
+            r.lit = true;
+            r.litTime = 0;
+            setGate(r.gate, false);
+            spawnSparks(r.pos, {0, 1, 0}, 30, r.needColor ? r.needColor : rgba(255, 245, 220), 4.0f);
+            uiSound(Sfx::Chest, 0.8f);
+            croma_ = std::min(1.0f, croma_ + 0.05f);
+            playScene(r.scene);
+        }
     }
 }

@@ -298,6 +298,13 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
         for (const Lantern& l : lanterns_) dd.line(l.pos, l.pos + Vec3{0, 2.4f, 0}, l.lit ? rgba(255, 200, 120) : rgba(140, 140, 150));
         for (const Encounter& e : encounters_)
             if (!e.cleared) dd.box(id, e.trigger.center(), e.trigger.halfExtents(), e.started ? rgba(255, 90, 60) : rgba(90, 90, 120));
+        for (size_t b = 0; b < beamPaths_.size(); ++b)
+            for (size_t i = 0; i + 1 < beamPaths_[b].size(); ++i) dd.line(beamPaths_[b][i], beamPaths_[b][i + 1], beamColors_[b][i]);
+        for (const Mirror& m : mirrors_) {
+            float a = float(m.angle) * kPi * 0.25f;
+            Vec3 c = m.pos + Vec3{0, 1.4f, 0}, t{-std::sin(a), 0, std::cos(a)};
+            dd.line(c - t * 0.4f, c + t * 0.4f, rgba(255, 255, 255));
+        }
         return;
     }
     // Todo el escenario se ve con el croma actual; las salpicaduras de color lo devuelven.
@@ -333,6 +340,33 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
             solid->colorZone(n.pos, n.radius * grow);
             solid->light(n.pos + Vec3{0, 1.8f, 0}, Vec3{1.0f, 0.9f, 0.8f} * 1.5f, 6.0f);
         }
+    }
+    // Rompecabezas de luz: emisores, espejos (panel que gira sobre un pedestal) y
+    // receptores. El haz se dibuja aparte (efectos).
+    for (const LightEmitter& em : emitters_) {
+        Mat4 m = translate(em.pos) * rotateY(time_);
+        solid->box(m * rotateX(kPi * 0.25f) * rotateZ(kPi * 0.25f), {}, {0.12f, 0.12f, 0.12f}, em.color, Material::Glow);
+        solid->light(em.pos, Vec3{1.0f, 0.95f, 0.85f} * 1.2f, 3.0f);
+    }
+    for (const Mirror& mr : mirrors_) {
+        solid->box(id, mr.pos + Vec3{0, 0.5f, 0}, {0.3f, 0.5f, 0.3f}, rgba(226, 230, 240), Material::Stone);
+        float a = float(mr.angle) * kPi * 0.25f;
+        // El panel es perpendicular a su normal (a, en el plano XZ).
+        Mat4 panel = translate(mr.pos + Vec3{0, 1.4f, 0}) * rotateY(kPi * 0.5f - a);
+        solid->box(panel, {}, {0.42f, 0.38f, 0.03f}, rgba(150, 190, 220), Material::Metal);
+        uint32_t edge = mr.filter ? mr.filter : rgba(255, 245, 220);
+        solid->box(panel, {0, 0.4f, 0}, {0.44f, 0.025f, 0.04f}, edge, Material::Glow);
+        solid->box(panel, {0, -0.4f, 0}, {0.44f, 0.025f, 0.04f}, edge, Material::Glow);
+        if (mr.filter) solid->box(panel, {}, {0.3f, 0.26f, 0.035f}, mr.filter, Material::Glow);
+    }
+    for (const Receptor& rc : receptors_) {
+        uint32_t col = rc.needColor ? rc.needColor : rgba(255, 245, 220);
+        Mat4 m = translate(rc.pos) * rotateY(rc.lit ? time_ * 2.0f : 0.0f);
+        solid->ellipsoid(m, {}, {0.2f, 0.2f, 0.2f}, rc.lit ? col : rgba(110, 112, 125), rc.lit ? Material::Glow : Material::Metal);
+        for (int k = 0; k < 8; ++k)  // anillo del color que pide
+            solid->box(m * rotateZ(float(k) * kPi * 0.25f), {0, 0.32f, 0}, {0.03f, 0.06f, 0.03f}, col,
+                       rc.lit || std::fmod(time_, 1.5f) < 0.75f ? Material::Glow : Material::Metal);
+        if (rc.lit) solid->light(rc.pos, Vec3{1.0f, 0.9f, 0.8f} * 1.5f, 4.0f);
     }
     // Faroles del puente: poste y lámpara (apagada, gris; encendida, cálida).
     for (const Lantern& l : lanterns_) {
@@ -621,6 +655,19 @@ void Game::drawEffects(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Vi
                           withAlpha(g.color, a));
             }
         }
+    // Haces de luz de los rompecabezas: cinta orientada a la cámara + núcleo para el bloom.
+    if (solid)
+        for (size_t b = 0; b < beamPaths_.size(); ++b)
+            for (size_t i = 0; i + 1 < beamPaths_[b].size(); ++i) {
+                Vec3 p0 = beamPaths_[b][i], p1 = beamPaths_[b][i + 1];
+                Vec3 dir = p1 - p0;
+                float len = length(dir);
+                if (len < 1e-3f) continue;
+                Vec3 side = normalize(cross(dir, (p0 + p1) * 0.5f - view.eye)) * (0.06f + 0.02f * std::sin(time_ * 8.0f));
+                uint32_t col = beamColors_[b][i];
+                glow.quad(p0 - side, p1 - side, p1 + side, p0 + side, withAlpha(col, 0.8f));
+                glow.quad(p0 - side * 3.0f, p1 - side * 3.0f, p1 + side * 3.0f, p0 + side * 3.0f, withAlpha(col, 0.25f));
+            }
     for (const Interactable& it : interacts_)
         if (!it.used && solid) glowStar(glow, view, it.pos + Vec3{0, 1.6f + 0.1f * std::sin(time_ * 2.0f), 0}, 0.25f, time_, withAlpha(rgba(255, 220, 150), 0.8f));
     // Botín.

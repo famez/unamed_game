@@ -484,11 +484,38 @@ int main() {
         }
         run(g, 0.2f);
         skipDialogues(g);
-        CHECK(g.partIndex() == 2 && !g.gates_[0].closed, "tres nodos: se abre la puerta del mercado (parte 3)");
+        CHECK(g.partIndex() == 2 && g.gates_[0].closed && !g.receptors_[0].lit,
+              "tres nodos: parte 3, la puerta sigue sellada (rompecabezas de luz)");
+        // Rompecabezas: girar los espejos (F) hasta que el haz llegue al receptor.
+        place(g, g.mirrors_[0].pos + Vec3{0.9f, 0, 0});
+        int before = g.mirrors_[0].angle;
+        g.update(dt, press(&Controls::interact));
+        CHECK(g.mirrors_[0].angle == (before + 1) % 4, "F gira el espejo 45 grados");
+        g.mirrors_[0].angle = 3;
+        g.mirrors_[1].angle = 1;
+        g.mirrors_[2].angle = 1;
+        run(g, 0.3f);
+        skipDialogues(g);
+        run(g, 0.2f);
+        CHECK(g.receptors_[0].lit && !g.gates_[0].closed && g.partIndex() == 3,
+              "el haz llega a la puerta: se abre (recorrido de %zu tramos)", g.beamColors_[0].size());
         place(g, {0, 0, 24});
         run(g, 2.0f);
         CHECK(g.level() == LevelId::Mercado && g.levelName() == "Mercado de los Ecos" && std::fabs(g.croma_ - 0.05f) < 1e-3f,
               "al cruzar la puerta se carga el mercado, otra vez casi sin color");
+        // Cámara opcional: solo se abre con luz magenta (el segundo espejo la tiñe).
+        skipDialogues(g);
+        g.mirrors_[0].angle = 1;
+        g.mirrors_[1].angle = 1;
+        g.mirrors_[1].filter = 0;
+        run(g, 0.1f);
+        bool vault = false;
+        for (const Gate& gt : g.gates_) if (gt.id == "camara") vault = !gt.closed;
+        CHECK(!g.receptors_[0].lit && !vault, "con luz blanca la camara no se abre");
+        g.mirrors_[1].filter = rgba(255, 70, 190);
+        run(g, 0.1f);
+        for (const Gate& gt : g.gates_) if (gt.id == "camara") vault = !gt.closed;
+        CHECK(g.receptors_[0].lit && vault, "con luz magenta, si");
         // El jefe espera al guion: no aparece hasta examinar el puesto de Nora.
         skipDialogues(g);
         for (Encounter& e : g.encounters_)
