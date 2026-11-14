@@ -684,6 +684,7 @@ private:
     std::vector<Enemy> enemies_;
     std::vector<Projectile> projectiles_;
     std::vector<Pickup> pickups_;
+    static constexpr size_t kMaxParticles = 900;
     std::vector<Particle> particles_;
     std::vector<Ring> rings_;
     std::vector<Blast> blasts_;

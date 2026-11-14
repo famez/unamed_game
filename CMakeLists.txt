@@ -25,6 +25,9 @@ set(LOGIC_SOURCES
     src/game/items.cpp
     src/actors/enemy.cpp
     src/game/game.cpp
+    src/game/combat.cpp
+    src/game/enemy_ai.cpp
+    src/game/loot.cpp
     src/game/game_story.cpp
     src/game/levels.cpp
     src/game/light.cpp

@@ -174,7 +174,7 @@ Máquina de desarrollo: i7-7500U (2C/4T), 12 GB RAM, Intel HD 620 (Mesa) + GeFor
 - **Usar la Intel, no la 920M**: con `nouveau` la Kepler no hace reclocking y rinde menos
   que la integrada. Mesa elige la Intel por defecto (`DRI_PRIME=1` forzaría la NVIDIA).
 - **X11 + GLX directo** en vez de GLFW/SDL: cero dependencias y nada oculto. Todo lo
-  específico de plataforma vive en `platform_x11.cpp` detrás de `platform.h`, así que
+  específico de plataforma vive en `core/platform_x11.cpp` detrás de `core/platform.h`, así que
   cambiar a GLFW/SDL (p. ej. para Windows) es reescribir un único fichero.
 - **Simulación a paso fijo de 60 Hz** desacoplada del render, **vsync** activado (o un
   limitador a 60 fps si no hay vsync) para no quemar CPU/GPU en un portátil.
@@ -191,34 +191,51 @@ sombras 4096²) es para un equipo más potente.
 
 ```
 src/
-  platform.h / platform_x11.cpp  Ventana, contexto GL 3.3, teclado/ratón, reloj
-  gl.h                           Cabeceras GL (sin loader: glvnd exporta todo en Linux)
-  vmath.h                        Vec3/Mat4, perspectiva, lookAt (column-major, Y arriba)
-  debug_draw.h/.cpp              Lote de líneas/triángulos/puntos + shader mínimo
-  skeleton.h/.cpp                Esqueletos genéricos (jerarquía y cinemática directa)
-  physics.h/.cpp                 Cajas AABB, cuerpos con gravedad, rayos (segmento vs caja)
-  character.h/.cpp               Protagonista: carrera, salto, combos, esquiva, guardia
-  enemy.h/.cpp                   Especies de enemigos: esqueletos, formas, animación
-  items.h/.cpp                   Objetos, armas e inventario
-  game.h/.cpp                    Escenario, oleadas, IA, combate, magias, botín, cofres
-  game_story.cpp                 Escenas del guion, órdenes, Brizna y ecos de memoria
-  story.h/.cpp                   Formato de guion y reproductor de diálogos (UTF-8)
-  synth.h/.cpp                   Síntesis de la música (capas) y los efectos; WAV
-  audio.h/.cpp                   Salida (PulseAudio con dlopen) y mezclador en un hilo
-  sfx.h                          Lista de efectos y eventos de sonido de la lógica
-  levels.cpp                     Escenarios, partes, combates de zona, puertas, rompecabezas
-  light.cpp                      La Luz: absorber, hacerse luz, Supernova
-  allies.cpp                     Formas prismáticas y compañeros
-  brain.h/.cpp                   Aprendizaje por refuerzo de los Grises (Q-learning)
-  game_draw.cpp                  Dibujado del mundo, efectos y HUD (y su versión debug)
-  inventory_menu.h/.cpp          Menú de inventario
-  text.h/.cpp                    Fuentes SDF (Orbitron, Exo 2) con stb_truetype: HUD y menús
-  models.h/.cpp                  Cuerpos continuos: primitivas → malla con skinning
-  menu.h/.cpp                    Menú de pausa
-  renderer.h/.cpp                Render: instancing, skinning, sombras, bloom, calidad, croma
   main.cpp                       Bucle principal, cámara, entrada
+  core/
+    platform.h / platform_x11.cpp  Ventana, contexto GL 3.3, teclado/ratón, reloj
+    gl.h                         Cabeceras GL (sin loader: glvnd exporta todo en Linux)
+    vmath.h                      Vec3/Mat4, perspectiva, lookAt (column-major, Y arriba)
+  render/
+    renderer.h/.cpp              Render: arranque, calidad, sombras y pasadas de la escena
+    render_scene.cpp             Lotes instanciados, luces, zonas y mallas con skinning
+    render_fx.cpp                Humo y fuego volumétrico a media resolución
+    render_post.cpp              Buffers de escena (MSAA), bloom y composición final
+    gl_util.h                    Ayudas internas del render
+    shaders/                     GLSL (.vert/.frag/.glsl), metidos en el binario por CMake
+    models.h/.cpp                Cuerpos continuos: primitivas → malla con skinning
+    debug_draw.h/.cpp            Lote de líneas/triángulos/puntos + shader mínimo; colores
+    text.h/.cpp                  Fuentes SDF (Orbitron, Exo 2) con stb_truetype
+  audio/
+    synth.h/.cpp                 Síntesis de la música (capas) y los efectos; WAV
+    audio.h/.cpp                 Salida (PulseAudio con dlopen) y mezclador en un hilo
+    sfx.h                        Lista de efectos y eventos de sonido de la lógica
+  actors/
+    skeleton.h/.cpp              Esqueletos genéricos (jerarquía y cinemática directa)
+    physics.h/.cpp               Cajas AABB, cuerpos con gravedad, rayos (segmento vs caja)
+    character.h/.cpp             Protagonista: carrera, salto, combos, esquiva, guardia
+    enemy.h/.cpp                 Especies de enemigos: esqueletos, formas, animación
+    brain.h/.cpp                 Aprendizaje por refuerzo de los Grises (Q-learning)
+  game/
+    game.h/.cpp                  Estado del juego, arranque y bucle de actualización
+    combat.cpp                   Apuntar, golpes, magias, daño, muerte y reaparición
+    enemy_ai.cpp                 Decisiones, movimiento y ataques de los enemigos; proyectiles
+    loot.cpp                     Botín, recoger, experiencia y niveles, fabricar, equipar
+    light.cpp / shadow.cpp       La Luz y la Sombra: absorber, focos, fundirse, Supernova
+    levels.cpp                   Escenarios, partes, combates de zona, puertas, rompecabezas
+    test_mode.cpp                Modo prueba (patio con enemigos sin fin)
+    allies.cpp                   Formas prismáticas y compañeros
+    game_story.cpp / cinema.cpp  Escenas del guion, órdenes y cinemáticas
+    story.h/.cpp                 Formato de guion y reproductor de diálogos (UTF-8)
+    items.h/.cpp                 Objetos, armas e inventario
+    game_draw.cpp                Dibujado del mundo, personajes y efectos (y versión debug)
+  ui/
+    hud.cpp                      HUD: barras, nivel, comandos, objetivo, textos de historia
+    menu.h/.cpp                  Menú de pausa
+    inventory_menu.h/.cpp        Menú de inventario y taller
 tests/
   logic_test.cpp                 Tests de la lógica sin ventana (combate, IA, botín, croma...)
+cmake/embed_shaders.cmake        Convierte los shaders en cadenas C++ al compilar
 assets/fonts/                    Orbitron y Exo 2 (licencia SIL OFL, ver OFL-*.txt)
 assets/story/                    Guiones de la historia
 third_party/stb/                 stb_truetype.h (dominio público)
