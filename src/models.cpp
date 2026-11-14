@@ -278,13 +278,14 @@ void buildSkinnedMesh(const ModelDef& def, std::vector<SkinVertex>& verts, std::
 }
 
 // --- El protagonista -------------------------------------------------------------------
-// Adulto, de proporciones realistas: abrigo largo oscuro hasta las rodillas, bufanda
-// gastada, pantalón y botas de trabajo, pelo corto ceniza. La luz no está en la ropa: son
-// vetas finas bajo la piel (ver game_draw.cpp) que brillan según la Luz que lleva.
+// Estilo de animación, en armonía con la cabeza: silueta delgada y limpia, formas que se
+// afinan (conos redondeados) en vez de tubos. Chaqueta corta de cuello alto, abierta sobre
+// una camisa clara, con dos faldones a la espalda; pantalón ajustado, botas y guantes
+// grandes, cinturón y una bufanda carmesí. La luz son vetas finas (game_draw.cpp).
 namespace {
-const uint32_t kCoat = rgba(44, 45, 52), kCoatDark = rgba(30, 30, 36), kUnder = rgba(62, 62, 66);
-const uint32_t kSkinC = rgba(238, 204, 178), kHairC = rgba(74, 72, 76), kBoot = rgba(92, 64, 48);
-const uint32_t kScarf = rgba(104, 58, 50), kGlove = rgba(36, 34, 36);
+const uint32_t kCoat = rgba(54, 62, 96), kCoatDark = rgba(36, 40, 64), kUnder = rgba(60, 60, 70);
+const uint32_t kSkinC = rgba(238, 204, 178), kHairC = rgba(74, 72, 76), kBoot = rgba(110, 72, 50);
+const uint32_t kScarf = rgba(172, 52, 56), kGlove = rgba(56, 40, 34), kShirt = rgba(222, 216, 204);
 #define E(j, cx, cy, cz, rx, ry, rz, col, k) {j, false, {cx, cy, cz}, {}, {rx, ry, rz}, col, k}
 #define C(j, ax, ay, az, bx, by, bz, rad, col, k) {j, true, {ax, ay, az}, {bx, by, bz}, {rad, rad, rad}, col, k}
 #define P(j, cx, cy, cz, rx, ry, rz, col) {j, false, {cx, cy, cz}, {}, {rx, ry, rz}, col, 0, true}
@@ -293,40 +294,43 @@ const uint32_t kScarf = rgba(104, 58, 50), kGlove = rgba(36, 34, 36);
 #define KH(j, ax, ay, az, bx, by, bz, r1, r2, col, k) {j, true, {ax, ay, az}, {bx, by, bz}, {r1, r2, r1}, col, k, false, 7}
 // clang-format off
 const BodyPrim kHeroPrims[] = {
-    // tronco: abrigo cruzado con cuello alto y faldón hasta las rodillas
-    E(Pelvis,    0, -0.01f, 0,        0.148f, 0.105f, 0.115f, kCoat, 0.0f),
-    E(Spine,     0, 0.08f, 0,         0.13f, 0.135f, 0.1f,    kCoat, 0.04f),
-    E(Chest,     0, 0.10f, 0.0f,      0.162f, 0.15f, 0.108f,  kCoat, 0.04f),
-    E(Chest,     0.04f, 0.07f, 0.105f, 0.045f, 0.12f, 0.022f, kCoatDark, 0.01f), // solapa cruzada
-    E(Chest,     0, 0.215f, -0.025f,  0.115f, 0.07f, 0.1f,    kCoat, 0.03f),     // cuello alto
-    E(Chest,     0, 0.235f, 0.01f,    0.095f, 0.045f, 0.09f,  kScarf, 0.015f),   // bufanda
-    E(Pelvis,    0, -0.2f, -0.015f,   0.168f, 0.24f, 0.13f,   kCoat, 0.03f),     // faldón
-    E(Pelvis,    0, 0.045f, 0,        0.152f, 0.025f, 0.118f, kCoatDark, 0.01f), // cinturón
-    C(Neck,      0, 0, 0,  0, 0.07f, 0,               0.038f, kSkinC, 0.02f),  // la cabeza va en su propia malla
-    // brazos: mangas del abrigo, puño oscuro, guantes
+    // tronco: cintura estrecha, pecho algo más ancho; camisa clara asomando por delante
+    E(Pelvis,    0, -0.01f, 0,        0.13f, 0.1f, 0.1f,      kUnder, 0.0f),
+    E(Spine,     0, 0.08f, 0,         0.112f, 0.13f, 0.085f,  kShirt, 0.04f),
+    E(Chest,     0, 0.1f, 0.0f,       0.15f, 0.14f, 0.095f,   kCoat, 0.04f),
+    E(Chest,     0, 0.06f, 0.05f,     0.055f, 0.13f, 0.05f,   kShirt, 0.012f),   // abertura de la chaqueta
+    E(Chest,     0, 0.215f, -0.02f,   0.1f, 0.062f, 0.09f,    kCoat, 0.03f),     // cuello alto
+    E(Chest,     0, 0.235f, 0.012f,   0.088f, 0.042f, 0.084f, kScarf, 0.015f),   // bufanda
+    E(Spine,     0, 0.0f, 0,          0.12f, 0.02f, 0.092f,   kCoatDark, 0.008f), // bajo de la chaqueta
+    E(Pelvis,    0, 0.045f, 0,        0.135f, 0.024f, 0.103f, kCoatDark, 0.01f), // cinturón
+    // faldones de la chaqueta, a la espalda
+    K(Pelvis,    0.06f, 0.04f, -0.08f,  0.085f, -0.42f, -0.15f, 0.06f, 0.025f, kCoat, 0.02f),
+    K(Pelvis,   -0.06f, 0.04f, -0.08f, -0.085f, -0.42f, -0.15f, 0.06f, 0.025f, kCoat, 0.02f),
+    C(Neck,      0, 0, 0,  0, 0.07f, 0,               0.034f, kSkinC, 0.02f),  // la cabeza va en su propia malla
+    // brazos: mangas que se afinan, puño vuelto y guantes grandes
     E(ShoulderL, 0.0f, -0.02f, 0,     0.05f, 0.05f, 0.052f,   kCoat, 0.03f),
-    C(ShoulderL, 0, -0.02f, 0,  0, -0.27f, 0,         0.047f, kCoat, 0.03f),
-    C(ElbowL,    0, 0, 0,  0, -0.2f, 0,               0.042f, kCoat, 0.03f),
-    E(ElbowL,    0, -0.205f, 0,       0.055f, 0.03f, 0.055f,  kCoatDark, 0.01f),
-    E(WristL,    0, -0.065f, 0.008f,  0.052f, 0.078f, 0.062f, kGlove, 0.03f),  // guantes grandes
+    K(ShoulderL, 0, -0.02f, 0,  0, -0.27f, 0,         0.048f, 0.04f, kCoat, 0.03f),
+    K(ElbowL,    0, 0, 0,  0, -0.19f, 0,              0.04f, 0.036f, kCoat, 0.03f),
+    E(ElbowL,    0, -0.2f, 0,         0.046f, 0.026f, 0.046f, kCoatDark, 0.01f),
+    E(WristL,    0, -0.065f, 0.008f,  0.052f, 0.078f, 0.062f, kGlove, 0.03f),
     E(ShoulderR, 0.0f, -0.02f, 0,     0.05f, 0.05f, 0.052f,   kCoat, 0.03f),
-    C(ShoulderR, 0, -0.02f, 0,  0, -0.27f, 0,         0.047f, kCoat, 0.03f),
-    C(ElbowR,    0, 0, 0,  0, -0.2f, 0,               0.042f, kCoat, 0.03f),
-    E(ElbowR,    0, -0.205f, 0,       0.055f, 0.03f, 0.055f,  kCoatDark, 0.01f),
+    K(ShoulderR, 0, -0.02f, 0,  0, -0.27f, 0,         0.048f, 0.04f, kCoat, 0.03f),
+    K(ElbowR,    0, 0, 0,  0, -0.19f, 0,              0.04f, 0.036f, kCoat, 0.03f),
+    E(ElbowR,    0, -0.2f, 0,         0.046f, 0.026f, 0.046f, kCoatDark, 0.01f),
     E(WristR,    0, -0.065f, 0.008f,  0.052f, 0.078f, 0.062f, kGlove, 0.03f),
-    // piernas: pantalón y botas altas
-    C(HipL,      0, 0, 0,  0, -0.42f, 0,              0.074f, kUnder, 0.04f),
-    C(KneeL,     0, 0, 0,  0, -0.40f, 0,              0.055f, kUnder, 0.03f),
-    C(KneeL,     0, -0.2f, 0.005f,  0, -0.40f, 0.01f, 0.064f, kBoot, 0.03f),
-    E(AnkleL,    0, -0.02f, 0.07f,    0.082f, 0.072f, 0.17f,  kBoot, 0.04f),     // botas grandes y redondas
-    E(AnkleL,    0, -0.01f, 0.18f,    0.07f, 0.06f, 0.07f,    kBoot, 0.03f),     // puntera
-    E(AnkleL,    0, -0.074f, 0.075f,  0.086f, 0.022f, 0.18f,  kCoatDark, 0.01f), // suela
-    C(HipR,      0, 0, 0,  0, -0.42f, 0,              0.074f, kUnder, 0.04f),
-    C(KneeR,     0, 0, 0,  0, -0.40f, 0,              0.055f, kUnder, 0.03f),
-    C(KneeR,     0, -0.2f, 0.005f,  0, -0.40f, 0.01f, 0.064f, kBoot, 0.03f),
-    E(AnkleR,    0, -0.02f, 0.07f,    0.082f, 0.072f, 0.17f,  kBoot, 0.04f),
-    E(AnkleR,    0, -0.01f, 0.18f,    0.07f, 0.06f, 0.07f,    kBoot, 0.03f),
-    E(AnkleR,    0, -0.074f, 0.075f,  0.086f, 0.022f, 0.18f,  kCoatDark, 0.01f),
+    // piernas: pantalón ajustado y botas grandes y redondas
+    K(HipL,      0, 0, 0,  0, -0.42f, 0,              0.075f, 0.052f, kUnder, 0.04f),
+    K(KneeL,     0, 0, 0,  0, -0.22f, 0,              0.052f, 0.045f, kUnder, 0.03f),
+    K(KneeL,     0, -0.2f, 0.005f,  0, -0.4f, 0.01f,  0.062f, 0.066f, kBoot, 0.025f),
+    E(AnkleL,    0, -0.02f, 0.07f,    0.08f, 0.07f, 0.17f,    kBoot, 0.04f),
+    E(AnkleL,    0, -0.01f, 0.18f,    0.068f, 0.058f, 0.07f,  kBoot, 0.03f),
+    E(AnkleL,    0, -0.074f, 0.075f,  0.084f, 0.022f, 0.18f,  kCoatDark, 0.01f), // suela
+    K(HipR,      0, 0, 0,  0, -0.42f, 0,              0.075f, 0.052f, kUnder, 0.04f),
+    K(KneeR,     0, 0, 0,  0, -0.22f, 0,              0.052f, 0.045f, kUnder, 0.03f),
+    K(KneeR,     0, -0.2f, 0.005f,  0, -0.4f, 0.01f,  0.062f, 0.066f, kBoot, 0.025f),
+    E(AnkleR,    0, -0.02f, 0.07f,    0.08f, 0.07f, 0.17f,    kBoot, 0.04f),
+    E(AnkleR,    0, -0.01f, 0.18f,    0.068f, 0.058f, 0.07f,  kBoot, 0.03f),
+    E(AnkleR,    0, -0.074f, 0.075f,  0.084f, 0.022f, 0.18f,  kCoatDark, 0.01f),
 };
 // Cabeza del protagonista, en una malla aparte (5 mm), estilo de animación: cara en forma
 // de huevo con el mentón en punta, nariz apenas insinuada y un pelo de mechones afilados

@@ -739,15 +739,28 @@ void Character::animate(Pose& out) const {
     float weight = std::sin(time_ * 0.42f);  // peso de una pierna a otra (~15 s el ciclo)
     float relax = smoothstep01((idleTime_ - 4.0f) / 1.5f) * idle * (1.0f - armedBlend_);
     // Con el arma en la mano: guardia de combate, agachado y con un rebote ligero (listo).
-    float ready = armedBlend_ * idle;
-    out.rootOffset.y -= (0.04f + 0.014f * std::sin(time_ * 6.0f)) * ready;
-    r[KneeL].x += 0.2f * ready;
-    r[KneeR].x += 0.2f * ready;
-    r[HipL].x -= 0.1f * ready;
-    r[HipR].x -= 0.1f * ready;
-    r[Spine].x += 0.1f * ready;
-    r[ShoulderL].z += 0.1f * ready;
-    r[ElbowL].x -= 0.5f * ready;  // el otro puño, arriba
+    // Guardia de combate: de lado, pierna izquierda adelantada, rodillas flexionadas, la hoja
+    // levantada en diagonal hacia delante y la mano libre adelantada; rebota, alerta.
+    float ready = armedBlend_ * idle * (guarding() ? 0.0f : 1.0f);
+    float hop = std::sin(time_ * 6.5f);
+    out.rootOffset.y -= (0.07f + 0.018f * hop) * ready;
+    r[Pelvis].y += 0.3f * ready;
+    r[HipL].x -= 0.4f * ready;
+    r[HipR].x += 0.3f * ready;
+    r[KneeL].x += 0.3f * ready;
+    r[KneeR].x += 0.45f * ready;
+    r[AnkleL].x += 0.1f * ready;
+    r[AnkleR].x -= 0.15f * ready;
+    r[Spine].x += 0.12f * ready;
+    r[Chest].y -= 0.2f * ready;
+    r[Head].y -= 0.1f * ready;
+    r[ShoulderR].x = lerpf(r[ShoulderR].x, -1.0f, ready);
+    r[ShoulderR].z = lerpf(r[ShoulderR].z, -0.45f, ready);
+    r[ElbowR].x = lerpf(r[ElbowR].x, -1.0f + 0.05f * hop, ready);
+    r[WristR].x = lerpf(r[WristR].x, 0.1f, ready);
+    r[ShoulderL].x = lerpf(r[ShoulderL].x, -0.8f, ready);
+    r[ShoulderL].z = lerpf(r[ShoulderL].z, 0.25f, ready);
+    r[ElbowL].x = lerpf(r[ElbowL].x, -0.9f, ready);
     r[HipL].z += (0.12f - 0.04f * relax) * idle;
     r[HipR].z -= (0.12f - 0.04f * relax) * idle;
     r[KneeL].x += (0.18f + 0.14f * std::max(0.0f, -weight)) * idle;  // se dobla la rodilla que descansa

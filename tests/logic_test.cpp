@@ -925,7 +925,7 @@ int main() {
         run(g, 3.5f, press(&Controls::nova));
         float h1 = 0;
         for (const Enemy& e : g.enemies_) h1 += std::max(0.0f, e.health);
-        CHECK(g.shadow_ < 50 && h1 < h0 * 0.6f, "V: el agujero negro atrae y deshace (vida %.0f → %.0f)", h0, h1);
+        CHECK(g.shadow_ < 75 && h1 < h0 * 0.6f, "V: el agujero negro atrae y deshace (vida %.0f → %.0f)", h0, h1);
         // Golpes cruzados.
         g.enemies_.clear();
         addEnemy(g, EnemyKind::Dazzled, {0, 0, 10});

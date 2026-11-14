@@ -180,6 +180,7 @@ int main(int argc, char** argv) {
     // --screenshot fichero.ppm segundos (guarda un frame en ese instante y sale).
     bool autoplay = false;
     bool portrait = false;  // --retrato: cámara frente a la cara del protagonista (para modelarlo)
+    bool bodyShot = false;  // --cuerpo: lo mismo, con el cuerpo entero
     float camYaw0 = 0;  // --camyaw: orientación inicial de la cámara (radianes)
     const char* shotPath = nullptr;
     double shotTime = 0;
@@ -188,6 +189,7 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--debug") == 0) debugView = true;
         if (std::strcmp(argv[i], "--autoplay") == 0) autoplay = true;
         if (std::strcmp(argv[i], "--retrato") == 0) portrait = true;
+        if (std::strcmp(argv[i], "--cuerpo") == 0) portrait = bodyShot = true;
         if (std::strcmp(argv[i], "--camyaw") == 0 && i + 1 < argc) camYaw0 = float(std::atof(argv[++i]));
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 2 < argc) {
             shotPath = argv[i + 1];
@@ -478,6 +480,10 @@ int main(int argc, char** argv) {
             look = translationOf(game.hero().joints[Head]) + Vec3{0, 0.11f, 0};
             float turn = 0.3f + 0.5f * std::sin(game.time() * 0.4f);  // gira despacio para verla de lado
             eye = look + f * 0.95f + side * turn + Vec3{0, 0.02f, 0};
+            if (bodyShot) {
+                look = game.heroRenderPos(alpha) + Vec3{0, 0.95f, 0};
+                eye = look + f * 3.4f + side * (turn * 2.5f) + Vec3{0, 0.3f, 0};
+            }
         }
         rc.view = lookAt(eye, look, {0, 1, 0});
         rc.proj = perspective(rc.fovY, rc.aspect, rc.zNear, rc.zFar);
