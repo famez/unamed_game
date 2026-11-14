@@ -40,9 +40,9 @@ struct OrbitCamera {
 // Pulsaciones acumuladas hasta el siguiente paso de simulación. Sin esto, un clic que
 // cae en un frame en el que no toca ningún paso fijo (pasa a veces a 60 Hz) se perdería.
 struct PendingInput {
-    bool jump = false, attack = false, dodge = false, lockOn = false, unlock = false, interact = false;
+    bool jump = false, attack = false, dodge = false, lockOn = false, nextTarget = false, unlock = false, interact = false;
     bool advance = false;  // pasar la línea de diálogo
-    bool beam = false, nova = false, transform = false, summon = false;
+    bool light = false, nova = false, transform = false, summon = false;
     bool runCommand = false;
     int command = -1, scroll = 0;
 };
@@ -276,18 +276,19 @@ int main(int argc, char** argv) {
                 pending.jump |= input.wasPressed(Key::Space);
                 pending.attack |= input.mouseLeftPressed;
                 pending.dodge |= input.wasPressed(Key::C) || input.wasPressed(Key::Ctrl);
-                pending.lockOn |= input.wasPressed(Key::R) || input.mouseMiddlePressed;
+                pending.lockOn |= input.wasPressed(Key::R);
+                pending.nextTarget |= input.mouseMiddlePressed;
                 pending.unlock |= input.wasPressed(Key::X);
                 pending.interact |= input.wasPressed(Key::F);
                 pending.runCommand |= input.wasPressed(Key::E);
                 pending.nova |= input.wasPressed(Key::V);
                 pending.transform |= input.wasPressed(Key::G);
                 pending.summon |= input.wasPressed(Key::T);
-                // Q: pulsación corta = hacerse luz; mantenida = absorber.
+                // Q: pulsación corta = entrar en la luz / saltar a otra fuente; mantenida = absorber.
                 if (input.wasPressed(Key::Q)) qHeld = 0;
                 if (input.isDown(Key::Q)) qHeld += float(frameDt);
                 else if (qHeld >= 0) {
-                    if (qHeld < 0.22f) pending.beam = true;
+                    if (qHeld < 0.22f) pending.light = true;
                     qHeld = -1;
                 }
             }
@@ -326,13 +327,14 @@ int main(int argc, char** argv) {
                 c.guard = guardHeld;
                 c.interact = pending.interact;
                 c.lockOn = pending.lockOn;
+                c.nextTarget = pending.nextTarget;
                 c.unlock = pending.unlock;
                 c.command = pending.command;
                 c.runCommand = pending.runCommand;
                 c.advance = pending.advance;
                 c.sprint = playing && input.isDown(Key::Shift);
                 c.absorb = playing && qHeld >= 0.22f;
-                c.beam = pending.beam;
+                c.light = pending.light;
                 c.nova = pending.nova;
                 c.transform = pending.transform;
                 c.summon = pending.summon;

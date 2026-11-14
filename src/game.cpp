@@ -133,11 +133,22 @@ void Game::update(float dt, const Controls& c) {
     if (down) {
         hero_.downTimer += dt;
         if (hero_.downTimer > kHeroRespawn) respawnHero();
+    } else if (inLight_ || travel_) {  // hecho luz: solo se elige fuente, se salta o se sale
+        updateLightTarget(c);
+        if (inLight_) updateInsideLight(dt, c);
+        lock_ = -1;
+        if (c.advance && dialogue_.active()) dialogue_.advance();
     } else {
         updateLightTarget(c);
         updateLight(dt, c);
         updateAllies(dt, c);
-        if (c.lockOn) cycleLock(c.camForward);
+        // R fija al Gris más centrado y, si ya hay uno fijado, lo suelta; el clic central
+        // pasa al siguiente.
+        if (c.lockOn) {
+            if (lock_ >= 0) lock_ = -1;
+            else cycleLock(c.camForward);
+        }
+        if (c.nextTarget) cycleLock(c.camForward);
         if (c.unlock) lock_ = -1;
         if (c.commandScroll != 0)
             commandSel_ = ((commandSel_ + c.commandScroll) % kCommandCount + kCommandCount) % kCommandCount;
@@ -170,7 +181,8 @@ void Game::update(float dt, const Controls& c) {
     bool wasGrounded = hero_.body.grounded;
     hero_.setSprint(c.sprint);
     hero_.setAttackHeld(c.attackHeld);
-    hero_.update(dt, down ? Vec3{} : c.move, !down && c.jump, world_, std::atan2(c.camForward.x, c.camForward.z));
+    bool light = inLight_ || travel_;
+    hero_.update(dt, down || light ? Vec3{} : c.move, !down && !light && c.jump, world_, std::atan2(c.camForward.x, c.camForward.z));
     if (c.jump && wasGrounded && hero_.body.vel.y > 1.0f) sound(Sfx::Jump, hero_.body.pos, 0.7f);
     updateTravel(dt);
     updateBrizna(dt);
@@ -302,6 +314,10 @@ float Game::cameraClear(Vec3 from, Vec3 to) const {
 }
 
 bool Game::lockTarget(Vec3& pos) const {
+    if (inLight_ && lightLock_) {  // dentro de una fuente, la cámara mira a la elegida
+        pos = lightLockPos_;
+        return true;
+    }
     if (lock_ < 0) return false;
     pos = enemies_[size_t(lock_)].center();
     return true;
@@ -593,7 +609,7 @@ void Game::killEnemy(Enemy& e) {
 }
 
 void Game::hurtHero(Vec3 dir, float damage, float knock, Enemy* source) {
-    if (hero_.downTimer >= 0 || hero_.rolling() || hero_.beaming() || heroInvuln_ > 0) return;
+    if (hero_.downTimer >= 0 || hero_.rolling() || inLight_ || travel_ || heroInvuln_ > 0) return;
     Vec3 chest = hero_.body.pos + Vec3{0, 1.0f, 0};
     // Guardia de frente: no hace daño. Si se acaba de levantar, rechaza al atacante.
     if (hero_.guarding() && dot(dir, hero_.forward()) < -0.2f) {
@@ -631,6 +647,7 @@ void Game::hurtHero(Vec3 dir, float damage, float knock, Enemy* source) {
 
 void Game::defeatHero() {
     hp_ = 0;
+    inLight_ = travel_ = lightLock_ = false;
     hero_.downTimer = 0;
     lock_ = -1;
     trail_.clear();
@@ -655,7 +672,7 @@ Brain& Game::brainFor(const Enemy& e) { return e.boss ? bossBrain_ : brains_[int
 
 // Qué está haciendo el Prismero, tal como lo ve un Gris.
 int Game::heroActionCode() const {
-    if (hero_.rolling() || hero_.beaming()) return 3;
+    if (hero_.rolling() || inLight_ || travel_) return 3;
     if (!hero_.body.grounded) return 4;
     if (hero_.guarding()) return 2;
     if (isAttack(hero_.move())) return 1;
@@ -707,7 +724,7 @@ void Game::updateEnemy(Enemy& e, float dt) {
     Vec3 toHero = flat(hero_.body.pos - e.body.pos);
     float dist = length(toHero);
     Vec3 dirHero = dist > 1e-4f ? toHero * (1.0f / dist) : e.forward();
-    bool heroOk = hero_.downTimer < 0;
+    bool heroOk = hero_.downTimer < 0 && !inLight_ && !travel_;  // dentro de la luz no le ven
     Vec3 desired;  // velocidad horizontal deseada
     bool faceHero = false;
 

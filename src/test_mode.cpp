@@ -43,15 +43,6 @@ void Game::initTest(TestMode mode, uint32_t seed) {
     notify(mode == TestMode::Light ? "Modo prueba · viaje por la luz" : "Modo prueba · Grises sin fin", kCyan);
 }
 
-// Farola: poste con una luz arriba a la que se puede viajar.
-void Game::addLampPost(Vec3 base, uint32_t color) {
-    const Mat4 id = Mat4::identity();
-    addBlock(base + Vec3{0, 1.6f, 0}, {0.08f, 1.6f, 0.08f}, kWhite, Material::Metal);
-    addDecor(id, base + Vec3{0, 3.35f, 0}, {0.2f, 0.2f, 0.2f}, color, Material::Glow, true);
-    addDecor(id, base + Vec3{0, 3.1f, 0}, {0.16f, 0.03f, 0.16f}, kWhite, Material::Metal, false);
-    lamps_.push_back(base + Vec3{0, 3.35f, 0});
-}
-
 // --- Patio de combate aleatorio -------------------------------------------------------------
 
 void Game::buildPrueba() {
@@ -165,7 +156,7 @@ void Game::buildPruebaLuz() {
         if (lamp) {
             Vec3 base = c + Vec3{randRange(-hx, hx) * 0.6f, 0, randRange(-hz, hz) * 0.6f};
             addLampPost(base, rim);
-            t.lamp = lamps_.back();
+            t.lamp = lamps_.back().pos;
         }
         islands_.push_back(t);
     };
@@ -194,8 +185,7 @@ void Game::buildPruebaLuz() {
         Vec3 corner{t.top.max.x - 0.5f, t.top.min.y + 0.2f, t.top.min.z + 0.5f};
         float h = randRange(4, 8);
         addBlock(corner + Vec3{0, h * 0.5f, 0}, {0.35f, h * 0.5f, 0.35f}, kWhite);
-        addDecor(id, corner + Vec3{0, h + 0.3f, 0}, {0.18f, 0.18f, 0.18f}, kMagenta, Material::Glow, true);
-        lamps_.push_back(corner + Vec3{0, h + 0.3f, 0});
+        lamps_.push_back({corner + Vec3{0, h + 0.3f, 0}, kMagenta});
     }
 
     LevelPart part;
@@ -203,7 +193,7 @@ void Game::buildPruebaLuz() {
     part.kind = PartKind::Exit;
     part.area = AABB{{1e6f, 1e6f, 1e6f}, {1e6f, 1e6f, 1e6f}};
     parts_ = {part};
-    heroStart_ = {0, 0, -2};
+    heroStart_ = islands_[0].lamp - Vec3{0, 3.35f, 1.6f};  // junto a la primera baliza
     heroStartYaw_ = 0;
     croma_ = cromaShown_ = 0.4f;
 }
@@ -254,14 +244,16 @@ void Game::updateTestMode(float dt) {
     // Archipiélago: al posarse en una isla nueva se marca y pasa a ser el punto de control.
     int visited = 0;
     for (TestIsland& t : islands_) {
-        if (!t.visited && hero_.body.grounded && !travel_ && inside(t.top, hero_.body.pos)) {
+        bool here = (hero_.body.grounded && !travel_ && inside(t.top, hero_.body.pos)) ||
+                    (inLight_ && length(hostPos_ - t.lamp) < 0.1f);
+        if (!t.visited && here) {
             t.visited = true;
             spawnRing(hero_.body.pos + Vec3{0, 0.05f, 0}, 2.0f, 0.6f, kAmber);
             uiSound(Sfx::ItemGet, 0.6f, 1.2f);
         }
         visited += t.visited;
     }
-    if (hero_.body.grounded && !travel_ && hero_.downTimer < 0)
+    if (hero_.body.grounded && !travel_ && !inLight_ && hero_.downTimer < 0)
         for (const TestIsland& t : islands_)
             if (inside(t.top, hero_.body.pos)) checkpoint_ = hero_.body.pos;
     if (!parts_.empty()) {

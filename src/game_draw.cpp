@@ -424,9 +424,18 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
         else
             solid->box(d.transform, d.center, d.half, d.color, d.material);
     }
-    // Solo las farolas cercanas: cada luz cuesta en todos los píxeles de la escena.
-    for (size_t i = 1; i < lamps_.size(); ++i)
-        if (length(flat(lamps_[i] - hero_.body.pos)) < 14.0f) solid->light(lamps_[i], Vec3{0.3f, 0.85f, 1.0f} * 1.3f, 5.0f);
+    // Bombillas de las farolas (apagadas, grises) y la luz de las cercanas: cada luz cuesta
+    // en todos los píxeles de la escena.
+    for (const Lamp& l : lamps_) {
+        if (l.bulb)
+            solid->ellipsoid(translate(l.pos), {}, {0.2f, 0.2f, 0.2f}, l.on ? l.color : rgba(70, 72, 80),
+                             l.on ? Material::Glow : Material::Metal);
+        if (l.on && l.bulb && length(flat(l.pos - hero_.body.pos)) < 14.0f) {
+            float r = float((l.color >> 0) & 0xFF) / 255.0f, g = float((l.color >> 8) & 0xFF) / 255.0f,
+                  b = float((l.color >> 16) & 0xFF) / 255.0f;
+            solid->light(l.pos, Vec3{0.4f + r * 0.6f, 0.4f + g * 0.6f, 0.4f + b * 0.6f} * 1.3f, 5.0f);
+        }
+    }
 
     for (const Crate& c : crates_) {
         if (c.broken) continue;
@@ -495,9 +504,16 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
         return;
     }
     if (blink) return;
-    if (hero_.beaming()) {  // hecho luz: una estela alargada en lugar del cuerpo
+    if (inLight_) {  // dentro de la fuente: la bombilla late con más fuerza
+        float pulse = 1.0f + 0.15f * std::sin(time_ * 6.0f);
+        solid->ellipsoid(translate(hostPos_), {}, Vec3{0.32f, 0.32f, 0.32f} * pulse, rgba(255, 248, 225), Material::Glow);
+        solid->light(hostPos_, Vec3{1.0f, 0.95f, 0.8f} * 3.5f, 8.0f);
+        return;
+    }
+    if (travel_) {  // hecho luz: una estela alargada en lugar del cuerpo
         Vec3 c = hero_.interpolatedPos(alpha) + Vec3{0, 1.0f, 0};
-        Vec3 d = hero_.beamDir();
+        Vec3 d = normalize(travelTo_ - travelFrom_);
+        if (length(d) < 0.5f) d = {0, 1, 0};
         solid->ellipsoid(translate(c) * basisY(d), {}, {0.16f, 1.3f, 0.16f}, rgba(255, 245, 215), Material::Glow);
         solid->ellipsoid(translate(c - d * 0.3f) * basisY(d), {}, {0.25f, 0.9f, 0.25f}, rgba(120, 220, 255), Material::Glow);
         solid->light(c, Vec3{1.0f, 0.95f, 0.85f} * 3.0f, 6.0f);
@@ -1077,8 +1093,11 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
             uiText(ui, x0 + 40, y + 4, 19, name, tc);
             uiText(ui, x0 + width - 10, y + 6, 15, value, sel ? rgba(60, 70, 110) : kUiDim, FontFace::Title, Align::Right);
         }
-        skewRect(d, x - 6, h - 30, x + 700, h - 8, 6, kUiPanel);
-        uiText(ui, x, h - 28, 14, "Clic atacar · Q luz (apunta a una luz: viajar) · V supernova · G forma · T compañero · C esquivar · Shift correr · R fijar", kUiDim);
+        const char* help = inLight_ ? "DENTRO DE LA LUZ · Q saltar a la fuente señalada · R elegir fuente · Clic emboscada · Espacio salir"
+                           : lock_ >= 0 ? "Clic atacar · R soltar objetivo · Clic central cambiar de objetivo · C esquivar · Shift correr"
+                                        : "Clic atacar · Q junto a una farola: entrar en la luz · R fijar · V supernova · G forma · T compañero · C esquivar";
+        skewRect(d, x - 6, h - 30, x + 20 + textWidth(help, 14), h - 8, 6, kUiPanel);
+        uiText(ui, x, h - 28, 14, help, kUiDim);
     }
 
     // Objetivo fijado arriba a la derecha.
@@ -1191,12 +1210,24 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
             float pulse = 1.0f + 0.12f * std::sin(time_ * 8.0f);
             fillCircle(d, sx, sy, 22 * pulse, withAlpha(rgba(255, 240, 190), 0.25f), 20);
             fillCircle(d, sx, sy, 6, rgba(255, 250, 225), 12);
-            std::snprintf(buf, sizeof(buf), "Q · viajar por la luz  %.0f m", double(length(lp - hero_.body.pos)));
+            if (inLight_)
+                std::snprintf(buf, sizeof(buf), "Q · saltar  %.0f m", double(length(lp - hostPos_)));
+            else
+                std::snprintf(buf, sizeof(buf), "Q · entrar en la luz");
             uiText(ui, sx, sy + 26, 15, buf, rgba(255, 240, 190), FontFace::Body, Align::Center, 0.4f);
         }
     }
+    // Dentro de la luz: el Gris sobre el que caería la emboscada.
+    if (int a = ambushTarget(); a >= 0) {
+        float sx, sy;
+        if (project(view, enemies_[size_t(a)].center() + Vec3{0, 1.0f, 0}, sx, sy)) {
+            float pulse = 1.0f + 0.12f * std::sin(time_ * 10.0f);
+            diamond(d, sx, sy, 12 * pulse, withAlpha(kUiPink, 0.85f));
+            uiText(ui, sx, sy + 16, 15, "Clic · emboscada", kUiPink, FontFace::Body, Align::Center, 0.4f);
+        }
+    }
     InteractTarget it = nearbyInteract();
-    if (it.kind >= 0 && hero_.downTimer < 0) {
+    if (it.kind >= 0 && hero_.downTimer < 0 && !inLight_) {
         const char* msg = it.label.c_str();
         float tw = textWidth(msg, 22) + 50;
         float x0 = (w - tw) * 0.5f, y0 = h * 0.7f;

@@ -232,23 +232,8 @@ float stepSpeed(const MoveDef& d, float u, float duration) {
 void Character::reset() { *this = Character{}; }
 
 bool Character::absorbing() const {
-    return absorbHeld_ && body.grounded && move_ == Move::None && !rolling() && !hurt() && !beaming() && downTimer < 0 &&
+    return absorbHeld_ && body.grounded && move_ == Move::None && !rolling() && !hurt() && downTimer < 0 &&
            lying <= 0.01f;
-}
-
-bool Character::startBeam(Vec3 dir, float duration) {
-    if (hurt() || downTimer >= 0 || lying > 0.01f || rolling() || beaming()) return false;
-    if (move_ != Move::None && !impactDone_) return false;  // como la esquiva: tras el impacto
-    Vec3 d = normalize(flat(dir));
-    if (length(d) < 0.5f) d = forward();
-    move_ = Move::None;
-    queued_ = false;
-    dashTime_ = 0;
-    dashVel_ = {};
-    beamDir_ = d;
-    beamTime_ = duration;
-    yaw = std::atan2(d.x, d.z);
-    return true;
 }
 
 bool Character::guarding() const {
@@ -470,23 +455,6 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
         }
     }
 
-    // Haz de luz: velocidad fija en línea recta, sin gravedad; al terminar conserva algo.
-    if (beaming()) {
-        beamTime_ -= dt;
-        body.vel = beamDir_ * kBeamSpeed + Vec3{0, kGravity * dt, 0};
-        moveBody(body, world, dt, kStepHeight);
-        if (beamTime_ <= 0) {
-            beamTime_ = 0;
-            body.vel = beamDir_ * 4.0f;
-            speed = 4.0f;
-        }
-        Pose target;
-        animate(target);
-        pose = target;
-        computeWorldMatrices(pose, modelMatrix(), joints);
-        updateSecondary(dt);
-        return;
-    }
     knock_ = knock_ * std::exp(-8.0f * dt);
     if (dashTime_ > 0) {
         dashTime_ -= dt;

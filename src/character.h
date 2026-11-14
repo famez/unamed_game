@@ -72,19 +72,9 @@ public:
     // al empezar el golpe. Si llega durante otro golpe queda en cola y se encadena.
     bool attack(float faceYaw, float dash);
     bool cast(float faceYaw);
-    // La Luz. Absorber (mantener): quieto, brazos abiertos. Haz: el cuerpo se vuelve luz y
-    // sale disparado en línea recta sin gravedad (invulnerable, atraviesa a los Grises).
+    // La Luz. Absorber (mantener): quieto, brazos abiertos.
     void setAbsorb(bool held) { absorbHeld_ = held; }
     bool absorbing() const;
-    bool startBeam(Vec3 dir, float duration);
-    bool beaming() const { return beamTime_ > 0; }
-    void stopBeam() {
-        beamTime_ = 0;
-        body.vel = {};
-        speed = 0;
-    }
-    Vec3 beamDir() const { return beamDir_; }
-    static constexpr float kBeamSpeed = 32.0f;
     // Ventana de contraataque tras una esquiva.
     bool counterReady() const { return counterWindow_ > 0; }
     // Voltereta de esquiva en la dirección dada: invulnerable mientras dura.
@@ -105,7 +95,7 @@ public:
     bool rolling() const { return rollTime_ >= 0; }
     bool hurt() const { return hurtTimer_ > 0; }
     bool busy() const {
-        return move_ != Move::None || rolling() || hurt() || downTimer >= 0 || lying > 0.01f || beaming();
+        return move_ != Move::None || rolling() || hurt() || downTimer >= 0 || lying > 0.01f;
     }
     bool airComboSpent() const { return airComboSpent_; }
     // Acercamiento rápido en curso (para abrir un poco el campo de visión).
@@ -159,8 +149,6 @@ private:
     bool doubleJumpUsed_ = false;
     bool absorbHeld_ = false;
     float absorbBlend_ = 0;
-    float beamTime_ = 0;
-    Vec3 beamDir_{0, 0, 1};
     float flipTime_ = -1;        // voltereta del doble salto
     float camYaw_ = 0;
 

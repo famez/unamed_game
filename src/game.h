@@ -46,7 +46,8 @@ struct Controls {
     bool dodge = false;
     bool guard = false;      // mantenido
     bool interact = false;   // abrir cofres
-    bool lockOn = false;     // fijar objetivo / pasar al siguiente
+    bool lockOn = false;     // R: fijar / soltar objetivo (dentro de una fuente: elegir fuente)
+    bool nextTarget = false; // clic central: pasar al siguiente objetivo
     bool unlock = false;     // soltar el objetivo
     int command = -1;        // 0..5: ejecutar directamente esa entrada del menú de comandos
     bool runCommand = false; // ejecutar la entrada seleccionada
@@ -56,7 +57,7 @@ struct Controls {
     Vec3 aimOrigin, aimDir{0, 0, 1};  // rayo de la cámara (para apuntar a fuentes de luz)
     bool sprint = false;       // mantener: correr
     bool absorb = false;       // mantener Q: absorber luz
-    bool beam = false;         // pulsar Q: hacerse luz (haz)
+    bool light = false;        // pulsar Q: entrar en la fuente de luz de al lado / saltar a otra
     bool nova = false;         // V con la Luz llena: Supernova
     bool transform = false;    // G: transformarse (con un núcleo)
     bool summon = false;       // T: invocar un compañero
@@ -281,6 +282,14 @@ struct MemoryEcho {
     float appear = 0;  // segundos desde que apareció
 };
 
+// Farola (o fuente de luz fija): el Prismero puede entrar en ella y saltar a otras.
+struct Lamp {
+    Vec3 pos;            // la bombilla
+    uint32_t color = 0;
+    bool bulb = true;    // dibujar la bombilla (el prisma de la fuente se dibuja aparte)
+    bool on = true;      // apagada o rota: no se puede usar
+};
+
 // Bloque sólido del escenario con su aspecto.
 struct Block {
     AABB box;
@@ -345,7 +354,10 @@ public:
     const Brain& bossBrain() const { return bossBrain_; }
     // Intensidad de luz (0..1) en un punto: zonas de nodos encendidos y faroles.
     float lightAt(Vec3 p) const;
-    // Viaje por la luz: fuente a la que apunta la cámara (o -1) y su posición.
+    // Viaje por la luz: dentro de una fuente, o la fuente señalada (al lado para entrar o, ya
+    // dentro, la elegida para saltar; -1 si no hay).
+    bool insideLight() const { return inLight_; }
+    Vec3 hostLight() const { return hostPos_; }
     int lightTarget() const { return lightTarget_; }
     Vec3 lightTargetPos() const { return lightTarget_ >= 0 ? lightPoints_[size_t(lightTarget_)].pos : Vec3{}; }
     bool travelingByLight() const { return travel_; }
@@ -452,6 +464,11 @@ private:
     void gatherLightPoints();
     void updateLightTarget(const Controls& c);
     void updateTravel(float dt);
+    void updateInsideLight(float dt, const Controls& c);
+    void startTravel(Vec3 to, int mode);
+    void leaveLight(bool ambush);
+    void cycleLightLock(Vec3 camForward);
+    int ambushTarget() const;
     void spawnSparks(Vec3 pos, Vec3 dir, int count, uint32_t color, float speed, bool stars = true);
     void spawnRing(Vec3 pos, float radius, float life, uint32_t color);
     float groundHeight(Vec3 p) const;
@@ -480,7 +497,7 @@ private:
     World world_;
     std::vector<Block> blocks_;  // escenario fijo (world_ = esto + cajas + cofres)
     std::vector<Decor> decor_;
-    std::vector<Vec3> lamps_;
+    std::vector<Lamp> lamps_;
     Vec3 heroStart_;
     float heroStartYaw_ = 0;
     LevelId level_ = LevelId::Plaza;
@@ -518,12 +535,18 @@ private:
     bool perfectGuard_ = false;
     Spell pendingSpell_ = Spell::Fire;  // la que sale al llegar el impacto del Cast
     bool pendingNova_ = false;          // el Cast en curso es la Supernova
-    std::vector<int> beamHits_;         // Grises ya atravesados por el haz en curso
     float absorbHint_ = 0;              // para no repetir el aviso de "no hay luz"
     float novaFlash_ = 0;
     std::vector<LightPoint> lightPoints_;
     int lightTarget_ = -1;
     bool travel_ = false;
+    int travelMode_ = 0;      // 0 entrar o saltar a una fuente, 1 salir, 2 emboscada
+    int ambushEnemy_ = -1;
+    bool inLight_ = false;    // dentro de una fuente de luz
+    Vec3 hostPos_;            // la fuente en la que está
+    bool lightLock_ = false;  // fuente elegida con R estando dentro
+    Vec3 lightLockPos_;
+    float lightHint_ = 0;
     Vec3 travelFrom_, travelTo_;
     float travelTime_ = 0, travelDur_ = 0;
     int commandSel_ = 0;

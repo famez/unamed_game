@@ -22,7 +22,7 @@ int fails = 0;
 void run(Game& g, float secs, Controls c = {}) {
     for (int i = 0; i < int(secs * 60); ++i) {
         g.update(dt, c);
-        c.jump = c.attack = c.dodge = c.interact = c.lockOn = c.unlock = c.runCommand = c.beam = c.nova = c.transform = c.summon = false;
+        c.jump = c.attack = c.dodge = c.interact = c.lockOn = c.nextTarget = c.unlock = c.runCommand = c.light = c.nova = c.transform = c.summon = false;
         c.command = -1;
         c.commandScroll = 0;
     }
@@ -229,23 +229,14 @@ int main() {
         g.mp_ = 0;
         run(g, 1.0f, hold);
         CHECK(g.mp_ > 30 && g.hero_.body.pos.y > -0.01f, "junto a un nodo encendido se absorbe (%.0f de Luz en 1 s)", g.mp_);
-        // Haz: gratis dentro de la luz y llega más lejos; fuera cuesta 20.
-        Vec3 p0 = g.hero_.body.pos;
-        float l1 = g.mp_;
-        Controls beam = press(&Controls::beam);
-        beam.camForward = {0, 0, 1};
-        run(g, 0.8f, beam);
-        float lit = length(flat(g.hero_.body.pos - p0));
-        CHECK(g.mp_ >= l1 && lit > 11.0f, "haz dentro de la luz: gratis y recorre %.1f m", lit);
+        // Lejos de las farolas, Q no hace nada (ya no hay haz que gaste Luz).
         place(g, {0, 0, -12});
         g.mp_ = 50;
-        p0 = g.hero_.body.pos;
+        Vec3 p0 = g.hero_.body.pos;
+        run(g, 0.8f, press(&Controls::light));
+        CHECK(g.mp_ >= 50 && !g.insideLight() && !g.travelingByLight() && length(flat(g.hero_.body.pos - p0)) < 0.1f,
+              "Q lejos de una fuente de luz: no se mueve ni gasta Luz");
         addEnemy(g, EnemyKind::Imp, {0, 0, -7}, AiState::Idle);
-        run(g, 0.8f, beam);
-        float grey = length(flat(g.hero_.body.pos - p0));
-        CHECK(g.mp_ == 30 && grey > 8.0f && grey < 11.5f, "haz en zona gris: cuesta 20 y recorre %.1f m", grey);
-        CHECK(g.enemies_[0].health < 30, "el haz atraviesa al Rastrero y le hace dano (vida %.0f)", g.enemies_[0].health);
-        CHECK(g.hp_ == 100, "durante el haz no te alcanzan");
         // Arrancar el color a un Gris aturdido.
         Enemy& e = g.enemies_[0];
         e.state = AiState::Stagger;
@@ -350,45 +341,76 @@ int main() {
               "el Rastrero aprende jugando: %d decisiones, atacar vale %.2f cuando acierta", imp.experience(), bestAttack);
         CHECK(g.bossBrain().experience() == 0, "el jefe tiene su propio cerebro (aun sin estrenar)");
     }
-    {  // Viaje por la luz: apuntar a una farola y llegar hasta ella hecho luz
+    {  // Viaje por la luz: entrar en una farola, saltar a otra, salir y emboscada
         Game g = fresh();
+        Vec3 lampA = g.lamps_[1].pos, lampB = g.lamps_[2].pos;  // (5,5, 3,35, -5,5) y (-5,5, 3,35, -5,5)
         place(g, {0, 0, -12});
-        Vec3 lamp = g.lamps_[1];  // farola en (5,5, 3,35, -5,5)
-        Controls aim;
-        aim.aimOrigin = {0, 2.5f, -16};
-        aim.aimDir = normalize(lamp - aim.aimOrigin);
-        g.update(dt, aim);
-        CHECK(g.lightTarget() >= 0 && length(g.lightTargetPos() - lamp) < 0.01f, "mirando a la farola, queda senalada");
+        g.update(dt, {});
+        CHECK(g.lightTarget() < 0, "lejos de las farolas no hay fuente en la que entrar");
+        place(g, {lampA.x, 0, lampA.z - 2.0f});
+        g.update(dt, {});
+        CHECK(g.lightTarget() >= 0 && length(g.lightTargetPos() - lampA) < 0.01f, "junto a una farola, queda señalada");
         float l0 = g.mp_;
+        run(g, 1.0f, press(&Controls::light));
+        CHECK(g.insideLight() && length(g.hostLight() - lampA) < 0.01f && g.mp_ > l0, "Q: entra en la farola (y recupera Luz)");
+        // Dentro no le ven ni le hieren.
+        Enemy& imp = addEnemy(g, EnemyKind::Imp, {lampA.x + 3, 0, lampA.z}, AiState::Chase);
+        g.hurtHero({1, 0, 0}, 30, 2, &imp);
+        run(g, 0.3f);
+        CHECK(g.hp_ == 100 && g.enemies_[0].state == AiState::Idle, "dentro de la luz los Grises no le ven ni le hieren");
+        g.enemies_.clear();
+        // Saltar a otra farola apuntando con la cámara.
+        Controls aim;
+        aim.aimOrigin = lampA + Vec3{3, 0.5f, -2};
+        aim.aimDir = normalize(lampB - aim.aimOrigin);
+        g.update(dt, aim);
+        CHECK(g.lightTarget() >= 0 && length(g.lightTargetPos() - lampB) < 0.01f, "dentro: la cámara señala otra farola");
         Controls go = aim;
-        go.beam = true;
-        g.update(dt, go);
-        CHECK(g.travelingByLight() && g.mp_ == l0 - 10, "Q: viaja hecho luz (cuesta 10 fuera de la luz)");
-        run(g, 1.5f, aim);
-        float d = length(flat(g.hero_.body.pos - lamp));
-        CHECK(!g.travelingByLight() && d < 1.0f && g.hero_.body.grounded, "llega junto a la farola (a %.2f m)", d);
-        // Hasta lo alto de una torre del puente.
+        go.light = true;
+        run(g, 1.0f, go);
+        CHECK(g.insideLight() && length(g.hostLight() - lampB) < 0.01f, "Q: salta de farola en farola");
+        // R elige fuente sin apuntar; la cámara la sigue.
+        Controls r = press(&Controls::lockOn);
+        r.camForward = {0, 0, 1};
+        run(g, 0.1f, r);
+        Vec3 lockPos;
+        CHECK(g.lightLock_ && g.lockTarget(lockPos) && g.lightTarget() >= 0, "R dentro de la luz: elige una fuente y la cámara la mira");
+        // Lo que tapa la luz impide saltar.
+        g.lightLock_ = false;
+        g.blocks_.push_back({boxFromCenter((lampA + lampB) * 0.5f, {0.3f, 2.0f, 2.0f}), 0, Material::Stone});
+        g.rebuildSolids();
+        Controls back;
+        back.aimOrigin = lampB + Vec3{-3, 0.5f, -2};
+        back.aimDir = normalize(lampA - back.aimOrigin);
+        g.update(dt, back);
+        CHECK(g.lightTarget() < 0 || length(g.lightTargetPos() - lampA) > 0.1f, "solo se salta a luces a la vista");
+        g.blocks_.pop_back();
+        g.rebuildSolids();
+        // Salir cuando se quiere: junto a la farola, en el suelo.
+        run(g, 1.0f, press(&Controls::jump));
+        float d = length(flat(g.hero_.body.pos - lampB));
+        CHECK(!g.insideLight() && !g.travelingByLight() && d < 1.5f && g.hero_.body.grounded, "Espacio: sale junto a la farola (a %.2f m)", d);
+        // Emboscada: desde dentro, el clic cae sobre el Gris más cercano.
+        run(g, 1.0f, press(&Controls::light));
+        Enemy& shroom = addEnemy(g, EnemyKind::Shroom, {lampB.x - 4, 0, lampB.z + 2});
+        float hp0 = shroom.health;
+        run(g, 1.0f, press(&Controls::attack));
+        CHECK(!g.insideLight() && g.enemies_[0].health < hp0 && length(flat(g.hero_.body.pos - g.enemies_[0].body.pos)) < 2.5f,
+              "clic dentro de la luz: emboscada sobre el Gris (vida %.0f → %.0f)", hp0, g.enemies_[0].health);
+        // Hasta lo alto de una torre del puente: se entra desde su base.
         Game p = fresh();
         p.loadLevel(LevelId::Puente);
-        place(p, {0, 0.8f, 32});
-        Vec3 top{5.4f, 8.9f, 28.5f};
-        Controls up;
-        up.aimOrigin = {-3, 3, 36};
-        up.aimDir = normalize(top - up.aimOrigin);
-        p.update(dt, up);
-        Controls upGo = up;
-        upGo.beam = true;
-        p.update(dt, upGo);
-        run(p, 2.0f);
-        CHECK(p.hero_.body.pos.y > 8.0f && p.hero_.body.grounded, "de luz en luz hasta lo alto de una torre (y=%.1f)", p.hero_.body.pos.y);
-        // Lo que tapa la luz impide viajar.
+        place(p, {4.4f, 0.8f, 29.5f});
+        run(p, 1.0f, press(&Controls::light));
+        CHECK(p.insideLight() && p.hostLight().y > 8.0f, "desde la base de una torre se entra en la luz de lo alto");
+        run(p, 1.0f, press(&Controls::jump));
+        CHECK(p.hero_.body.pos.y > 8.0f && p.hero_.body.grounded, "al salir queda en lo alto de la torre (y=%.1f)", p.hero_.body.pos.y);
+        // Una farola apagada no sirve.
         Game q = fresh();
-        place(q, {0, 0, -3.6f});
-        Controls hidden;
-        hidden.aimOrigin = {0, 2.0f, -7};
-        hidden.aimDir = normalize(Vec3{0, 3.0f, 0} - hidden.aimOrigin);  // el prisma de la fuente, sobre la columna
-        q.update(dt, hidden);
-        CHECK(q.lightTarget() < 0 || length(q.lightTargetPos() - Vec3{0, 3.0f, 0}) < 0.01f, "solo se senalan luces a la vista");
+        q.lamps_[1].on = false;
+        place(q, {lampA.x, 0, lampA.z - 2.0f});
+        q.update(dt, {});
+        CHECK(q.lightTarget() < 0, "en una farola apagada no se puede entrar");
         // En la luz, los Grises se debilitan y la Luz se recarga sola.
         Game w = fresh();
         w.nodes_[0].lit = true;
@@ -484,10 +506,15 @@ int main() {
         c.camForward = {0, 0, 1};
         g.update(dt, c);
         CHECK(g.lock_ == 1, "fija al enemigo de delante de la camara (%d)", g.lock_);
+        Controls next = press(&Controls::nextTarget);
+        next.camForward = {0, 0, 1};
+        g.update(dt, next);
+        CHECK(g.lock_ == 0, "clic central: pasa al siguiente (%d)", g.lock_);
         g.update(dt, c);
-        CHECK(g.lock_ == 0, "otra vez: pasa al siguiente (%d)", g.lock_);
+        CHECK(g.lock_ == -1, "R otra vez: suelta el objetivo");
+        g.update(dt, c);
         g.update(dt, press(&Controls::unlock));
-        CHECK(g.lock_ == -1, "soltar objetivo");
+        CHECK(g.lock_ == -1, "X también lo suelta");
     }
     {  // Polilla: su orbe se devuelve de un golpe y la daña
         Game g = fresh();
@@ -727,19 +754,22 @@ int main() {
         CHECK(!g.world_.ground && g.islands_.size() >= 10 && linked, "archipiélago de %zu islas, todas al alcance de otra",
               g.islands_.size());
         run(g, 0.3f);
-        // Viajar a la primera baliza de otra isla que se pueda señalar.
+        run(g, 1.0f, press(&Controls::light));  // se empieza junto a la primera baliza
+        CHECK(g.insideLight(), "en el archipiélago se empieza junto a una baliza");
+        // Saltar a la primera baliza de otra isla que se pueda señalar.
         bool went = false;
         for (size_t i = 1; i < g.islands_.size() && !went; ++i) {
             Controls aim;
-            Vec3 chest = g.hero_.body.pos + Vec3{0, 1.0f, 0};
+            Vec3 chest = g.hostLight();
             aim.aimOrigin = chest - normalize(g.islands_[i].lamp - chest) * 3.0f;
             aim.aimDir = normalize(g.islands_[i].lamp - aim.aimOrigin);
             g.update(dt, aim);
             if (g.lightTarget() < 0) continue;
-            aim.beam = true;
+            aim.light = true;
             run(g, 2.5f, aim);
             went = true;
         }
+        run(g, 1.0f, press(&Controls::jump));
         int visited = 0;
         for (const auto& t : g.islands_) visited += t.visited;
         CHECK(went && visited >= 2, "viajando por la luz se alcanza otra isla (%d visitadas)", visited);
