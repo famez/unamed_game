@@ -942,6 +942,32 @@ int main() {
         for (const Enemy& e : g.enemies_) hounds += e.kind == EnemyKind::Hound;
         CHECK(hounds == 2, "el jefe de sombra llama a dos sabuesos (%d) sin romper nada", hounds);
     }
+    {  // Prueba de sombra: charcos repartidos, se empieza en modo sombra y se desliza de uno a otro
+        Game g;
+        g.initTest(TestMode::Shadow, 11);
+        CHECK(g.level() == LevelId::PruebaSombra && g.shadowMode() && g.pools_.size() >= 6, "patio de sombras: %zu charcos, en modo sombra",
+              g.pools_.size());
+        Game c;
+        c.initTest(TestMode::Combat, 11);
+        CHECK(!c.pools_.empty(), "el patio de combate también tiene charcos (%zu)", c.pools_.size());
+        // Ponerse en un charco y deslizarse al más cercano que se pueda señalar.
+        place(g, g.pools_[0].pos);
+        bool went = false;
+        for (size_t i = 1; i < g.pools_.size() && !went; ++i) {
+            Controls aim;
+            Vec3 chest = g.hero_.body.pos + Vec3{0, 1, 0};
+            aim.aimOrigin = chest - normalize(g.pools_[i].pos - chest) * 3.0f;
+            aim.aimDir = normalize(g.pools_[i].pos - aim.aimOrigin);
+            g.update(dt, aim);
+            if (g.lightTarget() < 0) continue;
+            aim.light = true;
+            run(g, 2.0f, aim);
+            went = length(flat(g.hero_.body.pos - g.pools_[i].pos)) < 2.0f;
+        }
+        CHECK(went, "Q: se desliza de un charco a otro");
+        run(g, 0.2f);
+        CHECK(g.parts_[0].objective.find("Sombras alcanzadas: 2") == 0, "cuenta las sombras alcanzadas (%s)", g.parts_[0].objective.c_str());
+    }
     {  // Derrota y vuelta a empezar
         Game g = fresh();
         g.hurtHero({0, 0, 1}, 500, 2, nullptr);

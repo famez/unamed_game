@@ -138,7 +138,7 @@ int main(int argc, char** argv) {
     if (platform::msaaEnabled()) glEnable(GL_MULTISAMPLE);
     glClearColor(0.08f, 0.09f, 0.11f, 1.0f);
 
-    // --prueba [combate|luz] [semilla]: modo de prueba (vida y Luz infinitas) en un
+    // --prueba [combate|luz|sombra] [semilla]: modo de prueba (vida, Luz y Sombra infinitas) en un
     // escenario aleatorio; sin semilla, una distinta cada vez.
     TestMode testMode = TestMode::None;
     uint32_t testSeed = uint32_t(platform::timeSeconds() * 1000.0) ^ 0x5bd1e995u;
@@ -146,6 +146,7 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--prueba") == 0) {
             testMode = TestMode::Combat;
             if (i + 1 < argc && std::strcmp(argv[i + 1], "luz") == 0) testMode = TestMode::Light, ++i;
+            else if (i + 1 < argc && std::strcmp(argv[i + 1], "sombra") == 0) testMode = TestMode::Shadow, ++i;
             else if (i + 1 < argc && std::strcmp(argv[i + 1], "combate") == 0) ++i;
             if (i + 1 < argc && argv[i + 1][0] != '-') testSeed = uint32_t(std::strtoul(argv[++i], nullptr, 10));
         }
@@ -155,7 +156,7 @@ int main(int argc, char** argv) {
         game = Game{};
         if (testMode != TestMode::None) {
             game.initTest(testMode, testSeed);
-            std::printf("modo prueba (%s), semilla %u\n", testMode == TestMode::Light ? "luz" : "combate", testSeed);
+            std::printf("modo prueba (%s), semilla %u\n", testMode == TestMode::Light ? "luz" : testMode == TestMode::Shadow ? "sombra" : "combate", testSeed);
         } else {
             game.init(assetDir);
         }
@@ -169,6 +170,7 @@ int main(int argc, char** argv) {
     Vec3 camVel;  // velocidad del muelle de la cámara
     float sceneBlend = 0;  // 0 = cámara de juego, 1 = plano de diálogo
     float cineBlend = 0;   // 0 = cámara normal, 1 = plano de escena del guion
+    float camDist = 6.0f;  // distancia de la cámara tras apartarse de las paredes
     Vec3 cineEye, cineFocus;
     float qHeld = -1;      // tiempo con Q mantenida (-1 = suelta)
     DrawFlags flags;
@@ -256,9 +258,12 @@ int main(int argc, char** argv) {
                 case PauseMenu::Result::Restart:
                 case PauseMenu::Result::TestCombat:
                 case PauseMenu::Result::TestLight:
+                case PauseMenu::Result::TestShadow:
                     // Las opciones de prueba generan un escenario nuevo; reiniciar repite el actual.
                     if (result != PauseMenu::Result::Restart) {
-                        testMode = result == PauseMenu::Result::TestLight ? TestMode::Light : TestMode::Combat;
+                        testMode = result == PauseMenu::Result::TestLight    ? TestMode::Light
+                                   : result == PauseMenu::Result::TestShadow ? TestMode::Shadow
+                                                                             : TestMode::Combat;
                         testSeed = uint32_t(platform::timeSeconds() * 1000.0) ^ 0x5bd1e995u;
                     }
                     startGame();
@@ -436,8 +441,12 @@ int main(int argc, char** argv) {
             if (sceneBlend >= 1.0f) cam.yaw = faceYaw;  // al salir, se parte de este encuadre
         }
         // La cámara se acerca si hay una pared entre ella y el personaje.
+        // Si algo se interpone, la cámara se acerca enseguida; cuando deja de haberlo, se aleja
+        // despacio (sin saltos de un fotograma a otro).
         float clear = game.cameraClear(cam.target, cam.eye());
-        if (clear < 1.0f) view.distance = std::max(1.0f, cam.distance * clear - 0.3f);
+        float wantDist = clear < 1.0f ? std::max(1.0f, view.distance * clear - 0.3f) : view.distance;
+        camDist = wantDist < camDist ? wantDist : moveTowards(camDist, wantDist, 4.0f * fd);
+        view.distance = camDist;
         float shake = game.cameraShake();
         if (shake > 0) {  // temblor en los golpes fuertes
             float t = game.time();
@@ -563,7 +572,7 @@ int main(int argc, char** argv) {
             TrackId track = game.bossAlive() ? TrackId::Jefe
                             : game.level() == LevelId::Mercado ? TrackId::Mercado
                             : game.level() == LevelId::Puente || game.level() == LevelId::PruebaLuz ? TrackId::Puente
-                            : game.level() == LevelId::Prueba ? TrackId(game.testSeed() % 3)
+                            : game.level() == LevelId::Prueba || game.level() == LevelId::PruebaSombra ? TrackId(game.testSeed() % 3)
                                                               : TrackId::Plaza;
             audio.playTrack(track);
             audio.setMasterVolume((paused ? 0.35f : 0.8f) * masterVolume);

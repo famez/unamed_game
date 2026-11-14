@@ -687,6 +687,8 @@ void Game::drawEffects(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Vi
             dd.circleXZ(p.pos + Vec3{0, 0.02f, 0}, p.radius, 28, rgba(120, 70, 200));
             continue;
         }
+        float r = p.radius * smoothstep01(p.age / 0.8f);  // borde violeta tenue: que se lea en el suelo
+        glowRing(glow, p.pos + Vec3{0, 0.03f, 0}, r * 0.78f, r * 0.86f, withAlpha(rgba(120, 70, 200), 0.35f));
         for (int i = 0; i < 4; ++i) {
             float a = float(i) * 1.7f + p.pos.x, ph = std::fmod(time_ * 0.25f + float(i) * 0.25f, 1.0f);
             Vec3 q = p.pos + Vec3{std::cos(a) * p.radius * 0.45f, 0.2f + ph * 1.6f, std::sin(a) * p.radius * 0.45f};

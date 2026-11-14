@@ -6,7 +6,7 @@
 
 namespace {
 
-constexpr float kPanelW = 520, kPanelH = 522;
+constexpr float kPanelW = 520, kPanelH = 576;
 constexpr float kItemH = 42, kItemGap = 12, kItemsTop = 110;
 constexpr float kMinSensitivity = 0.25f, kMaxSensitivity = 3.0f, kSensitivityStep = 0.25f;
 
@@ -86,6 +86,7 @@ PauseMenu::Result PauseMenu::update(const Input& in, int width, int height) {
             case Restart: return Result::Restart;
             case TestCombatItem: return Result::TestCombat;
             case TestLightItem: return Result::TestLight;
+            case TestShadowItem: return Result::TestShadow;
             case Quit: return Result::Quit;
         }
     }
@@ -111,7 +112,7 @@ void PauseMenu::draw(UiLayer& ui, int width, int height) const {
     const char* qnames[3] = {"baja", "media", "alta"};
     char qual[48];
     std::snprintf(qual, sizeof(qual), "Calidad gráfica   ‹ %s ›", qnames[quality]);
-    const char* labels[ItemCount] = {"Continuar", "Reiniciar nivel", "Prueba: Grises sin fin", "Prueba: viaje por la luz", sens, qual, "Salir"};
+    const char* labels[ItemCount] = {"Continuar", "Reiniciar nivel", "Prueba: Grises sin fin", "Prueba: viaje por la luz", "Prueba: sombra", sens, qual, "Salir"};
     for (int i = 0; i < ItemCount; ++i) {
         Rect r = itemRect(i, width, height);
         bool sel = i == selected_;

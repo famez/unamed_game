@@ -64,6 +64,9 @@ void Game::rebuildSolids() {
     for (const Crate& c : crates_)
         if (!c.broken) world_.solids.push_back(c.box);
     for (const TreasureChest& c : chests_) world_.solids.push_back(boxFromCenter(c.pos + Vec3{0, 0.35f, 0}, {0.45f, 0.35f, 0.45f}));
+    // La cámara choca con lo opaco, no con las barreras de energía (son translúcidas: si la
+    // cámara se apartara de ellas, saltaría de un fotograma a otro al moverse cerca).
+    cameraWorld_ = world_;
     for (const Gate& g : gates_)
         if (g.closed) world_.solids.push_back(g.box);
 }
@@ -323,7 +326,7 @@ void Game::cycleLock(Vec3 camForward) {
 
 float Game::cameraClear(Vec3 from, Vec3 to) const {
     RayHit h;
-    return segmentVsWorld(from, to, world_, h) ? h.t : 1.0f;
+    return segmentVsWorld(from, to, cameraWorld_, h) ? h.t : 1.0f;
 }
 
 bool Game::lockTarget(Vec3& pos) const {

@@ -31,7 +31,7 @@ void Game::initTest(TestMode mode, uint32_t seed) {
     testMode_ = mode;
     testSeed_ = seed;
     rng_ = seed * 2654435761u + 0x9E3779B9u;
-    loadLevel(mode == TestMode::Light ? LevelId::PruebaLuz : LevelId::Prueba);
+    loadLevel(mode == TestMode::Light ? LevelId::PruebaLuz : mode == TestMode::Shadow ? LevelId::PruebaSombra : LevelId::Prueba);
     // Todo a mano para probar: armas, núcleos de las formas y el farolillo de Nora.
     for (ItemId w : {ItemId::StarStaff, ItemId::AuroraBlade, ItemId::LightLance, ItemId::LightFists}) inv_.add(w);
     for (ItemId c : {ItemId::CoreAurora, ItemId::CoreColossus, ItemId::CoreEcho}) inv_.add(c, 99);
@@ -41,8 +41,12 @@ void Game::initTest(TestMode mode, uint32_t seed) {
     mp_ = maxMp_;
     shadow_ = maxShadow_;
     shadowUnlocked_ = true;
+    shadowMode_ = mode == TestMode::Shadow;
     applyWeapon();
-    notify(mode == TestMode::Light ? "Modo prueba · viaje por la luz" : "Modo prueba · Grises sin fin", kCyan);
+    notify(mode == TestMode::Light    ? "Modo prueba · viaje por la luz"
+           : mode == TestMode::Shadow ? "Modo prueba · sombra (Q en un charco: deslizarte)"
+                                      : "Modo prueba · Grises sin fin",
+           kCyan);
 }
 
 // --- Patio de combate aleatorio -------------------------------------------------------------
@@ -116,7 +120,14 @@ void Game::buildPrueba() {
     int lamps = 6 + int(random01() * 4);
     for (int i = 0; i < lamps; ++i)
         if (findSpot(0.6f, p)) addLampPost(p, kNeons[(theme + i) % 5]);
-    int nodes = 2 + int(random01() * 2);
+    // Charcos de oscuridad: unos pocos en el patio de combate; muchos en la prueba de sombra.
+    bool shadowTest = testMode_ == TestMode::Shadow;
+    int pools = shadowTest ? 9 : 3;
+    for (int i = 0; i < pools; ++i)
+        if (findSpot(2.6f, p)) addPool(p, randRange(3.5f, 5.0f));
+    for (ShadowPool& pl : pools_) pl.age = 5;  // ya formados
+    poolVisited_.assign(pools_.size(), false);
+    int nodes = shadowTest ? 1 : 2 + int(random01() * 2);
     for (int i = 0; i < nodes; ++i)
         if (findSpot(1.0f, p)) {
             ColorNode n;
@@ -130,8 +141,9 @@ void Game::buildPrueba() {
         }
 
     LevelPart part;
-    part.title = "Grises sin fin";
-    part.objective = "Grises disipados: 0";
+    part.title = shadowTest ? "De sombra en sombra" : "Grises sin fin";
+    part.objective = shadowTest ? "" : "Grises disipados: 0";
+    if (shadowTest) levelName_ = "Prueba: Patio de sombras";
     part.kind = PartKind::Exit;  // nunca se termina
     part.area = AABB{{1e6f, 1e6f, 1e6f}, {1e6f, 1e6f, 1e6f}};
     parts_ = {part};
@@ -215,10 +227,11 @@ bool Game::spawnTestEnemy() {
         Spawn s;
         float r = random01();
         s.kind = r < 0.3f ? EnemyKind::Dazzled : r < 0.5f ? EnemyKind::Watcher : r < 0.8f ? EnemyKind::Hound : EnemyKind::Brute;
+        if (testMode_ == TestMode::Shadow) s.kind = r < 0.6f ? EnemyKind::Dazzled : EnemyKind::Watcher;  // solo de luz
         s.pos = p;
         bool bossAlive = false;
         for (const Enemy& e : enemies_) bossAlive |= e.boss && e.alive();
-        if (kills_ >= testBossAt_ && !bossAlive) {  // Gris mayor
+        if (kills_ >= testBossAt_ && !bossAlive && testMode_ == TestMode::Combat) {  // Gris mayor
             s.kind = EnemyKind::Brute;
             s.boss = true;
             s.name = "Gris mayor";
@@ -233,6 +246,30 @@ bool Game::spawnTestEnemy() {
 
 void Game::updateTestMode(float dt) {
     if (testMode_ == TestMode::None) return;
+    if (testMode_ == TestMode::Shadow) {
+        // Unos pocos de luz rondando: para probar que, fundido en la sombra, no te ven.
+        int alive = 0;
+        for (const Enemy& e : enemies_) alive += e.alive();
+        testSpawnTimer_ -= dt;
+        if (alive < 3 && testSpawnTimer_ <= 0 && hero_.downTimer < 0 && spawnTestEnemy()) testSpawnTimer_ = 3.0f;
+        int visited = 0;
+        float best = 1e9f;
+        poolVisited_.resize(pools_.size(), false);
+        for (size_t i = 0; i < pools_.size(); ++i) {
+            float d = length(flat(pools_[i].pos - hero_.body.pos));
+            if (!poolVisited_[i] && d < pools_[i].radius * 0.6f && !travel_) {
+                poolVisited_[i] = true;
+                spawnRing(pools_[i].pos + Vec3{0, 0.05f, 0}, 2.0f, 0.5f, rgba(150, 80, 255));
+            }
+            visited += poolVisited_[i];
+            if (!poolVisited_[i] && d < best && !parts_.empty()) best = d, parts_[0].marker = pools_[i].pos + Vec3{0, 1.5f, 0};
+        }
+        if (!parts_.empty()) {
+            parts_[0].objective = "Sombras alcanzadas: " + std::to_string(visited) + "/" + std::to_string(pools_.size());
+            if (best > 1e8f) parts_[0].marker = hero_.body.pos + Vec3{0, 3, 0};
+        }
+        return;
+    }
     if (testMode_ == TestMode::Combat) {
         // Siempre hay Grises: más cuantos más se disipan (de 3 a 9 a la vez).
         int alive = 0;

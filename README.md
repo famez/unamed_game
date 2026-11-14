@@ -129,6 +129,7 @@ Se abren desde el menú de pausa (cada vez con un escenario nuevo) o al arrancar
 ```bash
 ./build/game --prueba                 # Grises sin fin en un patio aleatorio
 ./build/game --prueba luz             # archipiélago de islas flotantes para el viaje por la luz
+./build/game --prueba sombra          # patio con charcos de oscuridad para deslizarse y fundirse
 ./build/game --prueba combate 1234    # con semilla: la misma semilla da el mismo escenario
 ```
 

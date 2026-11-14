@@ -575,6 +575,7 @@ void Game::loadLevel(LevelId id) {
         case LevelId::Puente: buildPuente(); break;
         case LevelId::Prueba: buildPrueba(); break;
         case LevelId::PruebaLuz: buildPruebaLuz(); break;
+        case LevelId::PruebaSombra: buildPrueba(); break;
         case LevelId::Count: break;
     }
     rebuildSolids();

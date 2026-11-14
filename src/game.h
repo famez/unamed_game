@@ -178,11 +178,12 @@ struct Companion {
 // encender faroles, usar algo, llegar a un sitio, salir). Al cumplirlo se abren puertas,
 // suena su escena y empieza la siguiente.
 
-enum class LevelId { Plaza, Mercado, Puente, Prueba, PruebaLuz, Count };
+enum class LevelId { Plaza, Mercado, Puente, Prueba, PruebaLuz, PruebaSombra, Count };
 
-// Modos de prueba (sin historia, con vida y Luz infinitas): un escenario aleatorio con
-// Grises sin fin, o un archipiélago de islas flotantes para practicar el viaje por la luz.
-enum class TestMode { None, Combat, Light };
+// Modos de prueba (sin historia, con vida, Luz y Sombra infinitas): un escenario aleatorio
+// con Grises sin fin, un archipiélago de islas flotantes para practicar el viaje por la luz,
+// o un patio con charcos de oscuridad para practicar la sombra.
+enum class TestMode { None, Combat, Light, Shadow };
 
 struct Spawn {
     EnemyKind kind;
@@ -575,6 +576,7 @@ private:
     void drawStoryHud(UiLayer& ui, const ViewInfo& view) const;
 
     World world_;
+    World cameraWorld_;  // lo que tapa la cámara (sin las barreras translúcidas)
     std::vector<Block> blocks_;  // escenario fijo (world_ = esto + cajas + cofres)
     std::vector<Decor> decor_;
     std::vector<Lamp> lamps_;
@@ -705,4 +707,5 @@ private:
         bool visited = false;
     };
     std::vector<TestIsland> islands_;
+    std::vector<bool> poolVisited_;  // prueba de sombra: charcos alcanzados
 };
