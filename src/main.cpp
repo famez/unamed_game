@@ -77,7 +77,36 @@ void crashHandler(int sig) {
 
 }  // namespace
 
+const char kHelp[] =
+    "Uso: game [opciones]\n"
+    "\n"
+    "Juego\n"
+    "  --calidad baja|media|alta     calidad gráfica (también en el menú de pausa)\n"
+    "  --resolucion ANCHOxALTO       tamaño de la ventana, p. ej. 1920x1080\n"
+    "  --volumen 0..1                volumen general\n"
+    "  --silencio                    sin audio\n"
+    "\n"
+    "Pruebas\n"
+    "  --prueba [combate|luz|sombra] [semilla]\n"
+    "                                escenario aleatorio con vida, Luz y Sombra infinitas\n"
+    "                                (combate por defecto; Z cambia de modo dentro)\n"
+    "  --escena ID                   empieza reproduciendo esa escena del guion\n"
+    "\n"
+    "Desarrollo\n"
+    "  --debug                       solo esqueletos y cajas en alambre (también F12)\n"
+    "  --autoplay                    un bot juega solo\n"
+    "  --giros                       el bot solo corre haciendo curvas (para ver el giro)\n"
+    "  --retrato | --cuerpo          cámara frente a la cara o al cuerpo del protagonista\n"
+    "  --camyaw RADIANES             orientación inicial de la cámara\n"
+    "  --screenshot FICHERO SEG [N]  guarda N fotogramas (.ppm) desde SEG segundos y sale\n"
+    "  -h, --help                    esta ayuda\n";
+
 int main(int argc, char** argv) {
+    for (int i = 1; i < argc; ++i)
+        if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {
+            std::fputs(kHelp, stdout);
+            return 0;
+        }
     for (int sig : {SIGSEGV, SIGABRT, SIGFPE, SIGBUS, SIGILL}) std::signal(sig, crashHandler);
     WindowDesc desc;
     desc.title = "unamed_game";
