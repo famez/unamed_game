@@ -78,6 +78,8 @@ void Game::init(const char* assetDir) {
     names_ = {{"brizna", "???"}, {"prota", "???"}, {"voz", "Una voz"}, {"eco", "Eco"}, {"sistema", ""},
               {"archivera", "???"}, {"nora", "Nora"}};
     story_ = assetDir && script_.load(std::string(assetDir) + "/story/capitulo1.txt");
+    bossBrain_.alpha = 0.45f;  // el jefe aprende muy deprisa durante el combate
+    bossBrain_.epsilon = 0.1f;
     loadLevel(LevelId::Plaza);
     if (story_) {
         hero_.body.pos = {0, 0, -3.4f};  // despierta junto a la fuente
@@ -118,6 +120,7 @@ void Game::update(float dt, const Controls& c) {
     guardFlash_ = std::max(0.0f, guardFlash_ - dt);
     heroInvuln_ = std::max(0.0f, heroInvuln_ - dt);
     shake_ = std::max(0.0f, shake_ - dt * 1.5f);
+    adaptNotice_ = std::max(0.0f, adaptNotice_ - dt);
     fovKick_ += ((hero_.dashAmount() > 0 ? 0.08f : 0.0f) + (isFinisher(hero_.move()) ? 0.06f : 0.0f) - fovKick_) *
                 (1.0f - std::exp(-8.0f * dt));
     lastHitAge_ += dt;
@@ -477,6 +480,7 @@ void Game::resolveImpact(Move m) {
 
 void Game::hitEnemy(Enemy& e, Vec3 dir, float damage, float knock, float lift, bool heavy) {
     e.health -= damage;
+    e.rlReward -= damage / 15.0f;
     e.hitFlash = 0.12f;
     Vec3 point = e.center() - dir * (e.body.radius * 0.6f);
     spawnSparks(point, dir, 8, rgba(255, 255, 230), 4.0f);
@@ -503,6 +507,8 @@ void Game::killEnemy(Enemy& e) {
     e.health = 0;
     ++kills_;
     croma_ = std::min(1.0f, croma_ + kCromaPerKill);
+    if (e.rlState >= 0) brainFor(e).learn(e.rlState, e.intent, e.rlReward - 2.0f, 0, true);  // disipado
+    e.rlState = -1;
     sound(Sfx::EnemyDie, e.center(), 1.0f, 0.9f + 0.25f * random01());
     playScene("primer_disipado");
     for (size_t i = 0; i < enemies_.size(); ++i)
@@ -569,9 +575,11 @@ void Game::hurtHero(Vec3 dir, float damage, float knock, Enemy* source) {
         }
         if (perfectGuard_) hitStop_ = 0.08f;
         sound(perfectGuard_ ? Sfx::PerfectGuard : Sfx::Guard, chest);
+        if (source) source->rlReward -= perfectGuard_ ? 1.0f : 0.5f;  // bloqueado: mala táctica
         return;
     }
     hp_ = std::max(0.0f, hp_ - damage);
+    if (source) source->rlReward += damage / 10.0f;  // le ha hecho daño: buena táctica
     sound(Sfx::HeroHurt, chest);
     heroInvuln_ = kInvulnAfterHit;
     heroFlash_ = 0.25f;
@@ -603,6 +611,39 @@ void Game::respawnHero() {
 }
 
 // --- Enemigos ------------------------------------------------------------------------
+
+Brain& Game::brainFor(const Enemy& e) { return e.boss ? bossBrain_ : brains_[int(e.kind)]; }
+
+// Qué está haciendo el Prismero, tal como lo ve un Gris.
+int Game::heroActionCode() const {
+    if (hero_.rolling() || hero_.beaming()) return 3;
+    if (!hero_.body.grounded) return 4;
+    if (hero_.guarding()) return 2;
+    if (isAttack(hero_.move())) return 1;
+    return 0;
+}
+
+// Cierra la decisión anterior (aprende de su recompensa) y elige la siguiente táctica.
+void Game::decideIntent(Enemy& e, float dist) {
+    Brain& b = brainFor(e);
+    BrainInput in{dist, heroActionCode(), std::max(0.0f, e.health) / (e.def().maxHealth * (e.boss ? 7.0f : 1.0f)),
+                  e.cooldown <= 0};
+    int s = Brain::state(in);
+    if (e.rlState >= 0) {
+        Intent before = b.best(e.rlState);
+        b.learn(e.rlState, e.intent, e.rlReward - 0.01f, s, false);
+        // Un jefe que cambia de idea en voz alta: se nota que se adapta.
+        if (e.boss && b.best(e.rlState) != before && adaptNotice_ <= 0) {
+            notify(std::string(e.name()) + " aprende de tus movimientos", rgba(255, 170, 90));
+            adaptNotice_ = 15.0f;
+        }
+    }
+    e.rlReward = 0;
+    e.rlState = s;
+    e.intent = b.choose(s, random01(), random01());
+    e.decisionTimer = 0.5f;
+    e.feintTimer = 0.4f;
+}
 
 void Game::updateEnemy(Enemy& e, float dt) {
     const EnemyDef& d = e.def();
@@ -652,17 +693,40 @@ void Game::updateEnemy(Enemy& e, float dt) {
                 break;
             }
             faceHero = true;
-            if (d.flying) {
-                // Vuela en círculos a media distancia.
-                float radial = dist > 6.5f ? 1.0f : dist < 4.0f ? -1.0f : 0.0f;
-                Vec3 tangent{-dirHero.z, 0, dirHero.x};
-                if (std::fmod(e.seed, 2.0f) < 1.0f) tangent = -tangent;
-                desired = (dirHero * radial + tangent * 0.7f) * d.speed;
-            } else if (dist > e.body.radius + hero_.body.radius + 0.25f) {
-                desired = dirHero * d.speed;
-            }
+            // La táctica la decide su cerebro (aprendizaje por refuerzo) cada medio segundo.
+            e.decisionTimer -= edt;
+            if (e.decisionTimer <= 0) decideIntent(e, dist);
+            Vec3 tangent{-dirHero.z, 0, dirHero.x};
+            if (std::fmod(e.seed, 2.0f) < 1.0f) tangent = -tangent;
             float dy = std::fabs(hero_.body.pos.y - e.body.pos.y);
-            if (dist < d.attackRange * e.size && e.cooldown <= 0 && (d.flying || dy < 1.2f)) {
+            bool inRange = dist < d.attackRange * e.size && e.cooldown <= 0 && (d.flying || dy < 1.2f);
+            float contact = e.body.radius + hero_.body.radius + 0.25f;
+            Vec3 approach = d.flying ? (dirHero * (dist > 6.5f ? 1.0f : dist < 4.0f ? -1.0f : 0.0f) + tangent * 0.7f) * d.speed
+                            : dist > contact ? dirHero * d.speed : Vec3{};
+            bool attack = false;
+            switch (e.intent) {
+                case Intent::Approach: desired = approach; break;
+                case Intent::Attack:
+                    desired = approach;
+                    attack = inRange;
+                    break;
+                case Intent::Retreat: desired = -dirHero * (d.speed * 0.8f); break;
+                case Intent::Circle:
+                    desired = (tangent * 0.85f + dirHero * (dist > 4.5f ? 0.35f : dist < 2.0f ? -0.35f : 0.0f)) * d.speed;
+                    break;
+                case Intent::Wait: break;
+                case Intent::Feint:  // amago: se queda quieto un momento (a ver si esquivas) y luego ataca
+                    if (e.feintTimer > 0) {
+                        e.feintTimer -= edt;
+                        desired = -dirHero * (d.speed * 0.15f);
+                    } else {
+                        desired = approach;
+                        attack = inRange;
+                    }
+                    break;
+                case Intent::Count: break;
+            }
+            if (attack) {
                 e.state = AiState::Windup;
                 e.stateTime = 0;
             }
@@ -681,6 +745,7 @@ void Game::updateEnemy(Enemy& e, float dt) {
                     hurtHero(e.forward(), d.damage * (e.boss ? 1.6f : 1.0f), d.knock, &e);
                 }
                 if (e.stateTime > d.attackTime) {
+                    if (!e.attackHit) e.rlReward -= 0.25f;  // ataque fallado
                     e.state = AiState::Recover;
                     e.stateTime = 0;
                 }
@@ -692,7 +757,10 @@ void Game::updateEnemy(Enemy& e, float dt) {
                     spawnSparks(e.body.pos, {0, 1, 0}, 12, rgba(255, 230, 120), 4.0f, false);
                     shake_ = std::max(shake_, 0.2f);
                     bool heroLow = std::fabs(hero_.body.pos.y - e.body.pos.y) < 0.35f && hero_.body.grounded;
-                    if (heroLow && dist < radius + hero_.body.radius) hurtHero(dirHero, d.damage * (e.boss ? 1.6f : 1.0f), d.knock * (e.boss ? 1.4f : 1.0f), &e);
+                    if (heroLow && dist < radius + hero_.body.radius)
+                        hurtHero(dirHero, d.damage * (e.boss ? 1.6f : 1.0f), d.knock * (e.boss ? 1.4f : 1.0f), &e);
+                    else
+                        e.rlReward -= 0.25f;  // la onda no le ha alcanzado
                     e.state = AiState::Recover;
                     e.stateTime = 0;
                     e.knock = {};

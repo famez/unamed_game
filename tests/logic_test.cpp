@@ -323,6 +323,33 @@ int main() {
         for (int i = 0; i < 3; ++i) g.useItem(ItemId::Sharpener);
         CHECK(g.inventory().powerBonus == 6 && g.inventory().count(ItemId::Sharpener) == 2, "el filo se queda en +6");
     }
+    {  // Aprendizaje por refuerzo de los Grises
+        Brain b;
+        b.epsilon = 0;
+        int st = Brain::state({1.5f, 0, 1.0f, true});
+        for (int i = 0; i < 30; ++i) b.learn(st, Intent::Attack, 1.0f, st, true);
+        b.learn(st, Intent::Wait, -0.5f, st, true);
+        CHECK(b.q(st, Intent::Attack) > 0.9f && b.choose(st, 0.5f, 0.5f) == Intent::Attack,
+              "Q-learning: una tactica premiada pasa a ser la elegida (Q=%.2f)", b.q(st, Intent::Attack));
+        int guarding = Brain::state({1.5f, 2, 1.0f, true});
+        CHECK(guarding != st, "ver al Prismero en guardia es otra situacion distinta");
+        Brain c;
+        std::string path = "/tmp/unamed_game_test.q";
+        CHECK(b.save(path) && c.load(path) && c.q(st, Intent::Attack) == b.q(st, Intent::Attack) && c.experience() == 31,
+              "el cerebro se guarda y se carga igual");
+        std::remove(path.c_str());
+
+        Game g = fresh();
+        place(g, {0, 0, -10});
+        addEnemy(g, EnemyKind::Imp, {0, 0, -7}, AiState::Chase);
+        run(g, 12.0f);
+        const Brain& imp = g.brain(int(EnemyKind::Imp));
+        float bestAttack = -1e9f;
+        for (int s2 = 0; s2 < Brain::kStates; ++s2) bestAttack = std::max(bestAttack, imp.q(s2, Intent::Attack));
+        CHECK(g.hp_ < 100 && imp.experience() > 5 && bestAttack > 0,
+              "el Rastrero aprende jugando: %d decisiones, atacar vale %.2f cuando acierta", imp.experience(), bestAttack);
+        CHECK(g.bossBrain().experience() == 0, "el jefe tiene su propio cerebro (aun sin estrenar)");
+    }
     {  // Cofres y cajas
         Game g = fresh();
         place(g, {11.5f, 0.9f, 11.4f});

@@ -460,6 +460,7 @@ void Game::buildPuente() {
 // --- Carga y lógica ---------------------------------------------------------------------
 
 void Game::loadLevel(LevelId id) {
+    saveBrains();  // lo aprendido por los Grises se guarda en cada cambio de escenario
     blocks_.clear();
     decor_.clear();
     lamps_.clear();

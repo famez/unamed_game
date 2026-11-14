@@ -4,6 +4,7 @@
 // magias, botín, cofres e inventario. game.cpp contiene la lógica; game_draw.cpp el
 // dibujado (mundo 3D, efectos y HUD).
 
+#include "brain.h"
 #include "character.h"
 #include "debug_draw.h"
 #include "enemy.h"
@@ -292,6 +293,11 @@ public:
     // Posición del objetivo fijado (para la cámara). Falso si no hay.
     bool lockTarget(Vec3& pos) const;
     float cameraShake() const { return shake_; }
+    // Cerebros de los Grises (aprendizaje por refuerzo): se cargan y guardan en `dir`.
+    void loadBrains(const std::string& dir);
+    void saveBrains() const;
+    const Brain& brain(int kind) const { return brains_[kind]; }
+    const Brain& bossBrain() const { return bossBrain_; }
     // Intensidad de luz (0..1) en un punto: zonas de nodos encendidos y faroles.
     float lightAt(Vec3 p) const;
     // Escenario y objetivo actuales.
@@ -361,6 +367,9 @@ private:
     void killEnemy(Enemy& e);
     void hurtHero(Vec3 dir, float damage, float knock, Enemy* source);
     void updateEnemy(Enemy& e, float dt);
+    Brain& brainFor(const Enemy& e);
+    int heroActionCode() const;
+    void decideIntent(Enemy& e, float dist);
     void enemyStartAttack(Enemy& e);
     void updateProjectiles(float dt);
     void explodeFire(Vec3 point);
@@ -465,6 +474,10 @@ private:
     std::vector<MemoryEcho> echoes_;
     Vec3 briznaPos_, briznaVel_;
     std::vector<SoundEvent> sounds_;
+    Brain brains_[int(EnemyKind::Count)];
+    Brain bossBrain_;
+    std::string brainDir_;
+    float adaptNotice_ = 0;
     float croma_ = 0.12f;        // sube al disipar Grises y al superar oleadas
     float cromaShown_ = 0.12f;   // el que se ve: lo sigue suavemente
     std::vector<ColorSplash> splashes_;

@@ -125,3 +125,17 @@ bool Game::inCombat() const {
 
 void Game::sound(Sfx id, Vec3 pos, float gain, float pitch) { sounds_.push_back({id, pos, true, gain, pitch}); }
 void Game::uiSound(Sfx id, float gain, float pitch) { sounds_.push_back({id, {}, false, gain, pitch}); }
+
+void Game::loadBrains(const std::string& dir) {
+    brainDir_ = dir;
+    const char* names[] = {"rastrero", "domo", "eco"};
+    for (int k = 0; k < int(EnemyKind::Count); ++k) brains_[k].load(dir + "/ia_" + names[k] + ".q");
+    bossBrain_.load(dir + "/ia_jefe.q");
+}
+
+void Game::saveBrains() const {
+    if (brainDir_.empty()) return;
+    const char* names[] = {"rastrero", "domo", "eco"};
+    for (int k = 0; k < int(EnemyKind::Count); ++k) brains_[k].save(brainDir_ + "/ia_" + names[k] + ".q");
+    bossBrain_.save(brainDir_ + "/ia_jefe.q");
+}

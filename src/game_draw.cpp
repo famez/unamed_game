@@ -1094,7 +1094,8 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
         for (const Enemy& e : enemies_) {
             float sx, sy;
             if (!project(view, e.center() + Vec3{0, e.def().height * 0.5f + 0.3f, 0}, sx, sy)) continue;
-            std::snprintf(buf, sizeof(buf), "%s %.0f", aiStateName(e.state), double(std::max(0.0f, e.health)));
+            std::snprintf(buf, sizeof(buf), "%s · %s %.0f", aiStateName(e.state), intentName(e.intent),
+                          double(std::max(0.0f, e.health)));
             uiText(ui, sx, sy, 15, buf, kUiAmber, FontFace::Body, Align::Center);
         }
         std::snprintf(buf, sizeof(buf), "DEBUG · enemigos %zu · botín %zu · partículas %zu · proyectiles %zu",

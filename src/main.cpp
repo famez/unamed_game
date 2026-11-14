@@ -96,10 +96,15 @@ int main(int argc, char** argv) {
     // Audio: música y efectos sintetizados; la música se guarda en ~/.cache/unamed_game.
     Audio audio;
     float masterVolume = 1.0f;
+    // Datos que se guardan entre partidas (música generada, lo aprendido por los Grises).
+    std::string dataDir;
     {
         const char* xdg = std::getenv("XDG_CACHE_HOME");
         const char* home = std::getenv("HOME");
         std::string cache = xdg && *xdg ? std::string(xdg) : std::string(home ? home : ".") + "/.cache";
+        dataDir = cache + "/unamed_game";
+        std::string mk = "mkdir -p '" + dataDir + "'";
+        if (std::system(mk.c_str()) != 0) std::fprintf(stderr, "No se pudo crear %s\n", dataDir.c_str());
         // --silencio: sin audio (pruebas de noche); --volumen 0..1: volumen general.
         bool silent = false;
         for (int i = 1; i < argc; ++i) {
@@ -118,6 +123,7 @@ int main(int argc, char** argv) {
 
     Game game;
     game.init(assetDir);
+    game.loadBrains(dataDir);
     OrbitCamera cam;
     cam.target = game.hero().body.pos + Vec3{0, 1.0f, 0};
     Vec3 camVel;  // velocidad del muelle de la cámara
@@ -205,8 +211,10 @@ int main(int argc, char** argv) {
             switch (menu.update(uiInput, uw, uh)) {
                 case PauseMenu::Result::Resume: closeMenu(); break;
                 case PauseMenu::Result::Restart:
+                    game.saveBrains();
                     game = Game{};
                     game.init(assetDir);
+                    game.loadBrains(dataDir);
                     cam = OrbitCamera{};
                     cam.target = game.hero().body.pos + Vec3{0, 1.0f, 0};
                     closeMenu();
@@ -502,6 +510,7 @@ int main(int argc, char** argv) {
         }
     }
 
+    game.saveBrains();
     audio.shutdown();
     unloadFonts();
     overlay.shutdown();

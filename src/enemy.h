@@ -4,6 +4,7 @@
 // pegados a las articulaciones), sus estadísticas y su animación procedural. La IA (qué
 // decide hacer en cada estado) está en game.cpp, porque necesita al jugador y al mundo.
 
+#include "brain.h"
 #include "physics.h"
 #include "skeleton.h"
 #include "vmath.h"
@@ -64,6 +65,12 @@ struct Enemy {
     float size = 1;       // escala del cuerpo (jefes)
     int bossPhase = 0;
     const char* title = nullptr;  // nombre propio (jefes)
+    // Aprendizaje por refuerzo: situación y táctica de la decisión en curso, y la
+    // recompensa acumulada desde entonces.
+    int rlState = -1;
+    Intent intent = Intent::Approach;
+    float decisionTimer = 0, feintTimer = 0;
+    float rlReward = 0;
     const char* name() const { return title ? title : def().name; }
     Vec3 knock;           // empujón recibido, se frena solo
     Pose pose;
