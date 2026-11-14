@@ -231,9 +231,8 @@ void Game::buildPlaza() {
                      rgba(30, 30, 34), Material::Metal, false);
         }
     }
-    // La hoja de alguien, tirada junto a un banco: lo primero que se recoge.
+    // Un banco junto a la fuente.
     addBlock({1.6f, 0.25f, -8.4f}, {1.0f, 0.25f, 0.3f}, rgba(96, 90, 84), Material::Stone);
-    interacts_ = {{"hoja", {0.9f, 0, -7.8f}, "Coger la hoja", "hoja"}};
 
     // Nodos cromáticos: uno junto a las cajas, otro en la terraza, otro en la plataforma alta.
     nodes_ = {{"nodo_oeste", {-9.5f, 0, -9.0f}, 11, kMagenta, "nodo_1"},
@@ -251,12 +250,6 @@ void Game::buildPlaza() {
     };
     echoes_ = {{{-7.5f, 1.3f, -11.0f}, "eco_alba"}, {{-12.5f, 3.6f, 10.0f}, "eco_promesa"}};
 
-    LevelPart p0;
-    p0.title = "Despertar";
-    p0.objective = "Sigue la chispa";
-    p0.kind = PartKind::Interact;
-    p0.target = "hoja";
-    p0.marker = {0.9f, 0.6f, -7.8f};
     LevelPart p1;
     p1.title = "Los perros";
     p1.objective = "Sobrevive";
@@ -285,7 +278,7 @@ void Game::buildPlaza() {
     p4.kind = PartKind::Exit;
     p4.area = area({-2.5f, -1, 22}, {2.5f, 5, 28});
     p4.marker = {0, 1.5f, 22};
-    parts_ = {p0, p1, p2, p3, p4};
+    parts_ = {p1, p2, p3, p4};
     // El haz sale del pie de la fuente hacia el este; tres espejos (mal orientados al
     // principio) pueden llevarlo hasta la puerta.
     emitters_ = {{{0.55f, 1.4f, 0}, {1, 0, 0}, rgba(255, 200, 90)}};

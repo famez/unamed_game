@@ -587,19 +587,14 @@ int main() {
         g.init(GAME_ASSET_DIR);
         skipDialogues(g);
         run(g, 0.5f);
-        CHECK(g.level() == LevelId::Plaza && g.partIndex() == 0 && g.enemies_.empty() && !g.powers().attack && !g.powers().strong,
-              "plaza: despierta sin fuerzas ni arma, sin enemigos todavía");
-        place(g, g.interacts_[0].pos);
-        g.update(dt, press(&Controls::interact));
-        skipDialogues(g);
-        run(g, 0.5f);
-        CHECK(g.powers().attack && g.powers().strong && g.partIndex() == 1 && g.enemies_.size() == 2 &&
-                  g.enemies_[0].kind == EnemyKind::Hound,
-              "coger la hoja: vuelven las fuerzas y llegan dos sabuesos (%zu)", g.enemies_.size());
+        run(g, 3.0f);
+        CHECK(g.level() == LevelId::Plaza && g.partIndex() == 0 && g.hero_.lying == 0 && g.powers().attack &&
+                  g.powers().strong && g.enemies_.size() == 2 && g.enemies_[0].kind == EnemyKind::Hound,
+              "plaza: se empieza de pie, con la espada, y llegan dos sabuesos (%zu)", g.enemies_.size());
         for (Enemy& e : g.enemies_) g.killEnemy(e);
         run(g, 1.0f);
         skipDialogues(g);
-        CHECK(g.partIndex() == 2, "combate ganado: parte 3, los nodos");
+        CHECK(g.partIndex() == 1, "combate ganado: parte 2, los nodos");
         CHECK(g.gates_[0].closed, "la puerta del mercado sigue cerrada");
         for (Encounter& e : g.encounters_) e.cleared = true;  // sin los guardianes de los nodos
         for (size_t i = 0; i < g.nodes_.size(); ++i) {
@@ -609,7 +604,7 @@ int main() {
         }
         run(g, 0.2f);
         skipDialogues(g);
-        CHECK(g.partIndex() == 3 && g.gates_[0].closed && !g.receptors_[0].lit && g.powers().absorb && g.powers().light,
+        CHECK(g.partIndex() == 2 && g.gates_[0].closed && !g.receptors_[0].lit && g.powers().absorb && g.powers().light,
               "tres nodos: vuelven la absorción y la luz; la puerta sigue sellada (rompecabezas)");
         // Rompecabezas: girar los espejos (F) hasta que el haz llegue al receptor.
         place(g, g.mirrors_[0].pos + Vec3{0.9f, 0, 0});
@@ -622,7 +617,7 @@ int main() {
         run(g, 0.3f);
         skipDialogues(g);
         run(g, 0.2f);
-        CHECK(g.receptors_[0].lit && !g.gates_[0].closed && g.partIndex() == 4,
+        CHECK(g.receptors_[0].lit && !g.gates_[0].closed && g.partIndex() == 3,
               "el haz llega a la puerta: se abre (recorrido de %zu tramos)", g.beamColors_[0].size());
         place(g, {0, 0, 24});
         run(g, 2.0f);
@@ -700,28 +695,16 @@ int main() {
     {  // Historia sin palabras: la intro son planos; los ecos son siluetas que repiten un recuerdo
         Game g;
         g.init(GAME_ASSET_DIR);
-        CHECK(g.story_ && g.hero_.lying == 1, "con guion: despierta tumbado");
-        run(g, 3.0f);
-        Vec3 eye, focus;
-        CHECK(g.dialogueBlocking() && g.cinematic(eye, focus) && g.enemies_.empty(), "la intro es un plano de cámara, sin enemigos");
-        Controls adv;
-        adv.advance = true;
-        for (int i = 0; i < 400 && g.dialogueBlocking(); ++i) {
-            g.update(dt, adv);
-            run(g, 0.05f);
-        }
-        run(g, 2.0f);
-        CHECK(!g.dialogueBlocking() && g.hero_.lying == 0 && !g.tutorials_.empty() && g.tutorials_.front().action == "andar",
-              "tras la intro está de pie y el tutorial dice «%s»", g.tutorials_.empty() ? "-" : g.tutorials_.front().word.c_str());
+        CHECK(g.story_ && g.hero_.lying == 0 && !g.dialogueBlocking(), "con guion: se empieza de pie, sin intro");
+        run(g, 0.5f);
+        CHECK(!g.tutorials_.empty() && g.tutorials_.front().action == "andar",
+              "el primer tutorial dice «%s»", g.tutorials_.empty() ? "-" : g.tutorials_.front().word.c_str());
         Controls walk;
         walk.move = {0, 0, 1};
         run(g, 2.5f, walk);
-        CHECK(g.tutorials_.empty() || g.tutorials_.front().doneTime >= 0, "al andar, el tutorial se da por hecho");
-        Controls hit = press(&Controls::attack);
-        size_t moves = 0;
-        g.update(dt, hit);
-        moves += g.hero_.move() != Move::None;
-        CHECK(moves == 0, "sin la hoja no se puede golpear");
+        CHECK(g.tutorials_.empty() || g.tutorials_.front().action != "andar" || g.tutorials_.front().doneTime >= 0,
+              "al andar, el tutorial se da por hecho");
+        g.enemies_.clear();
         // Eco de memoria: aparece con su orden y, al tocarlo, sus siluetas repiten el recuerdo.
         g.storyCommand({true, "eco_activa", "1"});
         g.hero_.body.pos = g.echoes_[0].pos - Vec3{0, 0.9f, 0};

@@ -81,10 +81,9 @@ void Game::init(const char* assetDir) {
     bossBrain_.epsilon = 0.1f;
     loadLevel(LevelId::Plaza);
     if (story_) {
-        hero_.body.pos = {0, 0, -3.4f};  // despierta junto a la fuente
+        hero_.body.pos = {0, 0, -3.4f};  // de pie junto a la fuente
         hero_.yaw = kPi;
-        hero_.lying = 1;
-        playScene("intro");
+        playScene("inicio");
     }
     inv_.add(ItemId::WoodenSword);
     inv_.add(ItemId::Potion, 3);

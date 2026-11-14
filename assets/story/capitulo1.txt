@@ -9,25 +9,16 @@
 
 # ============================ PLAZA DEL RELOJ ============================
 
-== intro
-!negro
-!pausa 2.0
-!plano -2.0 3.4 7.5  -0.6 2.7 4.3 4.5
-!pausa 3.5
-!plano 0 0.5 -3.4  1.8 1.4 -5.6 3.5
-!pausa 1.5
-!levantarse
-!pausa 2.0
-!capitulo
-!tutorial WASD andar Andar
-
-# Junto al banco hay una hoja. Al cogerla vuelven las fuerzas… y llegan los perros.
-== hoja
+# De momento se empieza de pie, con la espada y las fuerzas: llegan los perros enseguida.
+# (La intro tumbado en la plaza y la búsqueda de la hoja están quitadas por ahora.)
+== inicio
+!aviso
 !poder ataque
 !poder fuerza
-!plano 6 0.6 -14  1.0 2.2 -5.0 2.5
+!capitulo
+!tutorial WASD andar Andar
+!pausa 2.5
 !armar despertar
-!pausa 0.5
 !tutorial Clic atacar Golpear
 
 == perros
