@@ -39,6 +39,8 @@ void Game::initTest(TestMode mode, uint32_t seed) {
     inv_.add(ItemId::Potion, 9);
     hp_ = hpGhost_ = maxHp_;
     mp_ = maxMp_;
+    shadow_ = maxShadow_;
+    shadowUnlocked_ = true;
     applyWeapon();
     notify(mode == TestMode::Light ? "Modo prueba · viaje por la luz" : "Modo prueba · Grises sin fin", kCyan);
 }

@@ -293,6 +293,8 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
     // Todo el escenario se ve con el croma actual; las salpicaduras de color lo devuelven.
     solid->setWorldColor(cromaShown_);
     solid->setScenery(true);
+    // Charcos de oscuridad (antes que las salpicaduras: tienen prioridad en el límite).
+    for (const ShadowPool& p : pools_) solid->paint(p.pos, p.radius * 0.85f * smoothstep01(p.age / 0.8f), rgba(12, 10, 18));
     for (const ColorSplash& sp : splashes_) solid->paint(sp.pos, sp.radius * smoothstep01(sp.age / 0.3f), sp.color);
     // Suelo del escenario o, sobre el vacío, un mar de nubes muy abajo.
     if (world_.ground)
@@ -409,9 +411,13 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
     }
     // Bombillas de las farolas (apagadas, grises) y la luz de las cercanas: cada luz cuesta
     // en todos los píxeles de la escena.
-    for (const Lamp& l : lamps_) {
+    for (size_t i = 0; i < lamps_.size(); ++i) {
+        const Lamp& l = lamps_[i];
+        uint32_t bulb = l.color;
+        if (int(i) == drinkLamp_ && drink_ > 0)  // se la están bebiendo: parpadea y se apaga
+            bulb = mixRgb(l.color, rgba(40, 30, 60), drink_ * (0.6f + 0.4f * std::sin(time_ * 40.0f)));
         if (l.bulb)
-            solid->ellipsoid(translate(l.pos), {}, {0.2f, 0.2f, 0.2f}, l.on ? l.color : rgba(70, 72, 80),
+            solid->ellipsoid(translate(l.pos), {}, {0.2f, 0.2f, 0.2f}, l.on ? bulb : rgba(70, 72, 80),
                              l.on ? Material::Glow : Material::Metal);
         if (l.on && l.bulb && length(flat(l.pos - hero_.body.pos)) < 14.0f) {
             float r = float((l.color >> 0) & 0xFF) / 255.0f, g = float((l.color >> 8) & 0xFF) / 255.0f,
@@ -493,6 +499,14 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
         solid->light(hostPos_, Vec3{1.0f, 0.95f, 0.8f} * 3.5f, 8.0f);
         return;
     }
+    if (travel_ && travelMode_ == 3) {  // hecho sombra: una mancha oscura que se desliza por el suelo
+        Vec3 c = hero_.interpolatedPos(alpha) + Vec3{0, 0.06f, 0};
+        Vec3 d = normalize(flat(travelTo_ - travelFrom_));
+        Mat4 m = translate(c) * rotateY(std::atan2(d.x, d.z));
+        solid->ellipsoid(m, {}, {0.45f, 0.05f, 1.2f}, rgba(14, 10, 22), Material::Cloth);
+        solid->ellipsoid(m, {0, 0.02f, 0}, {0.2f, 0.04f, 0.8f}, rgba(150, 80, 255), Material::Glow);
+        return;
+    }
     if (travel_) {  // hecho luz: una estela alargada en lugar del cuerpo
         Vec3 c = hero_.interpolatedPos(alpha) + Vec3{0, 1.0f, 0};
         Vec3 d = normalize(travelTo_ - travelFrom_);
@@ -532,8 +546,8 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
     }
     for (const Shape& s : kHeroShapes) solid->ellipsoid(j[s.joint], s.center, s.radii, s.color, s.material, flash);
     // Las vetas: apagadas sin Luz; encendidas, del color de la luz (o de la sombra).
-    float lit = clampf(mp_ / maxMp_, 0, 1);
-    uint32_t vein = mixRgb(rgba(70, 68, 72), kVein, lit);
+    float lit = clampf(shadowMode_ ? shadow_ / maxShadow_ : mp_ / maxMp_, 0, 1);
+    uint32_t vein = mixRgb(rgba(70, 68, 72), shadowMode_ ? rgba(170, 100, 255) : kVein, lit);
     for (const NeonLine& l : kNeonLines) solid->box(j[l.joint], l.center, l.half, vein, lit > 0.05f ? Material::Glow : Material::Cloth, flash);
     // Mechones de pelo: se inclinan hacia donde se queda atrás el punto con muelle que
     // sigue a la cabeza (inercia al correr, saltar y girar).
@@ -640,6 +654,34 @@ void Game::drawEnemies(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Dr
 }
 
 void Game::drawEffects(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const ViewInfo& view) const {
+    // Agujeros negros: una esfera de negrura con un borde violeta que gira y crece.
+    for (const BlackHole& h : holes_) {
+        float k = smoothstep01(h.age / 0.3f) * (1.0f - smoothstep01((h.age - h.life + 0.2f) / 0.2f));
+        float r = 0.65f * k;
+        if (!solid) {
+            dd.circleXZ(h.pos, r + 0.3f, 20, rgba(150, 80, 255));
+            continue;
+        }
+        solid->ellipsoid(translate(h.pos), {}, {r, r, r}, rgba(6, 4, 10), Material::Cloth);
+        glowRing(glow, h.pos, r * 1.05f, r * 1.45f, withAlpha(rgba(150, 80, 255), 0.55f * k));
+        for (int i = 0; i < 3; ++i) {
+            float a = h.age * (3.0f + float(i)) + float(i) * 2.1f;
+            Vec3 p = h.pos + (view.right * std::cos(a) + view.up * std::sin(a)) * (r * 1.6f);
+            glowStar(glow, view, p, 0.12f, a, withAlpha(rgba(220, 190, 255), 0.7f * k));
+        }
+    }
+    // Charcos de oscuridad: jirones que suben despacio (en debug, su borde).
+    for (const ShadowPool& p : pools_) {
+        if (!solid) {
+            dd.circleXZ(p.pos + Vec3{0, 0.02f, 0}, p.radius, 28, rgba(120, 70, 200));
+            continue;
+        }
+        for (int i = 0; i < 4; ++i) {
+            float a = float(i) * 1.7f + p.pos.x, ph = std::fmod(time_ * 0.25f + float(i) * 0.25f, 1.0f);
+            Vec3 q = p.pos + Vec3{std::cos(a) * p.radius * 0.45f, 0.2f + ph * 1.6f, std::sin(a) * p.radius * 0.45f};
+            glowDot(glow, view, q, 0.35f, withAlpha(rgba(60, 30, 100), 0.25f * std::sin(ph * kPi)));
+        }
+    }
     // Cortinas de las barreras de energía: bandas que suben.
     if (solid)
         for (const Gate& g : gates_) {
@@ -1020,11 +1062,21 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
         uiText(ui, right - 14 - maxMp_ * 1.8f - 12, cy - 16, 14, "LUZ", rgba(255, 230, 150), FontFace::Title, Align::Right);
         segBar(d, right - 24, cy + 8, maxShadow_ * 1.8f, 10, shadow_ / maxShadow_, shadow_ / maxShadow_, rgba(150, 80, 255), 0, 10);
         uiText(ui, right - 24 - maxShadow_ * 1.8f - 12, cy + 4, 14, "SOMBRA", rgba(180, 130, 255), FontFace::Title, Align::Right);
-        if (mp_ >= maxMp_) {  // Supernova lista
+        if (shadowMode_ ? shadow_ >= 60.0f : mp_ >= maxMp_) {  // técnica de V lista
             float pulse = 0.6f + 0.4f * std::sin(time_ * 6.0f);
-            uiText(ui, right - 60, cy + 26, 15, "V · SUPERNOVA", withAlpha(rgba(255, 230, 150), pulse), FontFace::Title,
-                   Align::Right, pulse);
+            uiText(ui, right - 60, cy + 26, 15, shadowMode_ ? "V · AGUJERO NEGRO" : "V · SUPERNOVA",
+                   withAlpha(shadowMode_ ? rgba(190, 150, 255) : rgba(255, 230, 150), pulse), FontFace::Title, Align::Right, pulse);
         }
+        // La mitad activa (Z cambia, cuando la sombra ya ha despertado).
+        if (shadowUnlocked_) {
+            float pulse = modeFlash_ > 0 ? 1.0f + modeFlash_ : 1.0f;
+            uiText(ui, cx, cy - 76, 15 * pulse, shadowMode_ ? "SOMBRA" : "LUZ",
+                   shadowMode_ ? rgba(180, 130, 255) : rgba(255, 226, 160), FontFace::Title, Align::Center, 0.5f);
+            uiText(ui, cx, cy + 62, 12, "Z · cambiar", kUiDim, FontFace::Title, Align::Center);
+        }
+        if (shadowMode_ && shadowAt(hero_.body.pos) > 0.5f)
+            uiText(ui, right - 24 - maxShadow_ * 1.8f - 80, cy + 4, 13, "EN LA SOMBRA", rgba(180, 130, 255), FontFace::Title,
+                   Align::Right, 0.6f);
         if (lightAt(hero_.body.pos) > 0.3f)
             uiText(ui, right - 14 - maxMp_ * 1.8f - 60, cy - 16, 13, "EN LA LUZ", rgba(255, 245, 200), FontFace::Title,
                    Align::Right, 0.6f);
@@ -1081,7 +1133,8 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
         }
         const char* help = inLight_ ? "DENTRO DE LA LUZ · Q saltar a la fuente señalada · R elegir fuente · Clic emboscada · Espacio salir"
                            : lock_ >= 0 ? "Clic atacar · R soltar objetivo · Clic central cambiar de objetivo · C esquivar · Shift correr"
-                                        : "Clic atacar · Q junto a una farola: entrar en la luz · R fijar · V supernova · G forma · T compañero · C esquivar";
+                           : shadowMode_ ? "SOMBRA · Mantén Q junto a una farola: beber su luz · Q en la sombra: deslizarte · V agujero negro · Z luz"
+                                        : "Clic atacar · Q junto a una farola: entrar en la luz · R fijar · V supernova · C esquivar · Shift correr";
         skewRect(d, x - 6, h - 30, x + 20 + textWidth(help, 14), h - 8, 6, kUiPanel);
         uiText(ui, x, h - 28, 14, help, kUiDim);
     }
@@ -1198,6 +1251,8 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
             fillCircle(d, sx, sy, 6, rgba(255, 250, 225), 12);
             if (inLight_)
                 std::snprintf(buf, sizeof(buf), "Q · saltar  %.0f m", double(length(lp - hostPos_)));
+            else if (shadowMode_)
+                std::snprintf(buf, sizeof(buf), "Q · deslizarte  %.0f m", double(length(lp - hero_.body.pos)));
             else
                 std::snprintf(buf, sizeof(buf), "Q · entrar en la luz");
             uiText(ui, sx, sy + 26, 15, buf, rgba(255, 240, 190), FontFace::Body, Align::Center, 0.4f);

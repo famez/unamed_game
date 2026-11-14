@@ -23,7 +23,7 @@ int fails = 0;
 void run(Game& g, float secs, Controls c = {}) {
     for (int i = 0; i < int(secs * 60); ++i) {
         g.update(dt, c);
-        c.jump = c.attack = c.dodge = c.interact = c.lockOn = c.nextTarget = c.unlock = c.runCommand = c.light = c.nova = c.transform = c.summon = false;
+        c.jump = c.attack = c.dodge = c.interact = c.lockOn = c.nextTarget = c.unlock = c.runCommand = c.light = c.nova = c.transform = c.summon = c.swapMode = false;
         c.command = -1;
         c.commandScroll = 0;
     }
@@ -824,6 +824,68 @@ int main() {
         float s0 = k.shadow_;
         run(k, 3.0f);
         CHECK(k.shadow_ > s0, "recoger Sombra la suma (%.0f)", k.shadow_);
+    }
+    {  // La sombra: cambiar (Z), beber la luz de una farola, fundirse, deslizarse, agujero negro
+        Game g = fresh();
+        g.update(dt, press(&Controls::swapMode));
+        CHECK(!g.shadowMode(), "sin despertar la sombra, Z no hace nada");
+        g.unlockShadow();
+        run(g, 0.1f, press(&Controls::swapMode));
+        CHECK(g.shadowMode(), "con la sombra despierta, Z cambia a sombra");
+        Vec3 lampA = g.lamps_[1].pos, lampB = g.lamps_[2].pos;
+        place(g, {lampA.x, 0, lampA.z - 2.0f});
+        g.shadow_ = 0;
+        Controls hold;
+        hold.absorb = true;
+        run(g, 1.2f, hold);
+        CHECK(!g.lamps_[1].on && g.pools_.size() == 1 && g.shadow_ >= 30, "mantener Q: se bebe la luz de la farola (Sombra %.0f)", g.shadow_);
+        run(g, 1.0f);
+        CHECK(g.shadowAt(g.hero_.body.pos) > 0.5f, "y deja un charco de oscuridad alrededor");
+        // Fundido: un Gris a 5 m no le ve.
+        Enemy& imp = addEnemy(g, EnemyKind::Dazzled, g.hero_.body.pos + Vec3{5, 0, 0}, AiState::Idle);
+        (void)imp;
+        run(g, 0.5f);
+        CHECK(g.enemies_[0].state == AiState::Idle, "fundido con la sombra, el Deslumbrado no le ve");
+        g.enemies_.clear();
+        // Otra farola bebida: deslizarse de un charco a otro.
+        place(g, {lampB.x, 0, lampB.z - 2.0f});
+        run(g, 1.2f, hold);
+        place(g, {lampA.x, 0, lampA.z - 1.0f});
+        run(g, 0.5f);
+        Controls aim;
+        aim.aimOrigin = g.hero_.body.pos + Vec3{0, 2.5f, -3};
+        aim.aimDir = normalize(Vec3{lampB.x, 0, lampB.z} - aim.aimOrigin);
+        g.update(dt, aim);
+        CHECK(g.lightTarget() >= 0, "en la sombra, la cámara señala otra sombra");
+        aim.light = true;
+        run(g, 1.5f, aim);
+        float dB = length(flat(g.hero_.body.pos - Vec3{lampB.x, 0, lampB.z}));
+        CHECK(dB < 1.5f, "Q: se desliza por el suelo hasta la otra sombra (a %.1f m)", dB);
+        // Golpes cruzados: la sombra hiere más a los de luz.
+        addEnemy(g, EnemyKind::Dazzled, {0, 0, 10});
+        addEnemy(g, EnemyKind::Brute, {3, 0, 10});
+        float hd = g.enemies_[0].health, hb = g.enemies_[1].health;
+        g.hitEnemy(g.enemies_[0], {1, 0, 0}, 10, 0, 0, false);
+        g.hitEnemy(g.enemies_[1], {1, 0, 0}, 10, 0, 0, false);
+        CHECK(hd - g.enemies_[0].health > hb - g.enemies_[1].health, "en modo sombra se hiere más a los de luz (%.1f frente a %.1f)",
+              hd - g.enemies_[0].health, hb - g.enemies_[1].health);
+        // Agujero negro.
+        g.enemies_.clear();
+        place(g, {0, 0, -12}, 0);
+        addEnemy(g, EnemyKind::Dazzled, {0, 0, -8.5f});
+        addEnemy(g, EnemyKind::Hound, {1.5f, 0, -8});
+        g.shadow_ = 100;
+        float h0 = g.enemies_[0].health + g.enemies_[1].health;
+        run(g, 3.5f, press(&Controls::nova));
+        float h1 = 0;
+        for (const Enemy& e : g.enemies_) h1 += std::max(0.0f, e.health);
+        CHECK(g.shadow_ < 50 && h1 < h0 * 0.6f, "V: el agujero negro atrae y deshace (vida %.0f → %.0f)", h0, h1);
+        // De vuelta a la luz: encender una farola apagada (F).
+        run(g, 0.1f, press(&Controls::swapMode));
+        g.mp_ = 50;
+        place(g, Vec3{lampA.x, 0, lampA.z} + Vec3{0.6f, 0, 0});
+        run(g, 0.2f, press(&Controls::interact));
+        CHECK(g.lamps_[1].on && g.mp_ == 35, "en modo luz, F enciende la farola (cuesta 15 de Luz)");
     }
     {  // Derrota y vuelta a empezar
         Game g = fresh();

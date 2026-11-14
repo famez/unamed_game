@@ -88,11 +88,13 @@ void Game::init(const char* assetDir) {
     applyWeapon();
 }
 
+float Game::formSpeed() const { return form_ == Form::Aurora ? 1.3f : form_ == Form::Colossus ? 0.9f : 1.0f; }
+
 void Game::applyWeapon() {
     const WeaponStats& w = inv_.weaponStats();
     hero_.comboHits = w.comboHits;
     hero_.attackSpeed = w.speed * (form_ == Form::Aurora ? 1.5f : form_ == Form::Colossus ? 0.85f : 1.0f);
-    hero_.speedScale = form_ == Form::Aurora ? 1.3f : form_ == Form::Colossus ? 0.9f : 1.0f;
+    hero_.speedScale = formSpeed();
     hero_.gravityScale = form_ == Form::Echo ? 0.35f : 1.0f;
     hero_.infiniteJumps = form_ == Form::Echo;
     hero_.moveSet = w.style == WeaponStyle::Lance   ? MoveSet::Lance
@@ -115,6 +117,11 @@ void Game::update(float dt, const Controls& c) {
         return;
     }
     heroFlash_ = std::max(0.0f, heroFlash_ - dt);
+    swapCooldown_ = std::max(0.0f, swapCooldown_ - dt);
+    modeFlash_ = std::max(0.0f, modeFlash_ - dt);
+    absorbHint_ = std::max(0.0f, absorbHint_ - dt);
+    lightHint_ = std::max(0.0f, lightHint_ - dt);
+    for (ShadowPool& p : pools_) p.age += dt;
     guardFlash_ = std::max(0.0f, guardFlash_ - dt);
     heroInvuln_ = std::max(0.0f, heroInvuln_ - dt);
     shake_ = std::max(0.0f, shake_ - dt * 1.5f);
@@ -134,8 +141,10 @@ void Game::update(float dt, const Controls& c) {
         lock_ = -1;
         if (c.advance && dialogue_.active()) dialogue_.advance();
     } else {
+        if (c.swapMode) swapMode();
         updateLightTarget(c);
-        updateLight(dt, c);
+        if (shadowMode_) updateShadow(dt, c);
+        else updateLight(dt, c);
         updateAllies(dt, c);
         // R fija al Gris más centrado y, si ya hay uno fijado, lo suelta; el clic central
         // pasa al siguiente.
@@ -177,6 +186,8 @@ void Game::update(float dt, const Controls& c) {
     hero_.setSprint(c.sprint);
     hero_.setAttackHeld(c.attackHeld);
     bool light = inLight_ || travel_;
+    // Fundido con la sombra: dentro de un charco, en modo sombra, corre más.
+    hero_.speedScale = formSpeed() * (shadowMode_ && shadowAt(hero_.body.pos) > 0.5f ? 1.4f : 1.0f);
     hero_.update(dt, down || light ? Vec3{} : c.move, !down && !light && c.jump, world_, std::atan2(c.camForward.x, c.camForward.z));
     if (c.jump && wasGrounded && hero_.body.vel.y > 1.0f) sound(Sfx::Jump, hero_.body.pos, 0.7f);
     updateTravel(dt);
@@ -235,6 +246,7 @@ void Game::update(float dt, const Controls& c) {
     }
 
     updateProjectiles(dt);
+    updateBlackHoles(dt);
     updatePickups(dt);
     for (Crate& cr : crates_) cr.hitFlash = std::max(0.0f, cr.hitFlash - dt);
     for (TreasureChest& ch : chests_)
@@ -244,9 +256,10 @@ void Game::update(float dt, const Controls& c) {
     for (ColorSplash& sp : splashes_) sp.age += dt;
     updateLevel(dt);
     updateEffects(dt);
-    if (testMode_ != TestMode::None) {  // modo prueba: vida y Luz infinitas
+    if (testMode_ != TestMode::None) {  // modo prueba: vida, Luz y Sombra infinitas
         hp_ = maxHp_;
         mp_ = maxMp_;
+        shadow_ = maxShadow_;
     }
 }
 
@@ -523,8 +536,12 @@ void Game::resolveImpact(Move m) {
 }
 
 void Game::hitEnemy(Enemy& e, Vec3 dir, float damage, float knock, float lift, bool heavy) {
-    // La luz debilita a los de sombra; a los de luz, en cambio, los hace más duros.
+    // La luz debilita a los de sombra y endurece a los de luz; la oscuridad, al revés. Y la
+    // mitad que usa el protagonista hiere más a la familia contraria.
     if (lightAt(e.body.pos) > 0.3f) damage *= e.def().shadow ? 1.5f : 0.8f;
+    if (shadowAt(e.body.pos) > 0.3f) damage *= e.def().shadow ? 0.8f : 1.5f;
+    damage *= familyDamage(e);
+    if (shadowMode_ && !e.def().shadow) shadow_ = std::min(maxShadow_, shadow_ + 1.5f);  // le arranca sombra
     e.health -= damage;
     e.rlReward -= damage / 15.0f;
     e.hitFlash = 0.12f;
@@ -566,7 +583,8 @@ void Game::killEnemy(Enemy& e) {
     Vec3 ground{c.x, groundHeight(c), c.z};
     spawnRing(ground + Vec3{0, 0.05f, 0}, 1.6f, 0.5f, col);
     // El color robado vuelve al mundo: salpica el suelo y se queda.
-    splashes_.push_back({ground, randRange(1.1f, 1.6f), col, 0});
+    // Lo que suelta se queda en el suelo: un poso cálido (luz) o un charco violáceo (sombra).
+    splashes_.push_back({ground, randRange(1.1f, 1.6f), d.shadow ? rgba(46, 30, 74) : rgba(196, 176, 136), 0});
     if (splashes_.size() > size_t(Renderer::kMaxPaints)) splashes_.erase(splashes_.begin());
     for (int i = 0; i < 14 && particles_.size() < kMaxParticles; ++i) {
         float a = random01() * 2.0f * kPi;
@@ -711,6 +729,7 @@ void Game::updateEnemy(Enemy& e, float dt) {
     e.prevPos = e.body.pos;
     float slow = e.freeze > 0 ? 0.45f : 1.0f;  // congelado: todo más lento
     if (lightAt(e.body.pos) > 0.3f) slow *= d.shadow ? 0.8f : 1.1f;  // la luz pesa a los de sombra y aviva a los de luz
+    if (shadowAt(e.body.pos) > 0.3f) slow *= d.shadow ? 1.1f : 0.8f;  // y la oscuridad, al revés
     e.dodgeCooldown = std::max(0.0f, e.dodgeCooldown - dt);
     float edt = dt * slow;
     e.stateTime += edt;
@@ -729,7 +748,9 @@ void Game::updateEnemy(Enemy& e, float dt) {
     Vec3 toHero = flat(hero_.body.pos - e.body.pos);
     float dist = length(toHero);
     Vec3 dirHero = dist > 1e-4f ? toHero * (1.0f / dist) : e.forward();
-    bool heroOk = hero_.downTimer < 0 && !inLight_ && !travel_;  // dentro de la luz no le ven
+    // Dentro de la luz no le ven; fundido con la sombra, solo muy de cerca.
+    bool heroOk = hero_.downTimer < 0 && !inLight_ && !travel_ &&
+                  !(shadowMode_ && shadowAt(hero_.body.pos) > 0.5f && dist > 2.0f);
     Vec3 desired;  // velocidad horizontal deseada
     bool faceHero = false;
 

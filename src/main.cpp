@@ -42,7 +42,7 @@ struct OrbitCamera {
 struct PendingInput {
     bool jump = false, attack = false, dodge = false, lockOn = false, nextTarget = false, unlock = false, interact = false;
     bool advance = false;  // pasar la línea de diálogo
-    bool light = false, nova = false, transform = false, summon = false;
+    bool light = false, nova = false, transform = false, summon = false, swapMode = false;
     bool runCommand = false;
     int command = -1, scroll = 0;
 };
@@ -284,6 +284,7 @@ int main(int argc, char** argv) {
                 pending.nova |= input.wasPressed(Key::V);
                 pending.transform |= input.wasPressed(Key::G);
                 pending.summon |= input.wasPressed(Key::T);
+                pending.swapMode |= input.wasPressed(Key::Z);
                 // Q: pulsación corta = entrar en la luz / saltar a otra fuente; mantenida = absorber.
                 if (input.wasPressed(Key::Q)) qHeld = 0;
                 if (input.isDown(Key::Q)) qHeld += float(frameDt);
@@ -338,6 +339,7 @@ int main(int argc, char** argv) {
                 c.nova = pending.nova;
                 c.transform = pending.transform;
                 c.summon = pending.summon;
+                c.swapMode = pending.swapMode;
                 c.attackHeld = playing && captured && input.mouseLeft && !game.dialogueBlocking();
                 c.commandScroll = pending.scroll;
                 c.camForward = cam.forwardFlat();
@@ -359,6 +361,11 @@ int main(int argc, char** argv) {
                         if (botStep % 300 == 150) c.jump = true;
                     }
                     c.interact = botStep % 30 == 0;
+                    // En los modos de prueba también cambia a sombra y lanza agujeros negros.
+                    if (game.testMode() != TestMode::None) {
+                        c.swapMode = botStep == 30;
+                        c.nova = c.nova || botStep % 240 == 120;
+                    }
                 }
                 game.update(float(kFixedDt), c);
                 pending = PendingInput{};
