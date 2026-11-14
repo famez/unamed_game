@@ -436,22 +436,38 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
     bool aimed = guarding() || charge() > 0;
     float maxSpeed = (aimed ? kGuardSpeed : (sprintHeld_ && body.grounded ? kSprintSpeed : kRunSpeed)) * speedScale;
     float targetSpeed = canMove ? maxSpeed * input : 0.0f;
-    // La velocidad (vector) va hacia la deseada con aceleración limitada: al cambiar de
-    // dirección traza una curva en vez de girar en seco, y al soltar frena con suavidad.
-    // Dar media vuelta frena más (pivota) para no deslizarse de lado.
-    Vec3 targetVel = (input > 0.01f ? moveDir_ : forward()) * targetSpeed;
-    Vec3 diff = targetVel - moveVel_;
-    bool speeding = length(targetVel) > length(moveVel_) && dot(targetVel, moveVel_) >= 0;
-    float rate = speeding ? kAcceleration : kDeceleration;
-    if (dot(targetVel, moveVel_) < 0) rate *= 1.6f;
-    float dl = length(diff), maxDelta = rate * dt;
-    moveVel_ += dl > maxDelta ? diff * (maxDelta / dl) : diff;
-    speed = length(moveVel_);
-    if (canMove && (input > 0.01f || aimed)) {
-        float targetYaw = aimed ? camYaw_ : std::atan2(moveDir_.x, moveDir_.z);
-        float step = wrapAngle(targetYaw - yaw) * (1.0f - std::exp(-kTurnSmooth * dt));
-        yaw = wrapAngle(yaw + clampf(step, -14.0f * dt, 14.0f * dt));
+    // Sin apuntar, el cuerpo corre hacia donde mira: gira hacia la marcha (más deprisa
+    // cuanto más despacio va) y la velocidad sigue al cuerpo, así los pies nunca van de
+    // lado. En las curvas cerradas afloja y en la media vuelta casi frena: pivota.
+    // Apuntando (guardia, carga) mira a la cámara y se desplaza en cualquier dirección.
+    if (aimed || !canMove) {
+        Vec3 targetVel = (input > 0.01f ? moveDir_ : forward()) * targetSpeed;
+        Vec3 diff = targetVel - moveVel_;
+        bool speeding = length(targetVel) > length(moveVel_) && dot(targetVel, moveVel_) >= 0;
+        float rate = speeding ? kAcceleration : kDeceleration;
+        if (dot(targetVel, moveVel_) < 0) rate *= 1.6f;
+        float dl = length(diff), maxDelta = rate * dt;
+        moveVel_ += dl > maxDelta ? diff * (maxDelta / dl) : diff;
+        if (canMove && aimed) {
+            float step = wrapAngle(camYaw_ - yaw) * (1.0f - std::exp(-kTurnSmooth * dt));
+            yaw = wrapAngle(yaw + clampf(step, -14.0f * dt, 14.0f * dt));
+        }
+    } else {
+        float cur = length(moveVel_);
+        if (input > 0.01f) {
+            float off = wrapAngle(std::atan2(moveDir_.x, moveDir_.z) - yaw);
+            float fast = clampf(cur / kSprintSpeed, 0, 1);
+            float maxTurn = lerpf(16.0f, 9.0f, fast);
+            float step = off * (1.0f - std::exp(-lerpf(18.0f, 11.0f, fast) * dt));
+            yaw = wrapAngle(yaw + clampf(step, -maxTurn * dt, maxTurn * dt));
+            float c = std::cos(wrapAngle(std::atan2(moveDir_.x, moveDir_.z) - yaw));
+            targetSpeed *= clampf(0.6f + 0.4f * c, 0.15f, 1.0f);  // 90° → 60 %, media vuelta → 20 %
+        }
+        float rate = targetSpeed > cur ? kAcceleration : kDeceleration;
+        cur = moveTowards(cur, targetSpeed, rate * dt);
+        moveVel_ = forward() * cur;
     }
+    speed = length(moveVel_);
     Vec3 dir = speed > 0.01f ? moveVel_ * (1.0f / speed) : forward();
     if (rolling()) {
         float u = rollTime_ / kRollDuration;
@@ -524,7 +540,9 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
     bool still = speed < 0.3f && move_ == Move::None && !rolling() && body.grounded && !hurt() && !guarding() && !absorbing();
     idleTime_ = still ? idleTime_ + dt : 0.0f;
     // La fase avanza con la distancia recorrida (solo pisando suelo): los pies no patinan.
-    if (body.grounded) phase_ = std::fmod(phase_ + speed * dt * 2.0f * kPi / 2.6f, 2.0f * kPi);
+    // Al girar casi parado da pasitos: la fase también avanza con el giro.
+    float spin = speed < kRunSpeed ? std::fabs(wrapAngle(yaw - prevYaw_)) * 0.35f : 0.0f;
+    if (body.grounded) phase_ = std::fmod(phase_ + (speed * dt + spin) * 2.0f * kPi / 2.6f, 2.0f * kPi);
     airBlend_ = moveTowards(airBlend_, body.grounded ? 0.0f : 1.0f, 7.0f * dt);
 
     // Inclinación por aceleración y por giro, filtradas para que no tiemblen.
@@ -536,6 +554,8 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
     lean_ += (clampf(accel * 0.012f, -0.3f, 0.3f) - lean_) * (1.0f - std::exp(-10.0f * dt));
     float bankTarget = clampf(-yawRate * 0.05f * clampf(speed / kRunSpeed, 0, 1), -0.35f, 0.35f);
     bank_ += (bankTarget - bank_) * (1.0f - std::exp(-8.0f * dt));
+    float shuffle = rolling() || move_ != Move::None || !body.grounded ? 0.0f : clampf(std::fabs(yawRate) / 6.0f, 0, 1);
+    turnStep_ += (shuffle - turnStep_) * (1.0f - std::exp(-12.0f * dt));
 
     if (move_ != Move::None) {
         const MoveDef& d = kMoves[int(move_)];
@@ -684,7 +704,9 @@ void Character::animate(Pose& out) const {
     float bounce = std::fabs(std::sin(phase_));
 
     // Carrera: piernas en oposición de fase, rodilla flexionada al adelantar la pierna.
-    float legSwing = 0.85f * run, kneeBend = 1.6f * run;
+    // Girando en el sitio: pasitos cortos (levanta un poco las rodillas por turnos).
+    float shuffle = turnStep_ * (1.0f - run) * (1.0f - airBlend_);
+    float legSwing = 0.85f * run + 0.25f * shuffle, kneeBend = 1.6f * run + 0.7f * shuffle;
     r[HipL].x = -legSwing * s - 0.1f * run;
     r[HipR].x = legSwing * s - 0.1f * run;
     r[KneeL].x = kneeBend * std::max(0.0f, c) + 0.15f * run + 0.05f;

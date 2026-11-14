@@ -168,6 +168,7 @@ private:
     int lastKey_ = -1;
     float lean_ = 0, bank_ = 0;  // inclinación hacia delante (aceleración) y lateral (giro)
     float prevSpeed_ = 0, prevYaw_ = 0;
+    float turnStep_ = 0;  // pasitos al girar casi parado (0..1)
     Vec3 moveVel_;        // velocidad propia en el plano (con inercia)
     bool armed_ = true;
     float drawTime_ = 1.0f, armedBlend_ = 1.0f;

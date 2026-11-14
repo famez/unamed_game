@@ -181,6 +181,7 @@ int main(int argc, char** argv) {
     bool autoplay = false;
     bool portrait = false;  // --retrato: cámara frente a la cara del protagonista (para modelarlo)
     bool bodyShot = false;  // --cuerpo: lo mismo, con el cuerpo entero
+    bool turnsBot = false;  // --giros: el bot solo corre haciendo curvas y medias vueltas
     float camYaw0 = 0;  // --camyaw: orientación inicial de la cámara (radianes)
     const char* shotPath = nullptr;
     double shotTime = 0;
@@ -190,6 +191,7 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--autoplay") == 0) autoplay = true;
         if (std::strcmp(argv[i], "--retrato") == 0) portrait = true;
         if (std::strcmp(argv[i], "--cuerpo") == 0) portrait = bodyShot = true;
+        if (std::strcmp(argv[i], "--giros") == 0) autoplay = turnsBot = true;
         if (std::strcmp(argv[i], "--camyaw") == 0 && i + 1 < argc) camYaw0 = float(std::atof(argv[++i]));
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 2 < argc) {
             shotPath = argv[i + 1];
@@ -391,6 +393,16 @@ int main(int argc, char** argv) {
                         if (botStep % 300 == 150) c.jump = true;
                     }
                     c.interact = botStep % 30 == 0;
+                    if (turnsBot) {  // tramos: recto, curva de 90°, media vuelta, giro parado
+                        int t = botStep % 360;
+                        c = Controls{};
+                        c.camForward = cam.forwardFlat();
+                        c.advance = botStep % 25 == 0;
+                        float a = t < 60 ? 0.0f : t < 120 ? kPi * 0.5f : t < 180 ? kPi * 1.5f : t < 220 ? kPi * 1.5f : kPi * 0.5f;
+                        if (t >= 180 && t < 220) a = -1;  // parado
+                        if (t >= 220 && t < 250) a = kPi * 0.5f, c.move = Vec3{std::sin(a), 0, std::cos(a)} * 0.15f;
+                        else if (a >= 0) c.move = Vec3{std::sin(a), 0, std::cos(a)};
+                    }
                     // En los modos de prueba también cambia a sombra y lanza agujeros negros.
                     if (game.testMode() == TestMode::Shadow) {  // se funde con la sombra y la recorre
                         c.light = botStep % 240 == 40 || botStep % 240 == 200;
