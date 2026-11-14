@@ -211,6 +211,8 @@ private:
     void ensureFxTargets(int width, int height);
     void releaseFxTargets();
     bool fxScreenRect(const RenderCamera& cam, int width, int height, int& x0, int& y0, int& x1, int& y1) const;
+    void drawEffects(const RenderCamera& cam, int width, int height, float time);
+    void createNoiseTexture();
     GLuint compositeProgram_ = 0, noiseTex_ = 0;
     GLuint depthFbo_ = 0, depthTex_ = 0, fxFbo_ = 0, fxTex_ = 0;
     int fullWidth_ = 0, fullHeight_ = 0, fxWidth_ = 0, fxHeight_ = 0;

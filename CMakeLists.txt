@@ -61,6 +61,9 @@ add_executable(game
     src/render/models.cpp
     src/audio/audio.cpp
     src/render/renderer.cpp
+    src/render/render_scene.cpp
+    src/render/render_fx.cpp
+    src/render/render_post.cpp
 )
 
 # ${CMAKE_DL_LIBS}: dlopen de PulseAudio en tiempo de ejecución (sin cabeceras al compilar).
