@@ -2,6 +2,7 @@
 
 #include "game.h"
 
+#include <algorithm>
 #include <cstdio>
 
 namespace {
@@ -81,7 +82,10 @@ void InventoryMenu::activate(Game& game, ItemId id) {
     if (tab_ == Workshop) {
         int n = 0;
         const Recipe* r = recipes(n);
-        if (selected_ < n) message_ = game.craft(r[selected_]) ? std::string("Fabricado: ") + d.name : "Faltan piezas";
+        if (selected_ < n)
+            message_ = game.craft(r[selected_])                 ? std::string("Fabricado: ") + d.name
+                       : game.heroLevel() < r[selected_].minLevel ? "Hace falta nivel " + std::to_string(r[selected_].minLevel)
+                                                                  : "Faltan piezas";
         messageTime_ = 2.0f;
         return;
     }
@@ -108,28 +112,31 @@ bool InventoryMenu::update(const Input& in, Game& game, int width, int height) {
     messageTime_ = std::max(0.0f, messageTime_ - 1.0f / 60.0f);
     if (in.wasPressed(Key::A) || in.wasPressed(Key::Left)) {
         tab_ = (tab_ + TabCount - 1) % TabCount;
-        selected_ = 0;
+        selected_ = top_ = 0;
     }
     if (in.wasPressed(Key::D) || in.wasPressed(Key::Right)) {
         tab_ = (tab_ + 1) % TabCount;
-        selected_ = 0;
+        selected_ = top_ = 0;
     }
     for (int t = 0; t < TabCount; ++t)
         if (in.mouseLeftPressed && tabRect(t, width, height).contains(in.mouseX, in.mouseY)) {
             tab_ = t;
-            selected_ = 0;
+            selected_ = top_ = 0;
         }
 
     std::vector<ItemId> list = entries(game.inventory());
-    int n = std::min(int(list.size()), kMaxRows);
+    int n = int(list.size());
     if (n > 0) {
         if (in.wasPressed(Key::W) || in.wasPressed(Key::Up) || in.wheel > 0) selected_ = (selected_ + n - 1) % n;
         if (in.wasPressed(Key::S) || in.wasPressed(Key::Down) || in.wheel < 0) selected_ = (selected_ + 1) % n;
         selected_ = std::min(selected_, n - 1);
+        // Desplaza la lista para que la fila elegida siempre se vea.
+        top_ = std::clamp(top_, std::max(0, selected_ - kMaxRows + 1), selected_);
+        top_ = std::min(top_, std::max(0, n - kMaxRows));
         bool clicked = false;
-        for (int i = 0; i < n; ++i) {
+        for (int i = 0; i < std::min(n - top_, kMaxRows); ++i) {
             if (!rowRect(i, width, height).contains(in.mouseX, in.mouseY)) continue;
-            if (in.mouseDX != 0 || in.mouseDY != 0 || in.mouseLeftPressed) selected_ = i;
+            if (in.mouseDX != 0 || in.mouseDY != 0 || in.mouseLeftPressed) selected_ = top_ + i;
             if (in.mouseLeftPressed) clicked = true;
         }
         ItemId id = list[size_t(selected_)];
@@ -183,12 +190,16 @@ void InventoryMenu::draw(UiLayer& ui, const Game& game, int width, int height) c
     }
 
     std::vector<ItemId> list = entries(inv);
-    int n = std::min(int(list.size()), kMaxRows);
+    int n = int(list.size());
     if (n == 0) drawText(ui, p.x0 + 40, p.y0 + kListTop + 8, 20, "Nada todavía", dim);
-    for (int i = 0; i < n; ++i) {
+    int rows = std::min(n - top_, kMaxRows);
+    if (top_ > 0) drawText(ui, p.x0 + 30 + kListW * 0.5f, p.y0 + kListTop - 22, 16, "· · ·", dim);
+    if (top_ + rows < n) drawText(ui, p.x0 + 30 + kListW * 0.5f, p.y0 + kListTop + kRowH * kMaxRows - 2, 16, "· · ·", dim);
+    for (int row = 0; row < rows; ++row) {
+        int i = top_ + row;
         ItemId id = list[size_t(i)];
         const ItemDef& def = itemDef(id);
-        Rect r = rowRect(i, width, height);
+        Rect r = rowRect(row, width, height);
         bool sel = i == selected_;
         fillRect(d, r.x0, r.y0, r.x1, r.y1, sel ? rgba(235, 245, 255, 235) : rgba(26, 34, 80, 220));
         if (sel) fillRect(d, r.x0, r.y0, r.x0 + 5, r.y1, cyan);
@@ -196,10 +207,14 @@ void InventoryMenu::draw(UiLayer& ui, const Game& game, int width, int height) c
         uint32_t tc = inv.count(id) > 0 ? (sel ? rgba(20, 30, 70) : light) : rgba(110, 115, 140);
         if (tab_ == Workshop) {  // recetas: en claro las que se pueden fabricar ya
             int rc = 0;
-            bool ok = recipes(rc)[i].count > 0 && inv.canCraft(recipes(rc)[i]);
+            const Recipe& rcp = recipes(rc)[i];
+            bool ok = rcp.count > 0 && inv.canCraft(rcp, game.heroLevel());
+            bool lowLevel = game.heroLevel() < rcp.minLevel;
             tc = ok ? (sel ? rgba(20, 30, 70) : light) : rgba(110, 115, 140);
             drawText(ui, r.x0 + 44, r.y0 + 3, 20, def.name, tc);
-            drawText(ui, r.x1 - 14, r.y0 + 6, 16, ok ? "listo" : "faltan piezas", ok ? rgba(60, 200, 130) : rgba(150, 120, 140), right);
+            std::snprintf(buf, sizeof(buf), "nivel %d", rcp.minLevel);
+            drawText(ui, r.x1 - 14, r.y0 + 6, 16, ok ? "listo" : lowLevel ? buf : "faltan piezas",
+                     ok ? rgba(60, 200, 130) : lowLevel ? rgba(150, 170, 200) : rgba(150, 120, 140), right);
             continue;
         }
         drawText(ui, r.x0 + 44, r.y0 + 3, 20, def.name, tc);
@@ -224,6 +239,12 @@ void InventoryMenu::draw(UiLayer& ui, const Game& game, int width, int height) c
         if (tab_ == Workshop) {  // piezas de la receta: las que tienes / las que hacen falta
             int rc = 0;
             const Recipe& rcp = recipes(rc)[std::min(selected_, n - 1)];
+            if (rcp.minLevel > 1) {
+                bool lvl = game.heroLevel() >= rcp.minLevel;
+                std::snprintf(buf, sizeof(buf), "Nivel %d (tienes %d)", rcp.minLevel, game.heroLevel());
+                drawText(ui, dx + 20, y, 19, buf, lvl ? rgba(110, 255, 160) : rgba(255, 130, 140));
+                y += 32;
+            }
             drawText(ui, dx + 20, y, 17, "PIEZAS", dim, title);
             y += 28;
             for (int k = 0; k < rcp.partCount; ++k) {

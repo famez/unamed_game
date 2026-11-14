@@ -656,6 +656,7 @@ void Game::killEnemy(Enemy& e) {
             else withItem = false;
             break;
     }
+    if (e.boss) item = ItemId::BlazeGem, withItem = true;  // el jefe deja el prisma para la mejor espada
     dropLoot(c, munny, hpOrbs, mpOrbs, item, withItem, d.shadow);
 }
 
@@ -1269,7 +1270,7 @@ void Game::heal(float hp, float mp) {
 }
 
 bool Game::craft(const Recipe& r) {
-    if (!inv_.craft(r)) return false;
+    if (!inv_.craft(r, heroLevel_)) return false;
     const ItemDef& d = itemDef(r.result);
     notify(std::string("Fabricado: ") + d.name + (r.count > 1 ? " ×" + std::to_string(r.count) : ""), d.color);
     uiSound(Sfx::ItemGet, 0.8f, 1.1f);

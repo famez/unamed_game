@@ -311,6 +311,21 @@ int main() {
         g.useItem(ItemId::Sharpener);
         g.useItem(ItemId::Sharpener);
         CHECK(g.inventory().powerBonus == 4, "dos afiladores: fuerza +4");
+        {  // Espadas de la forja: piden nivel además de piezas
+            Game f = fresh();
+            const Recipe* dusk = nullptr;
+            for (int i = 0; i < rc; ++i)
+                if (rs[i].result == ItemId::DuskBlade) dusk = &rs[i];
+            f.inventory().add(ItemId::ShinyShard, 10);
+            f.inventory().add(ItemId::WingDust, 10);
+            CHECK(dusk && !f.craft(*dusk), "la hoja crepuscular no se forja a nivel 1 aunque haya piezas");
+            f.gainXp(10000);
+            CHECK(f.craft(*dusk) && f.equip(ItemId::DuskBlade) && f.hero_.comboHits == 4,
+                  "a nivel %d sí: se equipa y su combo es más largo", f.heroLevel());
+            int swords = 0;
+            for (int i = 0; i < rc; ++i) swords += itemDef(rs[i].result).weapon.style == WeaponStyle::Sword && rs[i].minLevel > 1;
+            CHECK(swords >= 5, "hay %d espadas para forjar según se avanza", swords);
+        }
         g.inventory().add(ItemId::Sharpener, 3);
         for (int i = 0; i < 3; ++i) g.useItem(ItemId::Sharpener);
         CHECK(g.inventory().powerBonus == 6 && g.inventory().count(ItemId::Sharpener) == 2, "el filo se queda en +6");

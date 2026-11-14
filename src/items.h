@@ -12,6 +12,8 @@ enum class ItemId : int {
     ShinyShard, GoldSpore, WingDust, BlazeGem,
     // Armas
     WoodenSword, StarStaff, AuroraBlade, LightLance, LightFists,
+    // Espadas que se forjan en el taller según se sube de nivel
+    LampEdge, DuskBlade, WatchSword, ShadowFang, StillHour,
     // Mejoras (se fabrican en el taller)
     Sharpener,
     // Núcleos de transformación (taller) y objetos clave
@@ -31,6 +33,8 @@ struct WeaponStats {
     float reach = 0;      // alcance (m) desde el centro del personaje
     float speed = 1;      // multiplicador de la velocidad de los golpes
     float length = 0;     // longitud de la hoja (m)
+    float width = 0.04f;  // media anchura de la hoja (m)
+    float curve = 0;      // curvatura (sable): cuánto se arquea hacia el lomo en la punta (m)
     uint32_t blade = 0, hilt = 0, trail = 0;
     WeaponStyle style = WeaponStyle::Sword;
 };
@@ -51,6 +55,7 @@ const ItemDef& itemDef(ItemId id);
 struct Recipe {
     ItemId result;
     int count;
+    int minLevel;  // nivel del protagonista para poder fabricarla
     struct Part {
         ItemId item;
         int n;
@@ -76,8 +81,9 @@ public:
     int munny = 0;  // lúmenes (la moneda: luz condensada)
     float powerBonus = 0;  // fuerza extra permanente (afiladores aplicados)
     static constexpr float kMaxPowerBonus = 6;
-    bool canCraft(const Recipe& r) const;
-    bool craft(const Recipe& r);
+    // Fabricar pide las piezas y, para las espadas buenas, un nivel mínimo.
+    bool canCraft(const Recipe& r, int level = 1) const;
+    bool craft(const Recipe& r, int level = 1);
     ItemId weapon = ItemId::WoodenSword;
     ItemId quick[kQuickSlots];
     const WeaponStats& weaponStats() const { return itemDef(weapon).weapon; }

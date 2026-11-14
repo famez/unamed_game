@@ -212,10 +212,32 @@ void drawWeapon(Renderer& r, const Mat4& w, const WeaponStats& ws, Move m, float
         r.ellipsoid(w, tip - Vec3{0, 0, 0.04f}, {0.07f, 0.02f, 0.03f}, ws.blade, Material::Metal);
         return;
     }
-    // Hoja: núcleo luminoso del color del prisma dentro de una funda clara.
-    r.box(w, mid, {0.04f, 0.011f, len * 0.5f}, ws.blade, Material::Metal);
-    r.box(w, mid, {0.004f, 0.013f, len * 0.46f}, ws.trail, Material::Glow);  // veta de luz por el filo
-    r.ellipsoid(w, tip, {0.04f, 0.011f, 0.08f}, ws.blade, Material::Metal);
+    // Hoja: núcleo luminoso del color del prisma dentro de una funda clara. Los sables se
+    // arquean (tramos que se van girando hacia el lomo) y cada espada tiene su anchura.
+    float bw = ws.width;
+    if (ws.curve > 0.001f) {
+        const int n = 6;
+        float seg = len / float(n);
+        Vec3 p = base;
+        for (int i = 0; i < n; ++i) {
+            float t0 = float(i) / float(n), t1 = float(i + 1) / float(n);
+            Vec3 q = base + Vec3{ws.curve * t1 * t1, 0, len * t1};  // se arquea en el plano del filo
+            Vec3 dir = normalize(q - p);
+            Mat4 sm = w * translate((p + q) * 0.5f) * rotateY(std::atan2(dir.x, dir.z));
+            float wi = bw * lerpf(1.0f, 0.75f, t0);
+            r.box(sm, {}, {wi, 0.011f, seg * 0.52f}, ws.blade, Material::Metal);
+            r.box(sm, {-wi * 0.8f, 0, 0}, {0.004f, 0.013f, seg * 0.5f}, ws.trail, Material::Glow);  // luz por el filo
+            p = q;
+        }
+        tip = p;
+        r.ellipsoid(w, tip, {bw * 0.75f, 0.011f, 0.06f}, ws.blade, Material::Metal);
+    } else {
+        r.box(w, mid, {bw, 0.011f, len * 0.5f}, ws.blade, Material::Metal);
+        r.box(w, mid, {0.004f, 0.013f, len * 0.46f}, ws.trail, Material::Glow);  // veta de luz por el filo
+        r.ellipsoid(w, tip, {bw, 0.011f, 0.08f}, ws.blade, Material::Metal);
+    }
+    if (bw >= 0.05f)  // espadas anchas: acanaladura oscura a lo largo
+        r.box(w, mid - Vec3{0, 0, len * 0.08f}, {0.006f, 0.012f, len * 0.3f}, ws.hilt, Material::Metal);
     if (hammer > 0.01f) {  // martillo: una cabeza de luz que crece en la punta
         Vec3 head = tip + Vec3{0, 0, 0.05f};
         r.box(w, head, Vec3{0.16f, 0.11f, 0.11f} * hammer, ws.blade, Material::Metal);

@@ -23,6 +23,13 @@ WeaponStats weapon(float power, float magic, int combo, float reach, float speed
     w.style = style;
     return w;
 }
+WeaponStats sword(float power, int combo, float reach, float speed, float length, float width, float curve,
+                  uint32_t blade, uint32_t hilt, uint32_t trail) {
+    WeaponStats w = weapon(power, 5, combo, reach, speed, length, blade, hilt, trail, WeaponStyle::Sword);
+    w.width = width;
+    w.curve = curve;
+    return w;
+}
 
 // clang-format off
 const ItemDef kItems[int(ItemId::Count)] = {
@@ -44,6 +51,16 @@ const ItemDef kItems[int(ItemId::Count)] = {
         weapon(12, 5, 3, 2.7f, 0.9f, 1.40f, rgb(230, 245, 255), rgb(200, 205, 220), rgb(60, 230, 255), WeaponStyle::Lance)},
     {"Guanteletes de luz", "Puñetazos rapidísimos. Combo de 6.",     ItemKind::Weapon,     rgb(255, 170, 90), 0, 0,
         weapon(6, 6, 5, 1.5f, 1.5f, 0.20f, rgb(255, 240, 225), rgb(200, 205, 220), rgb(255, 160, 60), WeaponStyle::Fists)},
+    {"Filo de farola",   "Forjada con el vidrio de una farola. Más filo y el mismo peso.", ItemKind::Weapon, rgb(240, 196, 120), 0, 0,
+        sword(14, 3, 2.0f, 1.05f, 0.88f, 0.042f, 0.0f, rgb(196, 190, 176), rgb(92, 64, 40), rgb(255, 190, 110))},
+    {"Hoja crepuscular", "Un sable curvo, rápido. Corta como cae la tarde.", ItemKind::Weapon, rgb(230, 130, 110), 0, 0,
+        sword(17, 4, 2.1f, 1.15f, 0.95f, 0.036f, 0.14f, rgb(206, 196, 200), rgb(70, 40, 52), rgb(255, 120, 90))},
+    {"Espada del vigía", "Larga y pesada: barre a los que rodean.", ItemKind::Weapon, rgb(170, 190, 220), 0, 0,
+        sword(22, 3, 2.5f, 0.88f, 1.18f, 0.05f, 0.0f, rgb(178, 186, 200), rgb(40, 44, 58), rgb(170, 210, 255))},
+    {"Colmillo de sombra", "Corta y negra. Cinco tajos seguidos sin respirar.", ItemKind::Weapon, rgb(150, 90, 230), 0, 0,
+        sword(18, 5, 1.8f, 1.4f, 0.7f, 0.034f, 0.1f, rgb(46, 40, 60), rgb(30, 26, 36), rgb(160, 90, 255))},
+    {"La hora quieta",   "Mitad luz, mitad sombra. Pesa lo que pesa un instante.", ItemKind::Weapon, rgb(255, 240, 200), 0, 0,
+        sword(28, 4, 2.4f, 1.1f, 1.08f, 0.046f, 0.06f, rgb(236, 232, 222), rgb(24, 22, 30), rgb(255, 246, 220))},
     {"Afilador de luz",  "Fuerza +2 permanente para cualquier prisma (máximo +6).", ItemKind::Upgrade, rgb(255, 255, 255), 0, 0, {}},
     {"Núcleo Aurora",    "G: Forma Aurora 25 s. Todo más rápido y más fuerte.", ItemKind::Core, rgb(255, 210, 90), 0, 0, {}},
     {"Núcleo Coloso",    "G: Forma Coloso 25 s. Golpes enormes con onda; nada te frena.", ItemKind::Core, rgb(255, 140, 60), 0, 0, {}},
@@ -53,16 +70,22 @@ const ItemDef kItems[int(ItemId::Count)] = {
 
 using P = Recipe::Part;
 const Recipe kRecipes[] = {
-    {ItemId::HiPotion, 1, {P{ItemId::Potion, 2}, P{ItemId::GoldSpore, 1}}, 2},
-    {ItemId::Elixir, 1, {P{ItemId::BlazeGem, 1}, P{ItemId::WingDust, 2}, P{ItemId::ShinyShard, 2}}, 3},
-    {ItemId::Ether, 2, {P{ItemId::WingDust, 2}}, 1},
-    {ItemId::Sharpener, 1, {P{ItemId::ShinyShard, 2}, P{ItemId::WingDust, 1}}, 2},
-    {ItemId::LightLance, 1, {P{ItemId::ShinyShard, 3}, P{ItemId::GoldSpore, 2}}, 2},
-    {ItemId::LightFists, 1, {P{ItemId::WingDust, 3}, P{ItemId::ShinyShard, 2}}, 2},
-    {ItemId::AuroraBlade, 1, {P{ItemId::StarStaff, 1}, P{ItemId::BlazeGem, 1}, P{ItemId::GoldSpore, 3}}, 3},
-    {ItemId::CoreAurora, 1, {P{ItemId::ShinyShard, 3}, P{ItemId::WingDust, 1}}, 2},
-    {ItemId::CoreColossus, 1, {P{ItemId::GoldSpore, 3}}, 1},
-    {ItemId::CoreEcho, 1, {P{ItemId::WingDust, 3}}, 1},
+    {ItemId::HiPotion, 1, 1, {P{ItemId::Potion, 2}, P{ItemId::GoldSpore, 1}}, 2},
+    {ItemId::Elixir, 1, 1, {P{ItemId::BlazeGem, 1}, P{ItemId::WingDust, 2}, P{ItemId::ShinyShard, 2}}, 3},
+    {ItemId::Ether, 2, 1, {P{ItemId::WingDust, 2}}, 1},
+    {ItemId::Sharpener, 1, 1, {P{ItemId::ShinyShard, 2}, P{ItemId::WingDust, 1}}, 2},
+    {ItemId::LightLance, 1, 1, {P{ItemId::ShinyShard, 3}, P{ItemId::GoldSpore, 2}}, 2},
+    {ItemId::LightFists, 1, 1, {P{ItemId::WingDust, 3}, P{ItemId::ShinyShard, 2}}, 2},
+    {ItemId::AuroraBlade, 1, 1, {P{ItemId::StarStaff, 1}, P{ItemId::BlazeGem, 1}, P{ItemId::GoldSpore, 3}}, 3},
+    {ItemId::CoreAurora, 1, 1, {P{ItemId::ShinyShard, 3}, P{ItemId::WingDust, 1}}, 2},
+    {ItemId::CoreColossus, 1, 1, {P{ItemId::GoldSpore, 3}}, 1},
+    {ItemId::CoreEcho, 1, 1, {P{ItemId::WingDust, 3}}, 1},
+    // Espadas: cada una pide un nivel y piezas de los enemigos de la zona.
+    {ItemId::LampEdge, 1, 3, {P{ItemId::ShinyShard, 3}, P{ItemId::GoldSpore, 1}}, 2},
+    {ItemId::DuskBlade, 1, 6, {P{ItemId::ShinyShard, 4}, P{ItemId::WingDust, 3}}, 2},
+    {ItemId::WatchSword, 1, 9, {P{ItemId::GoldSpore, 5}, P{ItemId::WingDust, 2}, P{ItemId::ShinyShard, 2}}, 3},
+    {ItemId::ShadowFang, 1, 12, {P{ItemId::WingDust, 6}, P{ItemId::GoldSpore, 2}}, 2},
+    {ItemId::StillHour, 1, 16, {P{ItemId::BlazeGem, 1}, P{ItemId::ShinyShard, 6}, P{ItemId::WingDust, 6}, P{ItemId::GoldSpore, 4}}, 4},
 };
 // clang-format on
 
@@ -75,7 +98,8 @@ const Recipe* recipes(int& count) {
     return kRecipes;
 }
 
-bool Inventory::canCraft(const Recipe& r) const {
+bool Inventory::canCraft(const Recipe& r, int level) const {
+    if (level < r.minLevel) return false;
     for (int i = 0; i < r.partCount; ++i)
         if (count(r.parts[i].item) < r.parts[i].n) return false;
     // Un arma solo se fabrica una vez.
@@ -83,8 +107,8 @@ bool Inventory::canCraft(const Recipe& r) const {
     return count(r.result) + r.count <= kMaxStack;
 }
 
-bool Inventory::craft(const Recipe& r) {
-    if (!canCraft(r)) return false;
+bool Inventory::craft(const Recipe& r, int level) {
+    if (!canCraft(r, level)) return false;
     for (int i = 0; i < r.partCount; ++i) remove(r.parts[i].item, r.parts[i].n);
     add(r.result, r.count);
     return true;

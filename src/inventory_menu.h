@@ -35,7 +35,8 @@ private:
     void activate(Game& game, ItemId id);
 
     int tab_ = Consumables;
-    int selected_ = 0;
+    int selected_ = 0;  // índice en la lista completa
+    int top_ = 0;       // primera fila visible (la lista se desplaza si no cabe)
     std::string message_;
     float messageTime_ = 0;
 };
