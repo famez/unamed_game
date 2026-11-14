@@ -34,7 +34,10 @@ void Game::storyCommand(const StoryLine& cmd) {
     } else if (c == "abrir") {
         setGate(cmd.text, false);
     } else if (c == "dar") {
-        if (cmd.text == "farolillo") inv_.add(ItemId::BlazeGem);
+        if (cmd.text == "farolillo") {
+            inv_.add(ItemId::NoraLantern);
+            notify("Obtenido: Farolillo de Nora (T: llamar a su eco)", itemDef(ItemId::NoraLantern).color);
+        }
     } else if (c == "eco_activa") {
         int n = std::atoi(cmd.text.c_str()) - 1;
         if (n >= 0 && n < int(echoes_.size())) {

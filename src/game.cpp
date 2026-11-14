@@ -96,7 +96,10 @@ void Game::init(const char* assetDir) {
 void Game::applyWeapon() {
     const WeaponStats& w = inv_.weaponStats();
     hero_.comboHits = w.comboHits;
-    hero_.attackSpeed = w.speed;
+    hero_.attackSpeed = w.speed * (form_ == Form::Aurora ? 1.5f : form_ == Form::Colossus ? 0.85f : 1.0f);
+    hero_.speedScale = form_ == Form::Aurora ? 1.3f : form_ == Form::Colossus ? 0.9f : 1.0f;
+    hero_.gravityScale = form_ == Form::Echo ? 0.35f : 1.0f;
+    hero_.infiniteJumps = form_ == Form::Echo;
     hero_.moveSet = w.style == WeaponStyle::Lance   ? MoveSet::Lance
                     : w.style == WeaponStyle::Fists ? MoveSet::Fists
                                                     : MoveSet::Blade;
@@ -132,6 +135,7 @@ void Game::update(float dt, const Controls& c) {
         if (hero_.downTimer > kHeroRespawn) respawnHero();
     } else {
         updateLight(dt, c);
+        updateAllies(dt, c);
         if (c.lockOn) cycleLock(c.camForward);
         if (c.unlock) lock_ = -1;
         if (c.commandScroll != 0)
@@ -440,7 +444,8 @@ void Game::resolveImpact(Move m) {
         if (std::fabs(e.center().y - chestY) > 1.5f || !inArc(to, e.body.radius)) continue;
         Vec3 dir = normalize(flat(to));
         if (length(dir) < 0.5f) dir = fwd;
-        hitEnemy(e, dir, (w.power + inv_.powerBonus) * hp.damage, hp.knock, hp.lift, hp.heavy);
+        hitEnemy(e, dir, (w.power + inv_.powerBonus) * hp.damage * formDamage(), hp.knock * (form_ == Form::Colossus ? 1.4f : 1.0f),
+                 hp.lift, hp.heavy || form_ == Form::Colossus);
         ++hits;
     }
     for (Crate& c : crates_) {
@@ -470,6 +475,22 @@ void Game::resolveImpact(Move m) {
     if (hits > 0) {
         hitStop_ = isFinisher(m) ? 0.09f : 0.05f;
         shake_ = std::max(shake_, isFinisher(m) ? 0.35f : 0.12f);
+    }
+    // Formas: el Coloso suelta una onda de choque con cada golpe y el Eco un orbe de luz.
+    if (form_ == Form::Colossus) {
+        Vec3 at = origin + fwd * 1.2f;
+        spawnRing(Vec3{at.x, groundHeight(at + Vec3{0, 1, 0}) + 0.05f, at.z}, 2.6f, 0.35f, formColor(form_));
+        for (Enemy& e : enemies_)
+            if (e.targetable() && length(flat(e.body.pos - at)) < 2.6f + e.body.radius)
+                hitEnemy(e, normalize(flat(e.body.pos - at)), (w.power + inv_.powerBonus) * 0.5f, 4.0f, 2.0f, true);
+        shake_ = std::max(shake_, 0.15f);
+    } else if (form_ == Form::Echo) {
+        int t = lock_ >= 0 ? lock_ : pickTarget(fwd, 15.0f);
+        Vec3 from = bladeTip();
+        Vec3 aim = t >= 0 ? normalize(enemies_[size_t(t)].center() - from) : fwd;
+        Projectile p{ProjectileKind::EnemyOrb, from, aim * 15.0f, 2.0f, t};
+        p.reflected = true;
+        projectiles_.push_back(p);
     }
     if (m == Move::Finisher) {
         shake_ = std::max(shake_, 0.25f);
@@ -578,14 +599,18 @@ void Game::hurtHero(Vec3 dir, float damage, float knock, Enemy* source) {
         if (source) source->rlReward -= perfectGuard_ ? 1.0f : 0.5f;  // bloqueado: mala táctica
         return;
     }
+    if (form_ == Form::Colossus) {  // el Coloso no se inmuta: menos daño, sin tambaleo
+        damage *= 0.6f;
+        knock *= 0.2f;
+    }
     hp_ = std::max(0.0f, hp_ - damage);
     if (source) source->rlReward += damage / 10.0f;  // le ha hecho daño: buena táctica
     sound(Sfx::HeroHurt, chest);
     heroInvuln_ = kInvulnAfterHit;
     heroFlash_ = 0.25f;
     shake_ = std::max(shake_, 0.25f);
-    hero_.flinch(0.35f);
-    hero_.push(dir * knock + Vec3{0, 2.0f, 0});
+    if (form_ != Form::Colossus) hero_.flinch(0.35f);
+    hero_.push(dir * knock + Vec3{0, form_ == Form::Colossus ? 0.0f : 2.0f, 0});
     spawnSparks(chest, dir, 10, rgba(255, 90, 90), 3.0f);
     if (hp_ <= 0) defeatHero();
 }
@@ -1062,6 +1087,9 @@ bool Game::craft(const Recipe& r) {
 
 bool Game::useItem(ItemId id) {
     const ItemDef& d = itemDef(id);
+    if (d.kind == ItemKind::Core && inv_.count(id) > 0)  // núcleo: transformarse
+        return startForm(id == ItemId::CoreAurora ? Form::Aurora : id == ItemId::CoreColossus ? Form::Colossus : Form::Echo);
+    if (d.kind == ItemKind::Key && id == ItemId::NoraLantern) return summon(1);
     if (d.kind == ItemKind::Upgrade && inv_.count(id) > 0) {  // afilador: fuerza permanente
         if (inv_.powerBonus >= Inventory::kMaxPowerBonus) {
             notify("El prisma ya no admite más filo", rgba(180, 180, 190));

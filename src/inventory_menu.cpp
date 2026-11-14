@@ -69,7 +69,8 @@ std::vector<ItemId> InventoryMenu::entries(const Inventory& inv) const {
         // Los consumibles se listan aunque no queden (para poder asignar el atajo).
         bool show = inv.count(id) > 0 || (kind == ItemKind::Consumable);
         ItemKind k = itemDef(id).kind;
-        if (k == ItemKind::Upgrade && inv.count(id) > 0) k = ItemKind::Consumable;  // los afiladores, con los objetos
+        if ((k == ItemKind::Upgrade || k == ItemKind::Core || k == ItemKind::Key) && inv.count(id) > 0)
+            k = ItemKind::Consumable;  // afiladores, núcleos y objetos clave, con los objetos
         if (k == kind && show) out.push_back(id);
     }
     return out;
@@ -84,7 +85,9 @@ void InventoryMenu::activate(Game& game, ItemId id) {
         messageTime_ = 2.0f;
         return;
     }
-    if (d.kind == ItemKind::Upgrade) {
+    if (d.kind == ItemKind::Core || d.kind == ItemKind::Key) {
+        message_ = game.useItem(id) ? std::string("Usado: ") + d.name : "Ahora no se puede";
+    } else if (d.kind == ItemKind::Upgrade) {
         message_ = game.useItem(id) ? "El prisma tiene más filo" : "No admite más filo";
     } else if (d.kind == ItemKind::Weapon) {
         if (game.equip(id)) message_ = std::string("Equipado: ") + d.name;

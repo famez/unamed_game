@@ -45,6 +45,10 @@ const ItemDef kItems[int(ItemId::Count)] = {
     {"Guanteletes de luz", "Puñetazos rapidísimos. Combo de 6.",     ItemKind::Weapon,     rgb(255, 170, 90), 0, 0,
         weapon(6, 6, 5, 1.5f, 1.5f, 0.20f, rgb(255, 240, 225), rgb(200, 205, 220), rgb(255, 160, 60), WeaponStyle::Fists)},
     {"Afilador de luz",  "Fuerza +2 permanente para cualquier prisma (máximo +6).", ItemKind::Upgrade, rgb(255, 255, 255), 0, 0, {}},
+    {"Núcleo Aurora",    "G: Forma Aurora 25 s. Todo más rápido y más fuerte.", ItemKind::Core, rgb(255, 210, 90), 0, 0, {}},
+    {"Núcleo Coloso",    "G: Forma Coloso 25 s. Golpes enormes con onda; nada te frena.", ItemKind::Core, rgb(255, 140, 60), 0, 0, {}},
+    {"Núcleo Eco",       "G: Forma Eco 25 s. Casi sin gravedad; cada golpe lanza un orbe.", ItemKind::Core, rgb(120, 230, 255), 0, 0, {}},
+    {"Farolillo de Nora", "T: llama al eco de Nora. Su luz cura y aturde a los Grises.", ItemKind::Key, rgb(255, 190, 110), 0, 0, {}},
 };
 
 using P = Recipe::Part;
@@ -56,6 +60,9 @@ const Recipe kRecipes[] = {
     {ItemId::LightLance, 1, {P{ItemId::ShinyShard, 3}, P{ItemId::GoldSpore, 2}}, 2},
     {ItemId::LightFists, 1, {P{ItemId::WingDust, 3}, P{ItemId::ShinyShard, 2}}, 2},
     {ItemId::AuroraBlade, 1, {P{ItemId::StarStaff, 1}, P{ItemId::BlazeGem, 1}, P{ItemId::GoldSpore, 3}}, 3},
+    {ItemId::CoreAurora, 1, {P{ItemId::ShinyShard, 3}, P{ItemId::WingDust, 1}}, 2},
+    {ItemId::CoreColossus, 1, {P{ItemId::GoldSpore, 3}}, 1},
+    {ItemId::CoreEcho, 1, {P{ItemId::WingDust, 3}}, 1},
 };
 // clang-format on
 

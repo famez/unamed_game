@@ -29,6 +29,7 @@ set(LOGIC_SOURCES
     src/levels.cpp
     src/light.cpp
     src/brain.cpp
+    src/allies.cpp
     src/story.cpp
     src/synth.cpp
 )

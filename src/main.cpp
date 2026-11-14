@@ -42,7 +42,7 @@ struct OrbitCamera {
 struct PendingInput {
     bool jump = false, attack = false, dodge = false, lockOn = false, unlock = false, interact = false;
     bool advance = false;  // pasar la línea de diálogo
-    bool beam = false, nova = false;
+    bool beam = false, nova = false, transform = false, summon = false;
     bool runCommand = false;
     int command = -1, scroll = 0;
 };
@@ -255,6 +255,8 @@ int main(int argc, char** argv) {
                 pending.interact |= input.wasPressed(Key::F);
                 pending.runCommand |= input.wasPressed(Key::E);
                 pending.nova |= input.wasPressed(Key::V);
+                pending.transform |= input.wasPressed(Key::G);
+                pending.summon |= input.wasPressed(Key::T);
                 // Q: pulsación corta = hacerse luz; mantenida = absorber.
                 if (input.wasPressed(Key::Q)) qHeld = 0;
                 if (input.isDown(Key::Q)) qHeld += float(frameDt);
@@ -306,6 +308,8 @@ int main(int argc, char** argv) {
                 c.absorb = playing && qHeld >= 0.22f;
                 c.beam = pending.beam;
                 c.nova = pending.nova;
+                c.transform = pending.transform;
+                c.summon = pending.summon;
                 c.attackHeld = playing && captured && input.mouseLeft && !game.dialogueBlocking();
                 c.commandScroll = pending.scroll;
                 c.camForward = cam.forwardFlat();

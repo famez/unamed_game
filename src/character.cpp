@@ -448,7 +448,7 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
     // giro amortiguado. Con la guardia o cargando se anda despacio mirando a la cámara.
     bool canMove = !busy() && !absorbing();
     bool aimed = guarding() || charge() > 0;
-    float maxSpeed = aimed ? kGuardSpeed : (sprintHeld_ && body.grounded ? kSprintSpeed : kRunSpeed);
+    float maxSpeed = (aimed ? kGuardSpeed : (sprintHeld_ && body.grounded ? kSprintSpeed : kRunSpeed)) * speedScale;
     float targetSpeed = canMove ? maxSpeed * input : 0.0f;
     speed = moveTowards(speed, targetSpeed, (targetSpeed > speed ? kAcceleration : kDeceleration) * dt);
     if (canMove && (input > 0.01f || aimed)) {
@@ -509,10 +509,12 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
             body.vel.y = kJumpSpeed;
         } else if (!doubleJumpUsed_) {  // doble salto con voltereta
             body.vel.y = kJumpSpeed * 0.9f;
-            doubleJumpUsed_ = true;
+            doubleJumpUsed_ = !infiniteJumps;
             flipTime_ = 0;
         }
     }
+    // Menos gravedad en el aire (forma Eco): se compensa parte antes de integrar.
+    if (!body.grounded && gravityScale < 1.0f && move_ != Move::Plunge) body.vel.y += kGravity * (1.0f - gravityScale) * dt;
     // Picado: tras el saltito, cae a plomo.
     if (move_ == Move::Plunge && !impactDone_ && moveTime_ > 0.18f) body.vel.y = -22.0f;
     // Golpe aéreo: casi sin gravedad mientras dura (se queda flotando).

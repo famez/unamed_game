@@ -474,7 +474,29 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
     const BuiltModel& body = model(ModelId::Hero);
     Mat4 skin[kMaxJoints];
     skinMatrices(body, j, skin);
-    solid->skinned(body.mesh, skin, body.jointCount, flash, kOutline);
+    solid->skinned(body.mesh, skin, body.jointCount, flash, form_ != Form::None ? formColor(form_) : kOutline);
+    // Formas prismáticas: piezas de luz propias de cada una.
+    if (form_ == Form::Aurora) {  // halo que gira sobre la cabeza
+        Mat4 halo = j[Head] * translate({0, 0.42f, -0.02f}) * rotateY(time_ * 2.5f);
+        for (int k = 0; k < 10; ++k)
+            solid->ellipsoid(halo * rotateY(float(k) * kPi * 0.2f), {0.2f, 0, 0}, {0.03f, 0.03f, 0.05f}, formColor(form_), Material::Glow);
+    } else if (form_ == Form::Colossus) {  // cristales en los hombros y nudillos ardientes
+        for (Joint sh : {ShoulderL, ShoulderR}) {
+            float sx = sh == ShoulderL ? 1.0f : -1.0f;
+            for (int k = 0; k < 3; ++k)
+                solid->box(j[sh] * translate({sx * (0.06f + 0.03f * float(k)), 0.06f + 0.04f * float(k), -0.02f}) *
+                               rotateZ(sx * (0.4f + 0.3f * float(k))),
+                           {}, {0.025f, 0.09f, 0.025f}, formColor(form_), Material::Glow);
+        }
+        for (Joint wr : {WristL, WristR}) solid->ellipsoid(j[wr], {0, -0.1f, 0.02f}, {0.07f, 0.05f, 0.07f}, formColor(form_), Material::Glow);
+    } else if (form_ == Form::Echo) {  // alas de luz que aletean
+        float flap = 0.35f + 0.3f * std::sin(time_ * 6.0f);
+        for (float sx : {-1.0f, 1.0f}) {
+            Mat4 wing = j[Chest] * translate({sx * 0.1f, 0.16f, -0.16f}) * rotateY(sx * -0.5f) * rotateZ(sx * flap);
+            solid->ellipsoid(wing, {sx * 0.42f, 0.1f, 0}, {0.42f, 0.22f, 0.015f}, formColor(form_), Material::Glow);
+            solid->ellipsoid(wing, {sx * 0.3f, -0.15f, 0}, {0.28f, 0.14f, 0.015f}, rgba(255, 255, 255), Material::Glow);
+        }
+    }
     for (const Shape& s : kHeroShapes) solid->ellipsoid(j[s.joint], s.center, s.radii, s.color, s.material, flash);
     for (const NeonLine& l : kNeonLines) solid->box(j[l.joint], l.center, l.half, l.color, Material::Glow, flash);
     solid->box(j[Chest] * translate({0, 0.12f, 0.128f}) * rotateZ(kPi * 0.25f), {}, {0.028f, 0.028f, 0.012f}, kNeonPink,
@@ -743,6 +765,25 @@ void Game::drawStory(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const View
             glowStar(glow, view, p, 0.06f, time_ * 4.0f, withAlpha(rgba(255, 255, 255), 0.8f));
         }
     }
+    // Compañeros: la chispa aliada (cian) y el eco de Nora (un farolillo cálido).
+    for (const Companion& m : companions_) {
+        float fade = clampf(m.life / 1.0f, 0, 1);
+        uint32_t col = m.kind == 1 ? rgba(255, 190, 110) : rgba(120, 230, 255);
+        if (!solid) {
+            dd.point(m.pos, col);
+            continue;
+        }
+        if (m.kind == 1) {
+            solid->ellipsoid(Mat4::identity(), m.pos, Vec3{0.17f, 0.22f, 0.17f} * fade, col, Material::Glow);
+            solid->box(Mat4::identity(), m.pos + Vec3{0, 0.26f, 0}, Vec3{0.1f, 0.03f, 0.1f} * fade, rgba(240, 240, 250), Material::Metal);
+            solid->light(m.pos, Vec3{1.0f, 0.75f, 0.45f} * (2.0f * fade), 6.0f);
+            glowDot(glow, view, m.pos, 0.6f, withAlpha(col, 0.25f * fade));
+        } else {
+            solid->ellipsoid(Mat4::identity(), m.pos, Vec3{0.1f, 0.1f, 0.1f} * fade, col, Material::Glow);
+            solid->light(m.pos, Vec3{0.5f, 0.9f, 1.0f} * (1.5f * fade), 4.0f);
+            glowStar(glow, view, m.pos, 0.3f, time_ * 3.0f, withAlpha(col, 0.7f * fade));
+        }
+    }
     // Ecos de memoria: cristales blancos que giran con un halo irisado y un haz de luz.
     for (const MemoryEcho& m : echoes_) {
         if (!m.active || m.taken) continue;
@@ -921,6 +962,13 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
         if (lightAt(hero_.body.pos) > 0.3f)
             uiText(ui, right - 14 - maxMp_ * 1.8f - 60, cy - 16, 13, "EN LA LUZ", rgba(255, 245, 200), FontFace::Title,
                    Align::Right, 0.6f);
+        // Forma activa: nombre y tiempo restante.
+        if (form_ != Form::None) {
+            uint32_t fc = formColor(form_);
+            std::snprintf(buf, sizeof(buf), "%s  %.0f s", formName(form_), double(formTime_));
+            uiText(ui, right, cy - 98, 16, buf, fc, FontFace::Title, Align::Right, 0.6f);
+            segBar(d, right, cy - 78, 200, 6, formTime_ / 25.0f, formTime_ / 25.0f, fc, 0, 25);
+        }
         // Lúmenes.
         diamond(d, w - 196, cy + 46, 9, kUiAmber);
         diamond(d, w - 196, cy + 46, 4, rgba(255, 250, 210));
@@ -965,8 +1013,8 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
             uiText(ui, x0 + 40, y + 4, 19, name, tc);
             uiText(ui, x0 + width - 10, y + 6, 15, value, sel ? rgba(60, 70, 110) : kUiDim, FontFace::Title, Align::Right);
         }
-        skewRect(d, x - 6, h - 30, x + 560, h - 8, 6, kUiPanel);
-        uiText(ui, x, h - 28, 14, "Clic atacar · Q luz (mantén: absorber) · C esquivar · Shift correr · R fijar · Tab inventario", kUiDim);
+        skewRect(d, x - 6, h - 30, x + 700, h - 8, 6, kUiPanel);
+        uiText(ui, x, h - 28, 14, "Clic atacar · Q luz · V supernova · G forma · T compañero · C esquivar · Shift correr · R fijar · Tab inventario", kUiDim);
     }
 
     // Objetivo fijado arriba a la derecha.

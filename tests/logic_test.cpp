@@ -22,7 +22,7 @@ int fails = 0;
 void run(Game& g, float secs, Controls c = {}) {
     for (int i = 0; i < int(secs * 60); ++i) {
         g.update(dt, c);
-        c.jump = c.attack = c.dodge = c.interact = c.lockOn = c.unlock = c.runCommand = c.beam = c.nova = false;
+        c.jump = c.attack = c.dodge = c.interact = c.lockOn = c.unlock = c.runCommand = c.beam = c.nova = c.transform = c.summon = false;
         c.command = -1;
         c.commandScroll = 0;
     }
@@ -349,6 +349,41 @@ int main() {
         CHECK(g.hp_ < 100 && imp.experience() > 5 && bestAttack > 0,
               "el Rastrero aprende jugando: %d decisiones, atacar vale %.2f cuando acierta", imp.experience(), bestAttack);
         CHECK(g.bossBrain().experience() == 0, "el jefe tiene su propio cerebro (aun sin estrenar)");
+    }
+    {  // Transformaciones y compañeros
+        Game g = fresh();
+        place(g, {0, 0, -10});
+        float speed0 = g.hero_.attackSpeed;
+        g.update(dt, press(&Controls::transform));
+        CHECK(g.form() == Form::None, "sin nucleo no hay transformacion");
+        g.inventory().add(ItemId::CoreAurora);
+        g.update(dt, press(&Controls::transform));
+        CHECK(g.form() == Form::Aurora && g.hero_.attackSpeed > speed0 * 1.4f && g.inventory().count(ItemId::CoreAurora) == 0,
+              "Forma Aurora: gasta el nucleo y golpea mas rapido");
+        run(g, 26.0f);
+        CHECK(g.form() == Form::None && std::fabs(g.hero_.attackSpeed - speed0) < 1e-4f, "la forma dura 25 s");
+        g.inventory().add(ItemId::CoreEcho);
+        g.update(dt, press(&Controls::transform));
+        CHECK(g.form() == Form::Echo && g.hero_.gravityScale < 0.5f && g.hero_.infiniteJumps, "Forma Eco: poca gravedad y saltos sin limite");
+
+        Game h = fresh();
+        place(h, {0, 0, -10});
+        addEnemy(h, EnemyKind::Shroom, {0, 0, -5});
+        h.mp_ = 30;
+        h.update(dt, press(&Controls::summon));
+        CHECK(h.companions_.empty(), "la chispa necesita 40 de Luz");
+        h.mp_ = 50;
+        h.update(dt, press(&Controls::summon));
+        CHECK(h.companions_.size() == 1 && h.mp_ == 10, "chispa aliada invocada (cuesta 40)");
+        run(h, 4.0f);
+        CHECK(h.enemies_[0].health < 60, "la chispa dispara al Domo (vida %.0f)", h.enemies_[0].health);
+        h.inventory().add(ItemId::NoraLantern);
+        h.mp_ = 60;
+        h.hp_ = 50;
+        h.update(dt, press(&Controls::summon));
+        CHECK(h.companions_.size() == 2 && h.companions_[1].kind == 1, "con el farolillo acude Nora");
+        run(h, 3.5f);
+        CHECK(h.hp_ > 50, "la luz de Nora cura (PV %.0f)", h.hp_);
     }
     {  // Cofres y cajas
         Game g = fresh();

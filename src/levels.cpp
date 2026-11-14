@@ -481,6 +481,7 @@ void Game::loadLevel(LevelId id) {
     blasts_.clear();
     trail_.clear();
     particles_.clear();
+    companions_.clear();
     level_ = id;
     part_ = 0;
     activeEncounter_ = -1;

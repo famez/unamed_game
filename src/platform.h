@@ -11,7 +11,7 @@ enum class Key {
     N1, N2, N3, N4, N5, N6, N7, N8,
     F1, F2, F3, F4,
     DebugView,  // F12 o la tecla º (a la izquierda del 1 en teclado español)
-    F, G, P, R, I, X, Tab, C, Ctrl, V,
+    F, G, P, R, I, X, Tab, C, Ctrl, V, T,
     Count
 };
 

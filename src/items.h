@@ -14,10 +14,12 @@ enum class ItemId : int {
     WoodenSword, StarStaff, AuroraBlade, LightLance, LightFists,
     // Mejoras (se fabrican en el taller)
     Sharpener,
+    // Núcleos de transformación (taller) y objetos clave
+    CoreAurora, CoreColossus, CoreEcho, NoraLantern,
     Count
 };
 
-enum class ItemKind { Consumable, Material, Weapon, Upgrade };
+enum class ItemKind { Consumable, Material, Weapon, Upgrade, Core, Key };
 
 // Forma del arma al dibujarla.
 enum class WeaponStyle { Sword, Staff, Saber, Lance, Fists };

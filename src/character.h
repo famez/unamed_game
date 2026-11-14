@@ -50,6 +50,10 @@ public:
     float lying = 0;       // 1 = tumbado boca arriba (al despertar), 0 = de pie
     int comboHits = 3;     // golpes en el suelo antes del remate (lo fija el arma)
     MoveSet moveSet = MoveSet::Blade;
+    // Modificadores de las formas prismáticas.
+    float speedScale = 1;     // velocidad de carrera
+    float gravityScale = 1;   // gravedad en el aire (Eco: casi nada)
+    bool infiniteJumps = false;
     float attackSpeed = 1; // multiplicador de la velocidad de los golpes (arma)
     Pose pose;             // pose mostrada (ya mezclada)
     Mat4 joints[JointCount] = {};  // matrices mundo tras el último update

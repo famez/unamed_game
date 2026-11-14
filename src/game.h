@@ -57,6 +57,8 @@ struct Controls {
     bool absorb = false;       // mantener Q: absorber luz
     bool beam = false;         // pulsar Q: hacerse luz (haz)
     bool nova = false;         // V con la Luz llena: Supernova
+    bool transform = false;    // G: transformarse (con un núcleo)
+    bool summon = false;       // T: invocar un compañero
     bool attackHeld = false;   // ataque mantenido (corte cargado)
 };
 
@@ -154,6 +156,17 @@ struct ColorSplash {
 struct TrailSample {  // estela del arma: base y punta de la hoja en un instante
     Vec3 base, tip;
     float age;
+};
+
+// Formas prismáticas (transformaciones) y compañeros invocables (allies.cpp).
+enum class Form { None, Aurora, Colossus, Echo };
+const char* formName(Form f);
+uint32_t formColor(Form f);
+
+struct Companion {
+    int kind = 0;  // 0 chispa aliada, 1 eco de Nora
+    Vec3 pos, vel;
+    float life = 0, timer = 0;
 };
 
 // --- Escenarios -----------------------------------------------------------------------
@@ -300,6 +313,8 @@ public:
     const Brain& bossBrain() const { return bossBrain_; }
     // Intensidad de luz (0..1) en un punto: zonas de nodos encendidos y faroles.
     float lightAt(Vec3 p) const;
+    Form form() const { return form_; }
+    float formTime() const { return formTime_; }
     // Escenario y objetivo actuales.
     LevelId level() const { return level_; }
     const std::string& levelName() const { return levelName_; }
@@ -382,6 +397,11 @@ private:
     void heal(float hp, float mp);
     void castImpact(Spell s);
     void supernova();
+    bool startForm(Form f);
+    void endForm();
+    bool summon(int kind);
+    void updateAllies(float dt, const Controls& c);
+    float formDamage() const;
     void updateLight(float dt, const Controls& c);
     void spawnSparks(Vec3 pos, Vec3 dir, int count, uint32_t color, float speed, bool stars = true);
     void spawnRing(Vec3 pos, float radius, float life, uint32_t color);
@@ -476,6 +496,10 @@ private:
     std::vector<SoundEvent> sounds_;
     Brain brains_[int(EnemyKind::Count)];
     Brain bossBrain_;
+    Form form_ = Form::None;
+    float formTime_ = 0;
+    std::vector<Companion> companions_;
+    float noraCooldown_ = 0;
     std::string brainDir_;
     float adaptNotice_ = 0;
     float croma_ = 0.12f;        // sube al disipar Grises y al superar oleadas
