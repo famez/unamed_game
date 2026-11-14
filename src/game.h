@@ -280,6 +280,8 @@ public:
     // Usar un consumible (desde el inventario o un atajo). Falso si no hay o no hace falta.
     bool useItem(ItemId id);
     bool equip(ItemId id);
+    // Fabricar en el taller (consume las piezas).
+    bool craft(const Recipe& r);
     float time() const { return time_; }
     int kills() const { return kills_; }
     size_t enemyCount() const { return enemies_.size(); }

@@ -241,6 +241,32 @@ int main() {
         CHECK(g.inventory().add(ItemId::Potion, 500) < 500 && g.inventory().count(ItemId::Potion) == 99,
               "maximo 99 por objeto");
     }
+    {  // Taller: fabricar con piezas, armas nuevas y afiladores
+        Game g = fresh();
+        int rc = 0;
+        const Recipe* rs = recipes(rc);
+        const Recipe* lance = nullptr;
+        const Recipe* sharp = nullptr;
+        for (int i = 0; i < rc; ++i) {
+            if (rs[i].result == ItemId::LightLance) lance = &rs[i];
+            if (rs[i].result == ItemId::Sharpener) sharp = &rs[i];
+        }
+        CHECK(lance && !g.craft(*lance), "sin piezas no se fabrica");
+        g.inventory().add(ItemId::ShinyShard, 7);
+        g.inventory().add(ItemId::GoldSpore, 2);
+        g.inventory().add(ItemId::WingDust, 3);
+        CHECK(g.craft(*lance) && g.inventory().count(ItemId::LightLance) == 1 && g.inventory().count(ItemId::ShinyShard) == 4,
+              "lanza de luz fabricada (gasta 3 estaticas y 2 esquirlas)");
+        CHECK(!g.craft(*lance), "un arma solo se fabrica una vez");
+        CHECK(g.equip(ItemId::LightLance) && g.hero_.moveSet == MoveSet::Lance, "con la lanza, combo de estocadas");
+        for (int i = 0; i < 2; ++i) g.craft(*sharp);
+        g.useItem(ItemId::Sharpener);
+        g.useItem(ItemId::Sharpener);
+        CHECK(g.inventory().powerBonus == 4, "dos afiladores: fuerza +4");
+        g.inventory().add(ItemId::Sharpener, 3);
+        for (int i = 0; i < 3; ++i) g.useItem(ItemId::Sharpener);
+        CHECK(g.inventory().powerBonus == 6 && g.inventory().count(ItemId::Sharpener) == 2, "el filo se queda en +6");
+    }
     {  // Cofres y cajas
         Game g = fresh();
         place(g, {11.5f, 0.9f, 11.4f});

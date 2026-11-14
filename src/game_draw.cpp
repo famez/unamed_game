@@ -153,6 +153,12 @@ void drawWeapon(Renderer& r, const Mat4& w, const WeaponStats& ws, Move m, float
     float whip = (m == Move::Slash3 || m == Move::AirFinisher) ? morph : 0.0f;
     float hammer = m == Move::Finisher ? morph : 0.0f;
     const uint32_t grip = rgba(235, 238, 248);
+    if (ws.style == WeaponStyle::Fists) {  // guantelete: funda clara y nudillos de luz
+        r.ellipsoid(w, {0, -0.06f, 0.008f}, {0.062f, 0.088f, 0.072f}, ws.blade, Material::Metal);
+        r.ellipsoid(w, {0, -0.115f, 0.03f}, {0.055f, 0.022f, 0.05f}, ws.trail, Material::Glow);
+        r.ellipsoid(w, {0, 0.01f, 0}, {0.06f, 0.025f, 0.06f}, ws.trail, Material::Glow);  // puño
+        return;
+    }
     r.box(w, kGripLocal, {0.02f, 0.02f, 0.075f}, grip, Material::Metal);
     r.ellipsoid(w, kGripLocal + Vec3{0, 0, 0.09f}, {0.07f, 0.07f, 0.025f}, grip, Material::Metal);
     r.ellipsoid(w, kGripLocal + Vec3{0, 0, 0.1f}, {0.055f, 0.055f, 0.02f}, ws.trail, Material::Glow);
@@ -172,6 +178,13 @@ void drawWeapon(Renderer& r, const Mat4& w, const WeaponStats& ws, Move m, float
     }
     Vec3 base = kBladeBase, tip = kBladeBase + Vec3{0, 0, len};
     Vec3 mid = (base + tip) * 0.5f;
+    if (ws.style == WeaponStyle::Lance) {  // lanza: asta larga (también hacia atrás) y punta de luz
+        r.box(w, mid - Vec3{0, 0, 0.25f}, {0.017f, 0.017f, len * 0.5f + 0.25f}, ws.blade, Material::Metal);
+        r.box(w, mid, {0.006f, 0.02f, len * 0.45f}, ws.trail, Material::Glow);
+        r.ellipsoid(w, tip + Vec3{0, 0, 0.08f}, {0.05f, 0.015f, 0.17f}, ws.trail, Material::Glow);
+        r.ellipsoid(w, tip - Vec3{0, 0, 0.04f}, {0.07f, 0.02f, 0.03f}, ws.blade, Material::Metal);
+        return;
+    }
     // Hoja: núcleo luminoso del color del prisma dentro de una funda clara.
     r.box(w, mid, {0.04f, 0.011f, len * 0.5f}, ws.blade, Material::Metal);
     r.box(w, mid, {0.014f, 0.015f, len * 0.48f}, ws.trail, Material::Glow);
@@ -476,6 +489,7 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
                          Material::Cloth, flash);
     }
     drawWeapon(*solid, j[WristR], ws, hero_.move(), hero_.moveU(), time_);
+    if (ws.style == WeaponStyle::Fists) drawWeapon(*solid, j[WristL], ws, hero_.move(), hero_.moveU(), time_);
     // Cinta de la espalda: segmentos alargados entre los puntos de la cadena, que se
     // estrechan hacia la punta.
     Vec3 rib[Character::kRibbonPoints];

@@ -27,7 +27,7 @@ void gem(DebugDraw& hud, float cx, float cy, float r, uint32_t c) {
     hud.triangle({cx, cy - r, 0}, {cx + r * 0.5f, cy - r * 0.5f, 0}, {cx, cy, 0}, rgba(255, 255, 255, 110));
 }
 
-const char* kTabNames[] = {"OBJETOS", "MATERIALES", "PRISMAS"};
+const char* kTabNames[] = {"OBJETOS", "MATERIALES", "PRISMAS", "TALLER"};
 
 }  // namespace
 
@@ -55,20 +55,38 @@ void InventoryMenu::show() {
 }
 
 std::vector<ItemId> InventoryMenu::entries(const Inventory& inv) const {
+    if (tab_ == Workshop) {  // una fila por receta
+        int n = 0;
+        const Recipe* r = recipes(n);
+        std::vector<ItemId> out;
+        for (int i = 0; i < n; ++i) out.push_back(r[i].result);
+        return out;
+    }
     ItemKind kind = tab_ == Consumables ? ItemKind::Consumable : tab_ == Materials ? ItemKind::Material : ItemKind::Weapon;
     std::vector<ItemId> out;
     for (int i = 0; i < int(ItemId::Count); ++i) {
         ItemId id = ItemId(i);
         // Los consumibles se listan aunque no queden (para poder asignar el atajo).
         bool show = inv.count(id) > 0 || (kind == ItemKind::Consumable);
-        if (itemDef(id).kind == kind && show) out.push_back(id);
+        ItemKind k = itemDef(id).kind;
+        if (k == ItemKind::Upgrade && inv.count(id) > 0) k = ItemKind::Consumable;  // los afiladores, con los objetos
+        if (k == kind && show) out.push_back(id);
     }
     return out;
 }
 
 void InventoryMenu::activate(Game& game, ItemId id) {
     const ItemDef& d = itemDef(id);
-    if (d.kind == ItemKind::Weapon) {
+    if (tab_ == Workshop) {
+        int n = 0;
+        const Recipe* r = recipes(n);
+        if (selected_ < n) message_ = game.craft(r[selected_]) ? std::string("Fabricado: ") + d.name : "Faltan piezas";
+        messageTime_ = 2.0f;
+        return;
+    }
+    if (d.kind == ItemKind::Upgrade) {
+        message_ = game.useItem(id) ? "El prisma tiene más filo" : "No admite más filo";
+    } else if (d.kind == ItemKind::Weapon) {
         if (game.equip(id)) message_ = std::string("Equipado: ") + d.name;
     } else if (d.kind == ItemKind::Consumable) {
         if (game.inventory().count(id) <= 0)
@@ -173,6 +191,14 @@ void InventoryMenu::draw(UiLayer& ui, const Game& game, int width, int height) c
         if (sel) fillRect(d, r.x0, r.y0, r.x0 + 5, r.y1, cyan);
         gem(d, r.x0 + 24, (r.y0 + r.y1) * 0.5f, 9, def.color);
         uint32_t tc = inv.count(id) > 0 ? (sel ? rgba(20, 30, 70) : light) : rgba(110, 115, 140);
+        if (tab_ == Workshop) {  // recetas: en claro las que se pueden fabricar ya
+            int rc = 0;
+            bool ok = recipes(rc)[i].count > 0 && inv.canCraft(recipes(rc)[i]);
+            tc = ok ? (sel ? rgba(20, 30, 70) : light) : rgba(110, 115, 140);
+            drawText(ui, r.x0 + 44, r.y0 + 3, 20, def.name, tc);
+            drawText(ui, r.x1 - 14, r.y0 + 6, 16, ok ? "listo" : "faltan piezas", ok ? rgba(60, 200, 130) : rgba(150, 120, 140), right);
+            continue;
+        }
         drawText(ui, r.x0 + 44, r.y0 + 3, 20, def.name, tc);
         if (def.kind == ItemKind::Weapon) {
             if (inv.weapon == id) drawText(ui, r.x1 - 14, r.y0 + 6, 16, "equipado", rgba(60, 200, 130), right);
@@ -192,14 +218,29 @@ void InventoryMenu::draw(UiLayer& ui, const Game& game, int width, int height) c
         drawText(ui, dx + 80, dy + 22, 28, def.name, light);
         drawText(ui, dx + 20, dy + 80, 18, def.description, dim);
         float y = dy + 118;
-        if (def.kind == ItemKind::Weapon) {
+        if (tab_ == Workshop) {  // piezas de la receta: las que tienes / las que hacen falta
+            int rc = 0;
+            const Recipe& rcp = recipes(rc)[std::min(selected_, n - 1)];
+            drawText(ui, dx + 20, y, 17, "PIEZAS", dim, title);
+            y += 28;
+            for (int k = 0; k < rcp.partCount; ++k) {
+                const Recipe::Part& part = rcp.parts[k];
+                bool have = inv.count(part.item) >= part.n;
+                gem(d, dx + 30, y + 11, 7, itemDef(part.item).color);
+                drawText(ui, dx + 46, y, 19, itemName(part.item), have ? light : rgba(255, 130, 140));
+                std::snprintf(buf, sizeof(buf), "%d / %d", inv.count(part.item), part.n);
+                drawText(ui, dx + 380, y, 19, buf, have ? rgba(110, 255, 160) : rgba(255, 130, 140), right);
+                y += 28;
+            }
+            drawText(ui, dx + 20, y + 8, 16, "Enter · fabricar", amber);
+        } else if (def.kind == ItemKind::Weapon) {
             const WeaponStats& w = def.weapon;
             const WeaponStats& cur = inv.weaponStats();
             auto stat = [&](const char* name, float v, float now) {
                 drawText(ui, dx + 20, y, 19, name, light);
                 std::snprintf(buf, sizeof(buf), "%.1f", double(v));
                 drawText(ui, dx + 230, y, 19, buf, light, right);
-                if (v != now) drawText(ui, dx + 250, y, 19, v > now ? "▲" : "▼", v > now ? rgba(110, 255, 140) : rgba(255, 120, 120));
+                if (v != now) drawText(ui, dx + 250, y, 19, v > now ? "+" : "-", v > now ? rgba(110, 255, 140) : rgba(255, 120, 120));
                 y += 30;
             };
             stat("Fuerza", w.power, cur.power);

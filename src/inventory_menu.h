@@ -22,7 +22,7 @@ public:
     void draw(UiLayer& ui, const Game& game, int width, int height) const;
 
 private:
-    enum Tab { Consumables, Materials, Weapons, TabCount };
+    enum Tab { Consumables, Materials, Weapons, Workshop, TabCount };
 
     struct Rect {
         float x0, y0, x1, y1;

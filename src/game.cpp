@@ -96,6 +96,9 @@ void Game::applyWeapon() {
     const WeaponStats& w = inv_.weaponStats();
     hero_.comboHits = w.comboHits;
     hero_.attackSpeed = w.speed;
+    hero_.moveSet = w.style == WeaponStyle::Lance   ? MoveSet::Lance
+                    : w.style == WeaponStyle::Fists ? MoveSet::Fists
+                                                    : MoveSet::Blade;
 }
 
 // --- Bucle principal ---------------------------------------------------------------------
@@ -429,7 +432,7 @@ void Game::resolveImpact(Move m) {
         if (std::fabs(e.center().y - chestY) > 1.5f || !inArc(to, e.body.radius)) continue;
         Vec3 dir = normalize(flat(to));
         if (length(dir) < 0.5f) dir = fwd;
-        hitEnemy(e, dir, w.power * hp.damage, hp.knock, hp.lift, hp.heavy);
+        hitEnemy(e, dir, (w.power + inv_.powerBonus) * hp.damage, hp.knock, hp.lift, hp.heavy);
         ++hits;
     }
     for (Crate& c : crates_) {
@@ -977,8 +980,27 @@ void Game::heal(float hp, float mp) {
     mp_ = std::min(maxMp_, mp_ + mp);
 }
 
+bool Game::craft(const Recipe& r) {
+    if (!inv_.craft(r)) return false;
+    const ItemDef& d = itemDef(r.result);
+    notify(std::string("Fabricado: ") + d.name + (r.count > 1 ? " ×" + std::to_string(r.count) : ""), d.color);
+    uiSound(Sfx::ItemGet, 0.8f, 1.1f);
+    return true;
+}
+
 bool Game::useItem(ItemId id) {
     const ItemDef& d = itemDef(id);
+    if (d.kind == ItemKind::Upgrade && inv_.count(id) > 0) {  // afilador: fuerza permanente
+        if (inv_.powerBonus >= Inventory::kMaxPowerBonus) {
+            notify("El prisma ya no admite más filo", rgba(180, 180, 190));
+            return false;
+        }
+        inv_.remove(id);
+        inv_.powerBonus = std::min(Inventory::kMaxPowerBonus, inv_.powerBonus + 2.0f);
+        notify("Fuerza +2 (filo " + std::to_string(int(inv_.powerBonus)) + "/6)", rgba(255, 255, 255));
+        uiSound(Sfx::PerfectGuard, 0.7f);
+        return true;
+    }
     if (d.kind != ItemKind::Consumable || inv_.count(id) <= 0 || hero_.downTimer >= 0) return false;
     bool useful = (d.heal > 0 && hp_ < maxHp_) || (d.mana > 0 && mp_ < maxMp_);
     if (!useful) {

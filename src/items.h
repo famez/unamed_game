@@ -11,14 +11,16 @@ enum class ItemId : int {
     // Materiales (los sueltan los enemigos; de momento solo se coleccionan)
     ShinyShard, GoldSpore, WingDust, BlazeGem,
     // Armas
-    WoodenSword, StarStaff, AuroraBlade,
+    WoodenSword, StarStaff, AuroraBlade, LightLance, LightFists,
+    // Mejoras (se fabrican en el taller)
+    Sharpener,
     Count
 };
 
-enum class ItemKind { Consumable, Material, Weapon };
+enum class ItemKind { Consumable, Material, Weapon, Upgrade };
 
 // Forma del arma al dibujarla.
-enum class WeaponStyle { Sword, Staff, Saber };
+enum class WeaponStyle { Sword, Staff, Saber, Lance, Fists };
 
 struct WeaponStats {
     float power = 0;      // daño base de cada golpe
@@ -42,6 +44,19 @@ struct ItemDef {
 };
 
 const ItemDef& itemDef(ItemId id);
+
+// Receta del taller: varias piezas se convierten en algo más potente.
+struct Recipe {
+    ItemId result;
+    int count;
+    struct Part {
+        ItemId item;
+        int n;
+    };
+    Part parts[4];
+    int partCount;
+};
+const Recipe* recipes(int& count);
 inline const char* itemName(ItemId id) { return itemDef(id).name; }
 
 class Inventory {
@@ -57,6 +72,10 @@ public:
     bool remove(ItemId id, int n = 1);
 
     int munny = 0;  // lúmenes (la moneda: luz condensada)
+    float powerBonus = 0;  // fuerza extra permanente (afiladores aplicados)
+    static constexpr float kMaxPowerBonus = 6;
+    bool canCraft(const Recipe& r) const;
+    bool craft(const Recipe& r);
     ItemId weapon = ItemId::WoodenSword;
     ItemId quick[kQuickSlots];
     const WeaponStats& weaponStats() const { return itemDef(weapon).weapon; }
