@@ -805,6 +805,7 @@ void Game::drawEffects(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Vi
                        : p.kind == PickupKind::Mp    ? rgba(255, 226, 160)
                        : p.kind == PickupKind::Shadow ? rgba(150, 80, 255)
                        : p.kind == PickupKind::Munny ? rgba(255, 210, 60)
+                       : p.kind == PickupKind::Xp    ? rgba(190, 240, 255)
                                                      : itemDef(p.item).color;
         if (!solid) {
             float s = 0.08f;
@@ -820,6 +821,13 @@ void Game::drawEffects(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Vi
                 solid->ellipsoid(Mat4::identity(), c, {0.08f, 0.08f, 0.08f}, col, Material::Glow);
                 glowDot(glow, view, c, 0.22f, withAlpha(col, 0.35f));
                 break;
+            case PickupKind::Xp: {  // rombo pálido que gira, más grande cuanto más vale
+                float r = 0.05f + 0.006f * float(p.value);
+                Mat4 m = translate(c) * rotateY(time_ * 5.0f + p.seed) * rotateZ(kPi * 0.25f);
+                solid->box(m, {}, {r, r, r * 0.4f}, col, Material::Glow);
+                glowDot(glow, view, c, r * 3.0f, withAlpha(col, 0.35f));
+                break;
+            }
             case PickupKind::Munny: {
                 float r = p.value >= 10 ? 0.14f : p.value >= 5 ? 0.11f : 0.08f;
                 Mat4 m = translate(c) * rotateY(time_ * 4.0f + p.seed);
@@ -1135,11 +1143,22 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
         if (heroFlash_ > 0) fillCircle(d, cx, cy, 52, withAlpha(rgba(255, 60, 90), heroFlash_ * 2.5f), 6, kPi / 6);
 
         float right = cx - 66;
-        uiText(ui, right - maxHp_ * 2.6f - 6, cy - 64, 15, "PV", kUiCyan, FontFace::Title);
+        float hpW = std::min(maxHp_, 160.0f) * 2.6f;  // la barra crece con el nivel hasta un tope
+        uiText(ui, right - hpW - 6, cy - 64, 15, "PV", kUiCyan, FontFace::Title);
         std::snprintf(buf, sizeof(buf), "%d / %d", int(std::ceil(hp_)), int(maxHp_));
         uiText(ui, right, cy - 66, 18, buf, kUiText, FontFace::Title, Align::Right);
-        segBar(d, right, cy - 40, maxHp_ * 2.6f, 18, hp_ / maxHp_, hpGhost_ / maxHp_, rgba(214, 206, 192),
+        segBar(d, right, cy - 40, hpW, 18, hp_ / maxHp_, hpGhost_ / maxHp_, rgba(214, 206, 192),
                rgba(255, 60, 120), int(maxHp_ / 10));
+        // Nivel (sobre el retrato) y la experiencia: un hilo bajo la barra de vida.
+        {
+            float pulse = 1.0f + 0.4f * std::min(1.0f, levelFlash_);
+            std::snprintf(buf, sizeof(buf), "NV %d", heroLevel_);
+            uiText(ui, cx, cy + 62, 16 * pulse, buf, levelFlash_ > 0 ? rgba(190, 240, 255) : kUiText, FontFace::Title,
+                   Align::Center, std::min(1.0f, levelFlash_));
+            float frac = heroLevel_ >= kMaxLevel ? 1.0f : float(xp_) / float(xpToNext(heroLevel_));
+            fillRect(d, right - hpW, cy - 20, right, cy - 17, rgba(30, 32, 40));
+            fillRect(d, right - hpW, cy - 20, right - hpW + hpW * frac, cy - 17, rgba(190, 240, 255));
+        }
         // Las barras aparecen cuando se recupera lo que miden.
         if (powers_.absorb) {
             segBar(d, right - 14, cy - 12, maxMp_ * 1.8f, 10, mp_ / maxMp_, mp_ / maxMp_, rgba(255, 225, 140), 0, 10);

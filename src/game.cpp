@@ -125,6 +125,7 @@ void Game::update(float dt, const Controls& input) {
     heroFlash_ = std::max(0.0f, heroFlash_ - dt);
     swapCooldown_ = std::max(0.0f, swapCooldown_ - dt);
     modeFlash_ = std::max(0.0f, modeFlash_ - dt);
+    levelFlash_ = std::max(0.0f, levelFlash_ - dt);
     absorbHint_ = std::max(0.0f, absorbHint_ - dt);
     lightHint_ = std::max(0.0f, lightHint_ - dt);
     updatePortals(dt);
@@ -498,7 +499,7 @@ void Game::resolveImpact(Move m) {
         if (std::fabs(e.center().y - chestY) > 1.5f || !inArc(to, e.body.radius)) continue;
         Vec3 dir = normalize(flat(to));
         if (length(dir) < 0.5f) dir = fwd;
-        hitEnemy(e, dir, (w.power + inv_.powerBonus) * hp.damage * formDamage(), hp.knock * (form_ == Form::Colossus ? 1.4f : 1.0f),
+        hitEnemy(e, dir, (w.power + inv_.powerBonus + levelPower()) * hp.damage * formDamage(), hp.knock * (form_ == Form::Colossus ? 1.4f : 1.0f),
                  hp.lift, hp.heavy || form_ == Form::Colossus);
         ++hits;
     }
@@ -536,7 +537,7 @@ void Game::resolveImpact(Move m) {
         spawnRing(Vec3{at.x, groundHeight(at + Vec3{0, 1, 0}) + 0.05f, at.z}, 2.6f, 0.35f, formColor(form_));
         for (Enemy& e : enemies_)
             if (e.targetable() && length(flat(e.body.pos - at)) < 2.6f + e.body.radius)
-                hitEnemy(e, normalize(flat(e.body.pos - at)), (w.power + inv_.powerBonus) * 0.5f, 4.0f, 2.0f, true);
+                hitEnemy(e, normalize(flat(e.body.pos - at)), (w.power + inv_.powerBonus + levelPower()) * 0.5f, 4.0f, 2.0f, true);
         shake_ = std::max(shake_, 0.15f);
     } else if (form_ == Form::Echo) {
         int t = lock_ >= 0 ? lock_ : pickTarget(fwd, 15.0f);
@@ -617,9 +618,22 @@ void Game::killEnemy(Enemy& e) {
     // El "alma" del enemigo: un destello grande que sube despacio.
     particles_.push_back({c, {0, 1.6f, 0}, 1.3f, 1.3f, 0.5f, col, -0.2f, true});
 
-    // Botín: dinero siempre, orbes casi siempre y, a veces, un objeto.
+    // Botín: dinero, experiencia y vida siempre, orbes de su familia casi siempre y, a
+    // veces, un objeto. La experiencia crece con lo duro que es (y el jefe vale por siete).
     int munny = d.munnyMin + int(random01() * float(d.munnyMax - d.munnyMin + 1));
-    int hpOrbs = random01() < 0.7f ? 1 + int(random01() * 2.0f) : 0;
+    int xp = int(d.maxHealth * 0.4f * (e.boss ? 7.0f : 1.0f));
+    for (int left = xp; left > 0;) {  // en orbes de 10 como mucho
+        Pickup p;
+        p.kind = PickupKind::Xp;
+        p.value = std::min(left, 10);
+        left -= p.value;
+        float a = random01() * 2.0f * kPi, r = randRange(0.8f, 2.0f);
+        p.pos = c;
+        p.vel = {std::cos(a) * r, randRange(5.0f, 7.0f), std::sin(a) * r};
+        p.seed = random01() * 10.0f;
+        pickups_.push_back(p);
+    }
+    int hpOrbs = 1 + (random01() < 0.5f ? 1 : 0) + (e.boss ? 4 : 0);
     int mpOrbs = random01() < 0.75f ? 1 + int(random01() * 2.0f) : 0;  // Luz o Sombra según la familia
     float r = random01();
     ItemId item = ItemId::Potion;
@@ -1048,7 +1062,7 @@ void Game::updateProjectiles(float dt) {
                     std::fabs(e.center().y - next.y) > 1.5f)
                     continue;
                 p.hitMask |= 1u << i;
-                hitEnemy(e, normalize(flat(p.vel)), (inv_.weaponStats().power + inv_.powerBonus) * 1.6f * formDamage(), 6.0f, 2.0f, true);
+                hitEnemy(e, normalize(flat(p.vel)), (inv_.weaponStats().power + inv_.powerBonus + levelPower()) * 1.6f * formDamage(), 6.0f, 2.0f, true);
             }
             p.pos = next;
             continue;
@@ -1163,7 +1177,7 @@ void Game::updatePickups(float dt) {
         }
         Vec3 to = chest - p.pos;
         float dist = length(to);
-        float magnet = p.kind == PickupKind::Item ? 2.5f : 4.5f;
+        float magnet = p.kind == PickupKind::Item ? 2.5f : p.kind == PickupKind::Xp ? 14.0f : 4.5f;
         if (heroOk && p.age > 0.4f && dist < magnet) {
             // Atraído por el jugador, cada vez más rápido.
             p.resting = false;
@@ -1206,6 +1220,11 @@ void Game::collect(Pickup& p) {
             col = rgba(150, 80, 255);
             uiSound(Sfx::Pickup, 0.5f, 0.8f);
             break;
+        case PickupKind::Xp:
+            gainXp(p.value);
+            col = rgba(190, 240, 255);
+            uiSound(Sfx::Pickup, 0.3f, 1.5f + 0.02f * float(xp_ % 10));
+            break;
         case PickupKind::Munny:
             inv_.munny += p.value;
             col = rgba(255, 220, 80);
@@ -1221,6 +1240,27 @@ void Game::collect(Pickup& p) {
             break;
     }
     spawnSparks(p.pos, {0, 1, 0}, 4, col, 1.5f);
+}
+
+void Game::gainXp(int amount) {
+    if (heroLevel_ >= kMaxLevel) return;
+    xp_ += amount;
+    while (heroLevel_ < kMaxLevel && xp_ >= xpToNext(heroLevel_)) {
+        xp_ -= xpToNext(heroLevel_);
+        ++heroLevel_;
+        // Cada nivel: más vida (y llena), más fuerza y algo más de Luz y Sombra.
+        maxHp_ += 10;
+        maxMp_ = std::min(200.0f, maxMp_ + 4);
+        maxShadow_ = std::min(200.0f, maxShadow_ + 4);
+        hp_ = hpGhost_ = maxHp_;
+        levelFlash_ = 2.5f;
+        notify("Nivel " + std::to_string(heroLevel_) + " · vida +10 · fuerza +1,5", rgba(190, 240, 255));
+        uiSound(Sfx::PerfectGuard, 0.8f, 0.8f);
+        Vec3 chest = hero_.body.pos + Vec3{0, 1.0f, 0};
+        spawnSparks(chest, {0, 1, 0}, 40, rgba(190, 240, 255), 5.0f);
+        spawnRing(hero_.body.pos + Vec3{0, 0.05f, 0}, 4.0f, 0.6f, rgba(190, 240, 255));
+    }
+    if (heroLevel_ >= kMaxLevel) xp_ = 0;
 }
 
 void Game::heal(float hp, float mp) {

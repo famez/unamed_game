@@ -869,6 +869,27 @@ int main() {
         run(k, 3.0f);
         CHECK(k.shadow_ > s0, "recoger Sombra la suma (%.0f)", k.shadow_);
     }
+    {  // Niveles: los enemigos sueltan experiencia y vida; al subir, más vida y fuerza
+        Game g = fresh();
+        place(g, {0, 0, -10});
+        g.hp_ = 50;
+        Enemy& e = addEnemy(g, EnemyKind::Brute, {2, 0, -10});
+        g.killEnemy(e);
+        int xpOrbs = 0, hpOrbs = 0, xpTotal = 0;
+        for (const Pickup& p : g.pickups_) {
+            xpOrbs += p.kind == PickupKind::Xp, hpOrbs += p.kind == PickupKind::Hp;
+            if (p.kind == PickupKind::Xp) xpTotal += p.value;
+        }
+        CHECK(xpOrbs > 0 && hpOrbs > 0, "un Coloso suelta experiencia (%d) y vida (%d orbes)", xpTotal, hpOrbs);
+        run(g, 3.0f);
+        CHECK(g.xp_ == xpTotal && g.hp_ > 50, "al recogerlo suma experiencia (%d) y vida (%.0f)", g.xp_, g.hp_);
+        float hp0 = g.maxHp_, pow0 = g.levelPower();
+        g.gainXp(Game::xpToNext(1) - g.xp_ + 5);
+        CHECK(g.heroLevel() == 2 && g.xp_ == 5 && g.maxHp_ > hp0 && g.levelPower() > pow0 && g.hp_ == g.maxHp_,
+              "sube a nivel 2: vida %.0f→%.0f, sobra la experiencia (%d)", hp0, g.maxHp_, g.xp_);
+        g.gainXp(100000);
+        CHECK(g.heroLevel() == Game::kMaxLevel, "el nivel tiene tope (%d)", g.heroLevel());
+    }
     {  // La sombra: portales, oscuridad lejos de las farolas, fundirse y moverse por ella
         Game g = fresh();
         g.unlockShadow();

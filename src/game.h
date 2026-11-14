@@ -94,7 +94,7 @@ struct Projectile {
     uint32_t hitMask = 0;  // onda: Grises ya alcanzados (por índice, los 32 primeros)
 };
 
-enum class PickupKind { Hp, Mp, Munny, Item, Shadow };  // Mp = Luz
+enum class PickupKind { Hp, Mp, Munny, Item, Shadow, Xp };  // Mp = Luz
 
 // Botín: salta del enemigo, rebota y, al acercarse el jugador, vuela hacia él.
 struct Pickup {
@@ -384,6 +384,13 @@ public:
 
     const Character& hero() const { return hero_; }
     float hp() const { return hp_; }
+    // Nivel del protagonista: la experiencia la sueltan los enemigos al disiparse.
+    static constexpr int kMaxLevel = 30;
+    static int xpToNext(int level) { return 30 + 25 * level; }
+    int heroLevel() const { return heroLevel_; }
+    int xp() const { return xp_; }
+    void gainXp(int amount);
+    float levelPower() const { return 1.5f * float(heroLevel_ - 1); }  // daño extra por nivel
     float maxHp() const { return maxHp_; }
     float mp() const { return mp_; }
     float maxMp() const { return maxMp_; }
@@ -617,6 +624,8 @@ private:
     Character hero_;
     Inventory inv_;
     float hp_ = 100, maxHp_ = 100;
+    int heroLevel_ = 1, xp_ = 0;
+    float levelFlash_ = 0;  // destello del HUD al subir de nivel
     float mp_ = 40, maxMp_ = 100;  // Luz: se absorbe del mundo (no se regenera sola)
     float shadow_ = 0, maxShadow_ = 100;  // Sombra: la sueltan los Vaciados
     float hpGhost_ = 100;     // barra roja que va detrás al perder vida
