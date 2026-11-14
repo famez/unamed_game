@@ -279,6 +279,33 @@ const BodyPrim kHeroPrims[] = {
     E(AnkleR,    0, -0.025f, 0.06f,   0.07f, 0.064f, 0.15f,   kBoot, 0.04f),
     E(AnkleR,    0, -0.074f, 0.06f,   0.074f, 0.02f, 0.155f,  kCoatDark, 0.01f),
 };
+// Ilse, la Archivera: túnica larga hasta los pies, capucha caída sobre los hombros y pelo
+// largo y claro. Mismo esqueleto que el protagonista.
+const uint32_t kRobe = rgba(40, 36, 50), kRobeDark = rgba(24, 22, 30), kIlseSkin = rgba(196, 184, 176);
+const uint32_t kIlseHair = rgba(200, 196, 188);
+const BodyPrim kIlsePrims[] = {
+    E(Pelvis,    0, -0.01f, 0,        0.16f, 0.11f, 0.12f,    kRobe, 0.0f),
+    E(Spine,     0, 0.08f, 0,         0.14f, 0.13f, 0.105f,   kRobe, 0.04f),
+    E(Chest,     0, 0.10f, 0.0f,      0.165f, 0.15f, 0.115f,  kRobe, 0.04f),
+    E(Chest,     0, 0.2f, -0.06f,     0.2f, 0.09f, 0.13f,     kRobeDark, 0.03f),  // capucha caída
+    E(Pelvis,    0, -0.42f, -0.01f,   0.2f, 0.5f, 0.17f,      kRobe, 0.04f),      // túnica hasta los pies
+    E(Pelvis,    0, -0.86f, 0.0f,     0.23f, 0.08f, 0.2f,     kRobeDark, 0.03f),
+    C(Neck,      0, 0, 0,  0, 0.1f, 0,                0.04f,  kIlseSkin, 0.02f),
+    E(Head,      0, 0.125f, 0.01f,    0.105f, 0.13f, 0.115f,  kIlseSkin, 0.03f),
+    E(Head,      0, 0.06f, 0.035f,    0.072f, 0.06f, 0.075f,  kIlseSkin, 0.035f),
+    E(Head,      0, 0.17f, -0.02f,    0.118f, 0.1f, 0.125f,   kIlseHair, 0.006f),
+    E(Head,      0, 0.02f, -0.09f,    0.11f, 0.2f, 0.07f,     kIlseHair, 0.02f),  // melena larga
+    C(ShoulderL, 0, -0.02f, 0,  0, -0.27f, 0,         0.055f, kRobe, 0.03f),
+    C(ElbowL,    0, 0, 0,  0, -0.2f, 0,               0.06f,  kRobe, 0.03f),      // manga ancha
+    E(WristL,    0, -0.05f, 0.006f,   0.038f, 0.06f, 0.045f,  kIlseSkin, 0.03f),
+    C(ShoulderR, 0, -0.02f, 0,  0, -0.27f, 0,         0.055f, kRobe, 0.03f),
+    C(ElbowR,    0, 0, 0,  0, -0.2f, 0,               0.06f,  kRobe, 0.03f),
+    E(WristR,    0, -0.05f, 0.006f,   0.038f, 0.06f, 0.045f,  kIlseSkin, 0.03f),
+    C(KneeL,     0, -0.3f, 0,  0, -0.4f, 0.01f,       0.05f,  kRobeDark, 0.02f),
+    E(AnkleL,    0, -0.025f, 0.06f,   0.06f, 0.05f, 0.13f,    kRobeDark, 0.03f),
+    C(KneeR,     0, -0.3f, 0,  0, -0.4f, 0.01f,       0.05f,  kRobeDark, 0.02f),
+    E(AnkleR,    0, -0.025f, 0.06f,   0.06f, 0.05f, 0.13f,    kRobeDark, 0.03f),
+};
 // clang-format on
 #undef E
 #undef C
@@ -315,6 +342,7 @@ void defineEnemyModels() {
         gEnemyBind[k] = enemyBindPose(EnemyKind(k));
         kModels[1 + k] = {d.rig, d.jointCount, prims.data(), int(prims.size()), k == int(EnemyKind::Brute) ? 0.017f : 0.011f, &gEnemyBind[k]};
     }
+    kModels[int(ModelId::Ilse)] = {kSkeleton, JointCount, kIlsePrims, int(sizeof(kIlsePrims) / sizeof(kIlsePrims[0])), 0.011f, &kHeroBind};
 }
 
 BuiltModel gModels[int(ModelId::Count)];

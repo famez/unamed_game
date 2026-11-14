@@ -70,9 +70,10 @@ void Game::rebuildSolids() {
 
 void Game::init(const char* assetDir) {
     // Historia: el guion del capítulo (sin él, el escenario no tiene combates ni escenas).
-    names_ = {{"brizna", "???"}, {"prota", "???"}, {"voz", "Una voz"}, {"eco", "Eco"}, {"sistema", ""},
-              {"archivera", "???"}, {"nora", "Nora"}};
+    names_ = {{"voz", ""}, {"objeto", ""}, {"ilse", "???"}};
     story_ = assetDir && script_.load(std::string(assetDir) + "/story/capitulo1.txt");
+    // Con historia se empieza sin nada: los poderes se recuperan por el camino.
+    if (story_) powers_ = Powers{false, false, false, false, false, false, false, false, false};
     bossBrain_.alpha = 0.45f;  // el jefe aprende muy deprisa durante el combate
     bossBrain_.epsilon = 0.1f;
     loadLevel(LevelId::Plaza);
@@ -104,11 +105,13 @@ void Game::applyWeapon() {
 
 // --- Bucle principal ---------------------------------------------------------------------
 
-void Game::update(float dt, const Controls& c) {
+void Game::update(float dt, const Controls& input) {
+    const Controls c = filterControls(input);  // lo que aún no ha recuperado, no existe
     time_ += dt;
     updateStory(dt);
+    updateCinema(dt, c);
     // Escena que bloquea: el juego se detiene (salvo animaciones y efectos) hasta leerla.
-    if (dialogue_.blocking()) {
+    if (dialogueBlocking()) {
         if (c.advance) dialogue_.advance();
         hero_.setGuard(false);
         hero_.update(dt, {}, false, world_);
@@ -187,7 +190,8 @@ void Game::update(float dt, const Controls& c) {
     hero_.setAttackHeld(c.attackHeld);
     bool light = inLight_ || travel_;
     // Fundido con la sombra: dentro de un charco, en modo sombra, corre más.
-    hero_.speedScale = formSpeed() * (shadowMode_ && shadowAt(hero_.body.pos) > 0.5f ? 1.4f : 1.0f);
+    hero_.speedScale = formSpeed() * (shadowMode_ && shadowAt(hero_.body.pos) > 0.5f ? 1.4f : 1.0f) *
+                       (powers_.strong ? 1.0f : 0.4f);  // sin fuerzas, apenas camina
     hero_.update(dt, down || light ? Vec3{} : c.move, !down && !light && c.jump, world_, std::atan2(c.camForward.x, c.camForward.z));
     if (c.jump && wasGrounded && hero_.body.vel.y > 1.0f) sound(Sfx::Jump, hero_.body.pos, 0.7f);
     updateTravel(dt);

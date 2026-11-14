@@ -1,209 +1,148 @@
-# Capítulo 1 · La primera luz
-# Ver docs/historia.md para el mundo y los personajes.
+# Capítulo 1 · La plaza parada
+# Ver docs/historia.md. Casi sin palabras: planos, ecos y tutoriales de una tecla.
 #
-# Hablantes: brizna, prota (nombre "???"), voz (recuerdos), eco (lo que repiten los Eco),
-# nora, archivera, sistema (ayudas).
-# Órdenes: levantarse, nombre <hablante> <Nombre>, capitulo, eco_activa <n>,
-#          armar <combate>, abrir <puerta>, dar <objeto>, fin_capitulo.
+# Órdenes: negro, levantarse, capitulo, pausa <s>, plano fx fy fz ex ey ez <s>,
+#          eco <nombre>, eco_activa <n>, ilse x y z, ilse_gesto, ilse_fuera,
+#          tutorial <tecla> <acción> <palabra>, poder <nombre>, armar <combate>,
+#          abrir <puerta>, dar <objeto>, apagar_luces, fin_capitulo.
+# Hablantes (los pocos que hay): voz (un recuerdo), objeto (lo que pone en algo), ilse.
 
-# ============================ PLAZA DEL PRISMA ============================
+# ============================ PLAZA DEL RELOJ ============================
 
 == intro
 !negro
-brizna: …
-brizna: ¿Me oyes? Sé que me oyes. Estás parpadeando.
-brizna: No te levantes todavía. Has estado trescientas noches dentro de esa fuente.
-prota: ¿Trescientas…?
-brizna: Más o menos. Aquí ya nadie cuenta los días. No queda nadie que se acuerde de contarlos.
+!pausa 2.0
+!plano -2.0 3.4 7.5  -0.6 2.7 4.3 4.5
+!pausa 3.5
+!plano 0 0.5 -3.4  1.8 1.4 -5.6 3.5
+!pausa 1.5
 !levantarse
-brizna: Bienvenido a Iridia. O a lo que dejó el Apagón.
-brizna: Antes cada calle tenía su color. El Faro los repartía por la ciudad a través de los nodos.
-brizna: Una noche brilló más que nunca… y después se lo tragó todo.
-prota: ¿Quién eres?
-brizna: Una chispa que se quedó atrás. Puedes llamarme Brizna.
-!nombre brizna Brizna
-brizna: ¿Y tú? ¿Cómo te llamas?
-prota: …
-prota: No lo sé.
-brizna: Vale. Entonces de momento serás «el que brilla». Aquí eso es raro. Y peligroso.
-brizna: Ya vienen. Los Grises sienten el color de lejos.
-sistema: Clic izquierdo para atacar (mantén para cargar) · C para esquivar · Shift para correr · R para fijar un objetivo.
+!pausa 2.0
 !capitulo
+!tutorial WASD andar Andar
 
-== primer_combate
+# Junto al banco hay una hoja. Al cogerla vuelven las fuerzas… y llegan los perros.
+== hoja
+!poder ataque
+!poder fuerza
+!plano 6 0.6 -14  1.0 2.2 -5.0 2.5
+!armar despertar
+!pausa 0.5
+!tutorial Clic atacar Golpear
+
+== perros
 !aviso
-brizna: No les tengas miedo. Ellos tampoco saben lo que hacen.
+!tutorial C esquivar Esquivar
 
-== primer_disipado
+== tras_perros
 !aviso
-brizna: ¿Lo has visto? Al disiparse… ha soltado su color.
-prota: Por un momento he visto una cocina. Alguien cortando pan.
-brizna: Era su recuerdo. Ahora es un poco tuyo.
-
-== despertar_fin
-brizna: Bien. Respira, si es que respiras.
-brizna: Mira la plaza: tres nodos cromáticos, apagados. Si los enciendes, el color volverá a este barrio.
-brizna: Uno junto a las cajas del oeste, otro en la terraza y otro en la plataforma alta. Tendrás que saltar.
-sistema: Acércate a un nodo y pulsa F para encenderlo. Los Grises cercanos te lo impedirán.
-brizna: Una cosa más. Tú no solo llevas color: puedes beberte la luz.
-brizna: Junto a un nodo encendido, mantén Q y absórbela. Con ella podrás hacerte luz tú mismo: pulsa Q y cruzarás lo que sea.
-sistema: Q: hacerse luz (cuesta Luz; gratis dentro de las zonas con color) · Mantén Q: absorber luz (también de un Gris aturdido) · V con la Luz llena: Supernova.
-brizna: Y otra cosa: si miras a una farola o a cualquier luz y pulsas Q, viajarás hasta ella hecho luz.
-brizna: De luz en luz se cruza la ciudad en un suspiro. Y en la luz, los Grises se debilitan.
-
-== domo
-!aviso
-brizna: Ese es un Domo. Cuando salte, salta tú también.
-
-== eco_enemigo
-!aviso
-brizna: Un Eco. Repiten lo último que dijeron antes de apagarse.
-eco: …¿habéis visto mi bufanda verde?… era de mi abuela…
+!tutorial Shift correr Correr
 
 == nodo_1
-brizna: ¿Lo notas? El suelo está templado.
-brizna: Ahí, entre las cajas. Algo brilla.
+!poder absorber
+!plano -9.5 1.8 -9.0  -6.0 2.8 -4.5 2.5
 !eco_activa 1
+!tutorial Q absorber Mantén para absorber
 
-== recuerdo_alba
-!recuerdo
-voz: Te he hecho la cena. La de siempre, sin cebolla, pesado.
-voz: Y luego me ayudas con los planos del Faro, ¿vale? Tú eres el único que entiende mi letra.
-prota: Esa voz… me hace sonreír. No sé por qué.
-brizna: …
-brizna: Sigamos. Quedan nodos.
-
-== nodo_2
-!aviso
-brizna: Dos de tres. Las fachadas vuelven a ser de color pastel. Las había olvidado.
+# Una mujer arregla una farola; un chico le sujeta la escalera y luego se va.
+== eco_alba
+!plano -5.5 1.6 -5.5  -1.0 2.4 -1.5 9.0
+!eco alba_farola
+!pausa 9.0
 
 == nodo_3
-brizna: El último. Desde aquí arriba se ve el Faro. ¿Lo ves? Esa torre gris al fondo.
-prota: Parece que me mira.
-brizna: Te mira. Siempre ha mirado a todo el mundo.
 !eco_activa 2
 
-== recuerdo_promesa
+== eco_promesa
 !recuerdo
-voz: Si un día se apaga todo… prométeme que encenderás la primera luz.
-voz: Aunque no te acuerdes de mí. Aunque no te acuerdes de nada.
-prota: «Prométeme».
-prota: Brizna. ¿Esa voz es la tuya?
-brizna: Las chispas no tenemos voz. Solo hacemos ruido.
+!plano -11.5 3.6 11.5  -7.0 4.6 6.5 7.0
+!eco alba_mira
+!pausa 2.5
+voz: Si un día se apaga todo, enciende tú la primera luz.
+!pausa 2.0
 
 == plaza_nodos
-brizna: La plaza vuelve a tener color. Mira el agua de la fuente: azul. Azul de verdad.
-brizna: Pero la puerta del mercado sigue sellada. Funciona con luz del Faro… y el Faro está apagado.
-brizna: El prisma de la fuente aún brilla un poco. ¿Ves el haz? Si lo llevamos hasta la puerta, se abrirá.
-sistema: Acércate a un espejo y pulsa F para girarlo. Lleva el haz hasta el receptor de la puerta.
+!poder luz
+!poder tecnicas
+!plano 5.5 3.35 5.0  1.5 2.4 1.0 3.0
+!tutorial Q entrar Entrar en la luz
+!tutorial Q saltar_luz Saltar a otra luz
+!tutorial Espacio salir Salir
+
+== espejos
+!aviso
+!tutorial F girar Girar el espejo
 
 == puerta_abierta
-brizna: ¡Abierta! El Mercado de los Ecos.
-brizna: Allí vendían farolillos. Los mejores de Iridia los hacía una tal Nora.
+!plano 0 2.0 16.0  0 2.8 7.0 2.5
 
-== caida
-!aviso
-brizna: ¡Eh! Quédate conmigo.
-brizna: No pienso perderte otra vez.
-prota: ¿Otra vez?
-brizna: Es una forma de hablar.
-
-# ============================ MERCADO DE LOS ECOS ============================
+# ============================ MERCADO QUEMADO ============================
 
 == mercado_llegada
-brizna: El Mercado de los Ecos. Antes no se podía andar aquí de tanta gente.
-brizna: Ahora solo quedan sus voces.
-eco: …¿has visto a mi hija? Lleva un abrigo amarillo…
-prota: ¿Quién busca a su hija?
-brizna: Muchos. Esa noche mucha gente estaba buscando a alguien.
-
-== emboscada
-!aviso
-brizna: ¡Cuidado, es una trampa! Han cerrado la calle.
+!plano 0 1.5 16  0 3.5 2.0 3.5
+!eco vendedor
+!pausa 1.0
 
 == calle_despejada
-brizna: Despejado. Mira el suelo, junto al segundo puesto.
+!aviso
 !eco_activa 1
 
-== recuerdo_nora
-!recuerdo
-voz: Lía, vuelve antes de que enciendan los faroles, ¿me oyes?
-voz: Te guardo el farolillo de luna. El que te gusta. No se lo vendo a nadie.
-prota: Una madre.
-brizna: Nora. Era la de los farolillos.
-
-== camara_abierta
-!aviso
-brizna: Luz magenta… Esta cámara la cerró alguien que sabía lo que hacía. Mira qué guardaba.
+# Alguien recorre la calle buscando a alguien.
+== eco_nora
+!plano 0 1.3 17  -4.0 2.2 12.0 6.0
+!eco buscando
+!pausa 6.0
 
 == nodo_mercado
-brizna: El mercado respira. Los toldos tienen color otra vez.
-brizna: El puesto de allí, el de los farolillos. Era el de Nora.
+!plano 8.5 1.5 44.5  4.0 3.0 39.0 3.0
 
 == nora_puesto
-prota: Hay un farolillo con forma de luna. Tiene una etiqueta.
-prota: «Para Lía. No se vende».
-brizna: Lo guardó trescientas noches.
-brizna: Espera. ¿Oyes eso?
-nora: …ya es de noche… ¿dónde está Lía?… ¿dónde está mi niña?…
-brizna: ¡Es ella! Su Gris es enorme… ha absorbido todo el color del mercado para esperarla.
-brizna: No le hagas daño de más. Solo devuélvele lo que es suyo.
+!plano 8.5 1.4 44.5  7.0 2.0 42.2 3.0
+objeto: «Para Lía. No se vende.»
 !armar jefe_nora
+!plano 0 2.5 46  0 3.0 38 2.5
 
+# Liberada, la que esperaba recuerda: su hija se despide en la puerta del puesto.
 == nora_libre
-nora: …
-nora: El farolillo de luna. ¿Lo has encontrado tú?
-prota: Estaba en tu puesto.
-nora: Lía no volvió aquella noche. Ahora me acuerdo. Me acuerdo de todo.
-nora: Duele. Pero es mío. Prefiero que duela a no tener nada.
-nora: Quédate el farolillo. Lía querría que alguien lo llevara encendido.
+!plano 8.5 1.2 44  4.0 2.5 38.0 9.0
+!eco nora_lia
+!pausa 8.5
 !dar farolillo
-nora: Los faroles del puente los hice yo. Enciéndelos. Que alguien los vea brillar.
-prota: Lo haré.
-prota: Brizna… ahora me acuerdo de Lía. De su abrigo amarillo. Pero yo nunca la conocí.
-brizna: Lo sé.
-brizna: Vamos al puente.
+!poder supernova
+!tutorial V supernova Supernova
 
 # ============================ PUENTE DE LOS FAROLES ============================
 
 == puente_llegada
-brizna: El Puente de los Faroles. Al otro lado empiezan los Jardines de cristal.
-brizna: Abajo no hay suelo. Solo nubes. No mires mucho.
-prota: ¿Y si me caigo?
-brizna: Pues vuelves al último farol encendido. Los faroles de Nora te recuerdan.
+!plano 0 2.0 30  3.0 4.0 -6.0 3.5
 !eco_activa 1
 
-== puente_combate
-!aviso
-brizna: ¡Te están esperando en el centro! ¡Cuidado con los bordes!
+# Un chico no se atreve a cruzar; ella vuelve a por él.
+== eco_teo
+!plano 0 1.5 54.5  4.0 3.2 48.0 8.0
+!eco teo_puente
+!pausa 8.0
 
-== puente_despejado
-brizna: Ya está. Desde aquí se ven los dos lados: la plaza a todo color y, delante, todo gris todavía.
-brizna: Lo has hecho bien. Muy bien.
-
-== recuerdo_teo
-!recuerdo
-voz: ¡No mires abajo, que te conozco!
-voz: ¿Lo ves? Ya has cruzado. Tonto. Te dije que podías.
-prota: Me daba miedo la altura.
-prota: Me daba miedo… y alguien me cogía de la mano.
-brizna: …
-brizna: Sigue. Ya casi estamos.
-
+# Al otro lado espera Ilse. Apaga el puente entero; algo de su sombra se queda dentro.
 == archivera
-archivera: Por fin. El que brilla.
-brizna: No. No, no, no. Aquí no.
-archivera: Llevas encima trescientas noches de recuerdos que no son tuyos, criatura.
-archivera: Cada vez que liberas a uno de ellos, le devuelves el dolor. ¿Te lo ha contado tu chispa?
-prota: ¿Quién eres?
-archivera: Me llamaban la Archivera. Yo guardaba la memoria de esta ciudad. Ahora guardo su paz.
-!nombre archivera La Archivera
-archivera: Devuélveme lo que llevas dentro y el dolor se acabará. Para todos.
-brizna: ¡Teo, no la escuches!
-prota: …
-prota: ¿Teo?
-brizna: Yo…
-archivera: Vaya. Ni siquiera eso le has dicho.
-archivera: Nos veremos en los Jardines, Prismero. Allí el cristal no miente.
-brizna: Lo siento. Lo siento mucho.
+!plano 0 2.2 72  0 3.0 63 3.0
+!ilse 0 1.0 72
+!pausa 3.0
+!ilse_gesto
+!pausa 0.8
+!apagar_luces
+!pausa 1.5
+!plano 0 2.0 72  1.2 2.3 68.5 6.0
+!pausa 1.0
+ilse: Olvidar también es una forma de descansar.
+!poder sombra
+!plano 0 1.4 66  3.0 2.6 60.0 2.5
+!ilse_fuera
+!pausa 1.0
+!armar sabuesos_ilse
+!tutorial Z cambiar Sombra
+
+== fin
+!plano 0 2.0 72  0 3.0 60 4.0
+!pausa 2.0
 !fin_capitulo

@@ -143,12 +143,16 @@ int main(int argc, char** argv) {
             game.init(assetDir);
         }
         game.loadBrains(dataDir);
+        for (int i = 1; i + 1 < argc; ++i)  // --escena id: reproduce ya esa escena (para escribirlas)
+            if (std::strcmp(argv[i], "--escena") == 0) game.jumpToScene(argv[i + 1]);
     };
     startGame();
     OrbitCamera cam;
     cam.target = game.hero().body.pos + Vec3{0, 1.0f, 0};
     Vec3 camVel;  // velocidad del muelle de la cámara
     float sceneBlend = 0;  // 0 = cámara de juego, 1 = plano de diálogo
+    float cineBlend = 0;   // 0 = cámara normal, 1 = plano de escena del guion
+    Vec3 cineEye, cineFocus;
     float qHeld = -1;      // tiempo con Q mantenida (-1 = suelta)
     DrawFlags flags;
     // Modo debug (F12 / º, o --debug al arrancar): solo esqueletos y cajas en alambre.
@@ -427,10 +431,24 @@ int main(int argc, char** argv) {
         RenderCamera rc;
         rc.fovY = 60.0f * kPi / 180.0f + game.fovKick();
         rc.aspect = float(w) / float(h > 0 ? h : 1);
-        rc.view = view.view();
+        // Planos de escena: la cámara se funde hacia el plano y vuelve al terminar.
+        Vec3 eye = view.eye(), look = view.target;
+        Vec3 ce, cf;
+        bool cine = game.cinematic(ce, cf);
+        if (cine) {
+            cineEye = cineBlend <= 0 ? ce : cineEye + (ce - cineEye) * (1.0f - std::exp(-4.0f * fd));
+            cineFocus = cineBlend <= 0 ? cf : cineFocus + (cf - cineFocus) * (1.0f - std::exp(-4.0f * fd));
+        }
+        cineBlend = moveTowards(cineBlend, cine ? 1.0f : 0.0f, (cine ? 1.2f : 1.6f) * fd);
+        if (cineBlend > 0) {
+            float k = smoothstep01(cineBlend);
+            eye = eye + (cineEye - eye) * k;
+            look = look + (cineFocus - look) * k;
+        }
+        rc.view = lookAt(eye, look, {0, 1, 0});
         rc.proj = perspective(rc.fovY, rc.aspect, rc.zNear, rc.zFar);
-        rc.position = view.eye();
-        rc.forward = normalize(view.target - rc.position);
+        rc.position = eye;
+        rc.forward = normalize(look - rc.position);
         rc.right = normalize(cross(rc.forward, {0, 1, 0}));
         rc.up = cross(rc.right, rc.forward);
         ViewInfo vi;

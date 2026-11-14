@@ -30,6 +30,7 @@ set(LOGIC_SOURCES
     src/light.cpp
     src/test_mode.cpp
     src/shadow.cpp
+    src/cinema.cpp
     src/brain.cpp
     src/allies.cpp
     src/story.cpp

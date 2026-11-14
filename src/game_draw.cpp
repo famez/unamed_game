@@ -72,7 +72,7 @@ struct Shape {
 // Detalles rígidos del Prismero (el cuerpo es la malla de models.cpp): lo que debe verse
 // nítido o brillar.
 const uint32_t kHair = rgba(74, 72, 76), kScarfC = rgba(104, 58, 50), kEyeC = rgba(36, 34, 38);
-const uint32_t kVein = rgba(255, 222, 170), kOutline = rgba(14, 14, 18);
+const uint32_t kVein = rgba(255, 222, 170), kOutline = rgba(14, 14, 18), kGhostWhite = rgba(255, 238, 214);
 // clang-format off
 const Shape kHeroShapes[] = {
     // ojos pequeños y oscuros, cejas
@@ -259,6 +259,7 @@ void Game::draw(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const DrawFlags
                 float alpha) const {
     drawLevel(dd, solid, f, view, alpha);
     drawHero(dd, solid, f, alpha);
+    drawGhosts(solid, dd, alpha);
     drawEnemies(dd, glow, solid, f, view, alpha);
     drawEffects(dd, glow, solid, view);
     drawStory(dd, glow, solid, view);
@@ -365,8 +366,16 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
         }
     }
     // Objetos con los que se puede interactuar: un destello que invita a acercarse.
-    for (const Interactable& it : interacts_)
-        if (!it.used) solid->light(it.pos + Vec3{0, 1.5f, 0}, Vec3{1.0f, 0.8f, 0.5f} * (0.8f + 0.4f * std::sin(time_ * 3.0f)), 3.0f);
+    for (const Interactable& it : interacts_) {
+        if (it.used) continue;
+        solid->light(it.pos + Vec3{0, 1.5f, 0}, Vec3{1.0f, 0.8f, 0.5f} * (0.8f + 0.4f * std::sin(time_ * 3.0f)), 3.0f);
+        if (it.id == "hoja") {  // la hoja, tirada en el suelo
+            Mat4 m = translate(it.pos + Vec3{0, 0.03f, 0}) * rotateY(0.6f);
+            solid->box(m, {0, 0, 0.3f}, {0.04f, 0.011f, 0.4f}, rgba(118, 120, 126), Material::Metal);
+            solid->box(m, {0, 0, -0.17f}, {0.02f, 0.02f, 0.08f}, rgba(70, 60, 52), Material::Cloth);
+            solid->box(m, {0, 0, -0.08f}, {0.07f, 0.014f, 0.016f}, rgba(118, 120, 126), Material::Metal);
+        }
+    }
     // Prisma de la fuente (solo en la plaza): flota, gira y proyecta luz cambiante.
     if (level_ == LevelId::Plaza) {
         float bob = 0.12f * std::sin(time_ * 1.3f);
@@ -566,8 +575,10 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
         solid->ellipsoid(j[Head] * translate(Vec3{x, 0.225f, 0.08f}) * basisY(-n), {}, {0.035f, 0.06f, 0.022f}, kHair,
                          Material::Cloth, flash);
     }
-    drawWeapon(*solid, j[WristR], ws, hero_.move(), hero_.moveU(), time_);
-    if (ws.style == WeaponStyle::Fists) drawWeapon(*solid, j[WristL], ws, hero_.move(), hero_.moveU(), time_);
+    if (powers_.attack) {  // hasta que la recoge, no lleva arma
+        drawWeapon(*solid, j[WristR], ws, hero_.move(), hero_.moveU(), time_);
+        if (ws.style == WeaponStyle::Fists) drawWeapon(*solid, j[WristL], ws, hero_.move(), hero_.moveU(), time_);
+    }
     // Cinta de la espalda: segmentos alargados entre los puntos de la cadena, que se
     // estrechan hacia la punta.
     Vec3 rib[Character::kRibbonPoints];
@@ -939,13 +950,9 @@ std::vector<std::string> wrapText(const std::string& text, float size, float max
 }
 
 uint32_t speakerColor(const std::string& id) {
-    if (id == "brizna") return rgba(255, 228, 150);
-    if (id == "prota") return rgba(255, 120, 205);
-    if (id == "eco") return rgba(90, 225, 255);
-    if (id == "sistema") return rgba(255, 196, 70);
-    if (id == "nora") return rgba(255, 170, 90);
-    if (id == "archivera") return rgba(200, 200, 225);
-    return rgba(240, 240, 255);
+    if (id == "ilse") return rgba(180, 140, 230);
+    if (id == "voz") return rgba(236, 222, 196);
+    return rgba(214, 210, 200);
 }
 
 }  // namespace
@@ -960,10 +967,10 @@ void Game::drawStoryHud(UiLayer& ui, const ViewInfo& view) const {
         float total = chapterEnded_ ? 7.0f : 5.0f;
         float a = clampf(std::min((total - chapterBanner_) / 0.8f, chapterBanner_ / 1.0f), 0, 1);
         float y = h * 0.4f;
-        fillRect(d, 0, y - 20, w, y + 110, withAlpha(rgba(8, 10, 30), 0.55f * a));
+        fillRect(d, 0, y - 20, w, y + 110, withAlpha(rgba(4, 4, 6), 0.55f * a));
         uiText(ui, w * 0.5f, y, 22, chapterEnded_ ? "FIN DEL CAPÍTULO 1" : "CAPÍTULO 1", withAlpha(kUiCyan, a), FontFace::Title,
                Align::Center, 0.5f * a);
-        uiText(ui, w * 0.5f, y + 34, 46, chapterEnded_ ? "Continuará…" : "La primera luz", withAlpha(kUiText, a),
+        uiText(ui, w * 0.5f, y + 34, 46, chapterEnded_ ? "Continuará…" : "La plaza parada", withAlpha(kUiText, a),
                FontFace::Body, Align::Center, 0.6f * a);
     }
 
@@ -975,8 +982,8 @@ void Game::drawStoryHud(UiLayer& ui, const ViewInfo& view) const {
 
     if (dialogue_.memory()) {
         // Recuerdo: la imagen se vela en blanco y la voz aparece en el centro.
-        fillRect(d, 0, 0, w, h, withAlpha(rgba(235, 240, 255), 0.55f));
-        fillRect(d, 0, h * 0.38f, w, h * 0.62f, withAlpha(rgba(20, 24, 60), 0.35f));
+        fillRect(d, 0, 0, w, h, withAlpha(rgba(20, 18, 16), 0.35f));
+        fillRect(d, 0, h * 0.38f, w, h * 0.62f, withAlpha(rgba(6, 6, 8), 0.4f));
         std::vector<std::string> lines = wrapText(shown, 30, w * 0.6f);
         float y = h * 0.5f - float(lines.size()) * 20.0f;
         if (!name.empty()) uiText(ui, w * 0.5f, y - 34, 16, name.c_str(), withAlpha(col, 0.9f), FontFace::Title, Align::Center);
@@ -991,7 +998,7 @@ void Game::drawStoryHud(UiLayer& ui, const ViewInfo& view) const {
         std::vector<std::string> lines = wrapText(shown, 21, 640);
         float y = 128;
         float bw = 700;
-        fillRect(d, (w - bw) * 0.5f, y - 8, (w + bw) * 0.5f, y + 30 + float(lines.size()) * 28.0f, withAlpha(rgba(8, 10, 30), 0.6f));
+        fillRect(d, (w - bw) * 0.5f, y - 8, (w + bw) * 0.5f, y + 30 + float(lines.size()) * 28.0f, withAlpha(rgba(6, 6, 8), 0.6f));
         if (!name.empty()) uiText(ui, (w - bw) * 0.5f + 16, y - 2, 14, name.c_str(), col, FontFace::Title);
         y += 22;
         for (const std::string& line : lines) {
@@ -1002,12 +1009,12 @@ void Game::drawStoryHud(UiLayer& ui, const ViewInfo& view) const {
     }
     // Diálogo: caja abajo con el nombre en una pestaña y el texto letra a letra.
     const float bw = 880, bx = (w - bw) * 0.5f, by = h - 200, bh = 158;
-    skewRect(d, bx, by, bx + bw, by + bh, 12, withAlpha(rgba(10, 14, 40), 0.9f));
+    skewRect(d, bx, by, bx + bw, by + bh, 12, withAlpha(rgba(12, 12, 14), 0.88f));
     fillRect(d, bx + 12, by, bx + bw + 12, by + 3, col);
     if (!name.empty()) {
         float nw = textWidth(name.c_str(), 18, FontFace::Title) + 40;
         skewRect(d, bx + 20, by - 30, bx + 20 + nw, by, 8, col);
-        uiText(ui, bx + 40, by - 26, 18, name.c_str(), rgba(14, 18, 46), FontFace::Title);
+        uiText(ui, bx + 40, by - 26, 18, name.c_str(), rgba(14, 14, 18), FontFace::Title);
     }
     std::vector<std::string> lines = wrapText(shown, 25, bw - 80);
     float y = by + 26;
@@ -1029,10 +1036,12 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
     const float w = float(view.width), h = float(view.height);
     char buf[128];
     // En las escenas que detienen el juego (y al despertar) solo se ve la historia.
-    if (dialogue_.blocking() || hero_.lying > 0.01f) {
+    if (dialogueBlocking() || hero_.lying > 0.01f) {
         drawStoryHud(ui, view);
+        drawCinemaHud(ui, view);
         return;
     }
+    drawCinemaHud(ui, view);
 
     // Vitalidad abajo a la derecha: retrato hexagonal y barras de PV y PM inclinadas y
     // segmentadas (su longitud crece con el máximo).
@@ -1058,11 +1067,16 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
         uiText(ui, right, cy - 66, 18, buf, kUiText, FontFace::Title, Align::Right);
         segBar(d, right, cy - 40, maxHp_ * 2.6f, 18, hp_ / maxHp_, hpGhost_ / maxHp_, rgba(214, 206, 192),
                rgba(255, 60, 120), int(maxHp_ / 10));
-        segBar(d, right - 14, cy - 12, maxMp_ * 1.8f, 10, mp_ / maxMp_, mp_ / maxMp_, rgba(255, 225, 140), 0, 10);
-        uiText(ui, right - 14 - maxMp_ * 1.8f - 12, cy - 16, 14, "LUZ", rgba(255, 230, 150), FontFace::Title, Align::Right);
-        segBar(d, right - 24, cy + 8, maxShadow_ * 1.8f, 10, shadow_ / maxShadow_, shadow_ / maxShadow_, rgba(150, 80, 255), 0, 10);
-        uiText(ui, right - 24 - maxShadow_ * 1.8f - 12, cy + 4, 14, "SOMBRA", rgba(180, 130, 255), FontFace::Title, Align::Right);
-        if (shadowMode_ ? shadow_ >= 60.0f : mp_ >= maxMp_) {  // técnica de V lista
+        // Las barras aparecen cuando se recupera lo que miden.
+        if (powers_.absorb) {
+            segBar(d, right - 14, cy - 12, maxMp_ * 1.8f, 10, mp_ / maxMp_, mp_ / maxMp_, rgba(255, 225, 140), 0, 10);
+            uiText(ui, right - 14 - maxMp_ * 1.8f - 12, cy - 16, 14, "LUZ", rgba(255, 230, 150), FontFace::Title, Align::Right);
+        }
+        if (shadowUnlocked_) {
+            segBar(d, right - 24, cy + 8, maxShadow_ * 1.8f, 10, shadow_ / maxShadow_, shadow_ / maxShadow_, rgba(150, 80, 255), 0, 10);
+            uiText(ui, right - 24 - maxShadow_ * 1.8f - 12, cy + 4, 14, "SOMBRA", rgba(180, 130, 255), FontFace::Title, Align::Right);
+        }
+        if (shadowMode_ ? shadow_ >= 60.0f : mp_ >= maxMp_ && powers_.nova) {  // técnica de V lista
             float pulse = 0.6f + 0.4f * std::sin(time_ * 6.0f);
             uiText(ui, right - 60, cy + 26, 15, shadowMode_ ? "V · AGUJERO NEGRO" : "V · SUPERNOVA",
                    withAlpha(shadowMode_ ? rgba(190, 150, 255) : rgba(255, 230, 150), pulse), FontFace::Title, Align::Right, pulse);
@@ -1096,7 +1110,7 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
     }
 
     // Menú de comandos abajo a la izquierda: magias (1-3) y atajos de objetos (4-6).
-    {
+    if (powers_.techniques) {
         const float x = 28, rowH = 34, width = 300;
         float y0 = h - 30 - rowH * float(kCommandCount) - 40;
         skewRect(d, x, y0, x + 170, y0 + 30, 10, rgba(222, 214, 198, 220));
@@ -1206,7 +1220,7 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
         }
         // Cartel con el nombre de la parte al empezarla.
         float by = h * 0.2f;
-        if (partBanner_ > 0 && p) {
+        if (partBanner_ > 0 && p && chapterBanner_ <= 0) {
             float a = clampf(std::min((4.0f - partBanner_) / 0.4f, partBanner_ / 0.6f), 0, 1);
             fillRect(d, 0, by - 14, w, by + 92, withAlpha(rgba(12, 16, 42), 0.5f * a));
             uiText(ui, w * 0.5f, by - 4, 16, levelName_.c_str(), withAlpha(kUiCyan, a), FontFace::Title, Align::Center);
@@ -1216,13 +1230,7 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
         // flecha en el borde hacia él.
         if (p && hero_.downTimer < 0 && testMode_ != TestMode::Combat) {
             float sx, sy;
-            Vec3 m = p->marker;
-            if (p->kind == PartKind::Nodes)
-                for (const ColorNode& c : nodes_)
-                    if (!c.lit) { m = c.pos + Vec3{0, 2.6f, 0}; break; }
-            if (p->kind == PartKind::Lanterns)
-                for (const Lantern& l : lanterns_)
-                    if (!l.lit) { m = l.pos + Vec3{0, 2.6f, 0}; break; }
+            Vec3 m = objectivePos(*p);
             float dist = length(m - hero_.body.pos);
             bool on = project(view, m, sx, sy) && sx > 40 && sx < w - 40 && sy > 40 && sy < h - 40;
             if (!on) {
@@ -1300,4 +1308,54 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
         uiText(ui, 28, 94, 15, "F1 huesos · F2 articulaciones · F3 cajas · F4 rejilla", rgba(120, 200, 160));
     }
     drawStoryHud(ui, view);
+}
+
+// Ecos: el cuerpo del protagonista hecho de luz blanca (un recuerdo de otros). Ilse: su
+// propio cuerpo, oscuro, con dos puntos violetas por ojos.
+void Game::drawGhosts(Renderer* solid, DebugDraw& lines, float alpha) const {
+    for (const Ghost& g : ghosts_) {
+        if (g.fade > 0.25f) continue;
+        Mat4 j[JointCount];
+        g.body.interpolatedJoints(alpha, j);
+        if (!solid) {
+            drawSkeleton(lines, kSkeleton, JointCount, j, DrawFlags{}, g.ilse ? rgba(150, 80, 255) : kGhostWhite);
+            continue;
+        }
+        const BuiltModel& m = model(g.ilse ? ModelId::Ilse : ModelId::Hero);
+        Mat4 skin[kMaxJoints];
+        skinMatrices(m, j, skin);
+        float appear = smoothstep01(g.age / 0.6f);
+        if (g.ilse) {
+            solid->skinned(m.mesh, skin, m.jointCount, 0.0f, rgba(60, 30, 90));
+            for (float x : {0.04f, -0.04f})
+                solid->ellipsoid(j[Head], {x, 0.128f, 0.105f}, {0.016f, 0.006f, 0.006f}, rgba(190, 130, 255), Material::Glow);
+        } else {
+            solid->skinned(m.mesh, skin, m.jointCount, 0.75f + 0.1f * std::sin(time_ * 3.0f + g.age), kGhostWhite);
+            solid->light(translationOf(j[Chest]), Vec3{1.0f, 0.9f, 0.75f} * (1.2f * appear), 4.0f);
+        }
+    }
+}
+
+// Escenas: bandas negras arriba y abajo durante los planos. Tutoriales: una tecla y una
+// palabra, abajo en el centro, que se apagan al hacer la acción.
+void Game::drawCinemaHud(UiLayer& ui, const ViewInfo& view) const {
+    DebugDraw& d = ui.shapes;
+    const float w = float(view.width), h = float(view.height);
+    if (cineBars_ > 0) {
+        float k = smoothstep01(cineBars_);
+        fillRect(d, 0, 0, w, 70 * k, rgba(0, 0, 0));
+        fillRect(d, 0, h - 70 * k, w, h, rgba(0, 0, 0));
+    }
+    if (tutorials_.empty() || dialogueBlocking()) return;
+    const Tutorial& t = tutorials_.front();
+    float a = clampf(std::min(t.age / 0.4f, t.doneTime >= 0 ? 1.0f - (t.age - t.doneTime) / 0.8f : 1.0f), 0, 1);
+    if (a <= 0) return;
+    float kw = std::max(34.0f, textWidth(t.key.c_str(), 18, FontFace::Title) + 20);
+    float ww = textWidth(t.word.c_str(), 22);
+    float x0 = (w - kw - 14 - ww) * 0.5f, y0 = h * 0.78f;
+    uint32_t done = t.doneTime >= 0 ? rgba(150, 200, 150) : kUiCyan;
+    fillRect(d, x0 - 1.5f, y0 - 1.5f, x0 + kw + 1.5f, y0 + 35.5f, withAlpha(done, a));
+    fillRect(d, x0, y0, x0 + kw, y0 + 34, withAlpha(rgba(14, 14, 18), 0.9f * a));
+    uiText(ui, x0 + kw * 0.5f, y0 + 7, 18, t.key.c_str(), withAlpha(done, a), FontFace::Title, Align::Center);
+    uiText(ui, x0 + kw + 14, y0 + 5, 22, t.word.c_str(), withAlpha(kUiText, a), FontFace::Body, Align::Left, 0.5f * a);
 }

@@ -572,12 +572,19 @@ int main() {
         g.init(GAME_ASSET_DIR);
         skipDialogues(g);
         run(g, 0.5f);
-        CHECK(g.level() == LevelId::Plaza && g.partIndex() == 0 && g.enemies_.size() == 2,
-              "plaza, parte 1: el combate del despertar empieza (%zu Grises)", g.enemies_.size());
+        CHECK(g.level() == LevelId::Plaza && g.partIndex() == 0 && g.enemies_.empty() && !g.powers().attack && !g.powers().strong,
+              "plaza: despierta sin fuerzas ni arma, sin enemigos todavía");
+        place(g, g.interacts_[0].pos);
+        g.update(dt, press(&Controls::interact));
+        skipDialogues(g);
+        run(g, 0.5f);
+        CHECK(g.powers().attack && g.powers().strong && g.partIndex() == 1 && g.enemies_.size() == 2 &&
+                  g.enemies_[0].kind == EnemyKind::Hound,
+              "coger la hoja: vuelven las fuerzas y llegan dos sabuesos (%zu)", g.enemies_.size());
         for (Enemy& e : g.enemies_) g.killEnemy(e);
         run(g, 1.0f);
         skipDialogues(g);
-        CHECK(g.partIndex() == 1, "combate ganado: parte 2, los nodos");
+        CHECK(g.partIndex() == 2, "combate ganado: parte 3, los nodos");
         CHECK(g.gates_[0].closed, "la puerta del mercado sigue cerrada");
         for (Encounter& e : g.encounters_) e.cleared = true;  // sin los guardianes de los nodos
         for (size_t i = 0; i < g.nodes_.size(); ++i) {
@@ -587,8 +594,8 @@ int main() {
         }
         run(g, 0.2f);
         skipDialogues(g);
-        CHECK(g.partIndex() == 2 && g.gates_[0].closed && !g.receptors_[0].lit,
-              "tres nodos: parte 3, la puerta sigue sellada (rompecabezas de luz)");
+        CHECK(g.partIndex() == 3 && g.gates_[0].closed && !g.receptors_[0].lit && g.powers().absorb && g.powers().light,
+              "tres nodos: vuelven la absorción y la luz; la puerta sigue sellada (rompecabezas)");
         // Rompecabezas: girar los espejos (F) hasta que el haz llegue al receptor.
         place(g, g.mirrors_[0].pos + Vec3{0.9f, 0, 0});
         int before = g.mirrors_[0].angle;
@@ -600,11 +607,11 @@ int main() {
         run(g, 0.3f);
         skipDialogues(g);
         run(g, 0.2f);
-        CHECK(g.receptors_[0].lit && !g.gates_[0].closed && g.partIndex() == 3,
+        CHECK(g.receptors_[0].lit && !g.gates_[0].closed && g.partIndex() == 4,
               "el haz llega a la puerta: se abre (recorrido de %zu tramos)", g.beamColors_[0].size());
         place(g, {0, 0, 24});
         run(g, 2.0f);
-        CHECK(g.level() == LevelId::Mercado && g.levelName() == "Mercado de los Ecos" && std::fabs(g.croma_ - 0.05f) < 1e-3f,
+        CHECK(g.level() == LevelId::Mercado && g.levelName() == "Mercado Quemado" && std::fabs(g.croma_ - 0.05f) < 1e-3f,
               "al cruzar la puerta se carga el mercado, otra vez casi sin color");
         // Cámara opcional: solo se abre con luz magenta (el segundo espejo la tiñe).
         skipDialogues(g);
@@ -640,6 +647,7 @@ int main() {
         Game g;
         g.init(GAME_ASSET_DIR);
         skipDialogues(g);
+        run(g, 2.0f);  // que acabe de levantarse
         g.loadLevel(LevelId::Puente);
         skipDialogues(g);
         CHECK(!g.world_.ground, "el puente no tiene suelo");
@@ -674,28 +682,63 @@ int main() {
         d.advance();
         CHECK(!d.active(), "la escena termina");
     }
-    {  // Historia en el juego: la intro detiene todo hasta leerla
+    {  // Historia sin palabras: la intro son planos; los ecos son siluetas que repiten un recuerdo
         Game g;
         g.init(GAME_ASSET_DIR);
-        CHECK(g.story_ && g.hero_.lying == 1, "con guion: el Prismero despierta tumbado");
+        CHECK(g.story_ && g.hero_.lying == 1, "con guion: despierta tumbado");
         run(g, 3.0f);
-        CHECK(g.dialogueBlocking() && g.enemies_.empty(), "la intro bloquea: sin Grises todavia");
-        CHECK(g.speakerName("brizna") == "???", "Brizna aun no tiene nombre");
+        Vec3 eye, focus;
+        CHECK(g.dialogueBlocking() && g.cinematic(eye, focus) && g.enemies_.empty(), "la intro es un plano de cámara, sin enemigos");
         Controls adv;
         adv.advance = true;
-        for (int i = 0; i < 200 && g.dialogueBlocking(); ++i) {
+        for (int i = 0; i < 400 && g.dialogueBlocking(); ++i) {
             g.update(dt, adv);
             run(g, 0.05f);
         }
-        CHECK(!g.dialogueBlocking() && g.speakerName("brizna") == "Brizna", "tras leer la intro, Brizna tiene nombre");
-        run(g, 1.0f);
-        CHECK(!g.enemies_.empty() && g.hero_.lying == 0, "tras la intro empieza el primer combate y el Prismero esta de pie");
-        // Eco de memoria: aparece con su orden y se recoge al pasar.
+        run(g, 2.0f);
+        CHECK(!g.dialogueBlocking() && g.hero_.lying == 0 && !g.tutorials_.empty() && g.tutorials_.front().action == "andar",
+              "tras la intro está de pie y el tutorial dice «%s»", g.tutorials_.empty() ? "-" : g.tutorials_.front().word.c_str());
+        Controls walk;
+        walk.move = {0, 0, 1};
+        run(g, 2.5f, walk);
+        CHECK(g.tutorials_.empty() || g.tutorials_.front().doneTime >= 0, "al andar, el tutorial se da por hecho");
+        Controls hit = press(&Controls::attack);
+        size_t moves = 0;
+        g.update(dt, hit);
+        moves += g.hero_.move() != Move::None;
+        CHECK(moves == 0, "sin la hoja no se puede golpear");
+        // Eco de memoria: aparece con su orden y, al tocarlo, sus siluetas repiten el recuerdo.
         g.storyCommand({true, "eco_activa", "1"});
         g.hero_.body.pos = g.echoes_[0].pos - Vec3{0, 0.9f, 0};
         g.update(dt, {});
         g.update(dt, {});
-        CHECK(g.echoes_[0].taken && g.played_.count(g.echoes_[0].scene), "el eco de memoria lanza su recuerdo");
+        run(g, 0.5f);
+        CHECK(g.echoes_[0].taken && g.ghosts_.size() == 2, "el eco lanza su recuerdo: %zu siluetas", g.ghosts_.size());
+        float x0 = g.ghosts_[1].body.body.pos.x;
+        run(g, 5.0f);
+        CHECK(g.ghosts_.empty() || std::fabs(g.ghosts_.back().body.body.pos.x - x0) > 0.3f, "las siluetas se mueven y desaparecen");
+    }
+    {  // Ilse apaga el puente y despierta la sombra
+        Game g;
+        g.init(GAME_ASSET_DIR);
+        skipDialogues(g);
+        g.loadLevel(LevelId::Puente);
+        skipDialogues(g);
+        for (Lantern& l : g.lanterns_) l.lit = true;
+        place(g, {0, 1.0f, 64});
+        g.playScene("archivera");
+        run(g, 1.0f);
+        bool ilse = false;
+        for (const Ghost& gh : g.ghosts_) ilse |= gh.ilse;
+        CHECK(ilse, "aparece Ilse al otro lado del puente");
+        skipDialogues(g);
+        bool dark = true;
+        for (const Lantern& l : g.lanterns_) dark = dark && !l.lit;
+        for (const Lamp& l : g.lamps_) dark = dark && !l.on;
+        CHECK(dark && !g.pools_.empty() && g.shadowUnlocked(), "apaga todas las luces; queda la oscuridad y la sombra despierta");
+        bool armed = false;
+        for (const Encounter& e : g.encounters_) armed |= e.id == "sabuesos_ilse" && e.armed;
+        CHECK(armed, "y suelta a su jauría");
     }
     {  // Sonido sintetizado: todos los efectos suenan, sin saturar, y el WAV va y vuelve
         bool allOk = true;

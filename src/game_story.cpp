@@ -18,6 +18,7 @@ std::string Game::speakerName(const std::string& id) const {
 }
 
 void Game::storyCommand(const StoryLine& cmd) {
+    if (cinemaCommand(cmd)) return;
     const std::string& c = cmd.speaker;
     if (c == "negro") {
         fade_ = 1;
@@ -102,11 +103,19 @@ void Game::updateStory(float dt) {
     }
 }
 
-// Brizna flota junto al hombro del Prismero siguiéndole con un muelle; en las escenas se
-// pone delante, a la altura de su cara.
+// La chispa no habla: guía. Se adelanta hacia el objetivo y, cuando el protagonista ya está
+// cerca, espera sobre él. En combate (o sin objetivo) vuelve junto a su hombro.
 void Game::updateBrizna(float dt) {
     Vec3 fwd = hero_.forward(), right{-fwd.z, 0, fwd.x};
     Vec3 target = hero_.body.pos + right * 0.55f + Vec3{0, 1.75f + 0.08f * std::sin(time_ * 2.3f), 0} - fwd * 0.15f;
+    const LevelPart* part = currentPart();
+    if (story_ && part && !inCombat() && !dialogueBlocking() && hero_.lying <= 0.01f) {
+        Vec3 goal = objectivePos(*part);
+        Vec3 to = flat(goal - hero_.body.pos);
+        float d = length(to);
+        if (d > 6.0f) target = hero_.body.pos + to * (3.5f / d) + Vec3{0, 1.6f + 0.15f * std::sin(time_ * 3.0f), 0};
+        else if (d > 0.5f) target = goal + Vec3{0, 0.3f * std::sin(time_ * 2.0f), 0};
+    }
     if (dialogue_.blocking() && !dialogue_.memory())
         target = hero_.body.pos + fwd * 0.95f + right * 0.3f + Vec3{0, hero_.lying > 0.5f ? 0.9f : 1.5f, 0};
     if (briznaPos_.x == 0 && briznaPos_.y == 0 && briznaPos_.z == 0) briznaPos_ = target;

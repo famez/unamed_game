@@ -54,7 +54,7 @@ void Game::gatherLightPoints() {
 // centrada en la cámara, a menos de 30 m y a la vista desde la fuente en la que se está.
 void Game::updateLightTarget(const Controls& c) {
     lightTarget_ = -1;
-    if (travel_ || hero_.downTimer >= 0) return;
+    if (travel_ || hero_.downTimer >= 0 || (!shadowMode_ && !powers_.light)) return;
     gatherLightPoints();
     Vec3 chest = hero_.body.pos + Vec3{0, 1.0f, 0};
     RayHit h;

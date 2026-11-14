@@ -1,6 +1,7 @@
 #include "story.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 
@@ -84,6 +85,7 @@ void Dialogue::start(const Scene* scene) {
     index_ = 0;
     reveal_ = 0;
     hold_ = 0;
+    wait_ = 0;
 }
 
 const StoryLine* Dialogue::line() const {
@@ -98,16 +100,23 @@ bool Dialogue::lineComplete() const {
 }
 
 // Entrega las órdenes seguidas desde la posición actual hasta la próxima línea de texto.
+// Una pausa detiene la entrega hasta que pasa su tiempo.
 void Dialogue::skipCommands(std::vector<StoryLine>* commands) {
-    while (scene_ && index_ < scene_->lines.size() && scene_->lines[index_].command) {
-        if (commands) commands->push_back(scene_->lines[index_]);
+    while (wait_ <= 0 && scene_ && index_ < scene_->lines.size() && scene_->lines[index_].command) {
+        const StoryLine& l = scene_->lines[index_];
         ++index_;
+        if (l.speaker == "pausa") wait_ = float(std::atof(l.text.c_str()));
+        else if (commands) commands->push_back(l);
     }
-    if (scene_ && index_ >= scene_->lines.size()) scene_ = nullptr;
+    if (wait_ <= 0 && scene_ && index_ >= scene_->lines.size()) scene_ = nullptr;
 }
 
 void Dialogue::update(float dt, std::vector<StoryLine>& commands) {
     newChars_ = 0;
+    if (wait_ > 0) {
+        wait_ -= dt;
+        if (wait_ > 0) return;
+    }
     skipCommands(&commands);
     const StoryLine* l = line();
     if (!l) return;
@@ -129,6 +138,10 @@ void Dialogue::update(float dt, std::vector<StoryLine>& commands) {
 
 void Dialogue::advance() {
     if (!scene_) return;
+    if (wait_ > 0) {  // pulsar acorta la pausa
+        wait_ = 0.001f;
+        return;
+    }
     if (!lineComplete()) {
         const StoryLine* l = line();
         if (l) reveal_ = float(utf8Length(l->text));

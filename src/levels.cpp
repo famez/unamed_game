@@ -117,7 +117,7 @@ void Game::addGate(const std::string& id, Vec3 c, Vec3 h, uint32_t color, bool c
 // --- Escenario 1: Plaza del Prisma ---------------------------------------------------------
 
 void Game::buildPlaza() {
-    levelName_ = "Plaza del Prisma";
+    levelName_ = "Plaza del Reloj";
     floorColor_ = rgba(70, 120, 90);
     floorMaterial_ = Material::Grass;
     const Mat4 id = Mat4::identity();
@@ -215,28 +215,55 @@ void Game::buildPlaza() {
     c.munny = 40;
     chests_ = {a, b, c};
 
+    // El reloj de la plaza, parado en la hora del crepúsculo (las 10:47 de la tarde).
+    {
+        Vec3 base{-2.0f, 0, 7.5f};
+        addBlock(base + Vec3{0, 1.6f, 0}, {0.12f, 1.6f, 0.12f}, rgba(70, 70, 76), Material::Metal);
+        Vec3 face = base + Vec3{0, 3.45f, 0};
+        addDecor(id, face, {0.42f, 0.42f, 0.12f}, rgba(60, 60, 66), Material::Metal, true);
+        addDecor(id, face + Vec3{0, 0, -0.1f}, {0.36f, 0.36f, 0.04f}, rgba(196, 190, 176), Material::Stone, true);
+        addDecor(id, face + Vec3{0, 0, 0.1f}, {0.36f, 0.36f, 0.04f}, rgba(196, 190, 176), Material::Stone, true);
+        for (float side : {-1.0f, 1.0f}) {  // agujas a las 10:47 por las dos caras
+            float hour = -(10.78f / 12.0f) * 2.0f * kPi, minute = -(47.0f / 60.0f) * 2.0f * kPi;
+            addDecor(translate(face + Vec3{0, 0, side * 0.15f}) * rotateZ(hour), {0, 0.11f, 0}, {0.022f, 0.12f, 0.01f},
+                     rgba(30, 30, 34), Material::Metal, false);
+            addDecor(translate(face + Vec3{0, 0, side * 0.16f}) * rotateZ(minute), {0, 0.16f, 0}, {0.014f, 0.17f, 0.01f},
+                     rgba(30, 30, 34), Material::Metal, false);
+        }
+    }
+    // La hoja de alguien, tirada junto a un banco: lo primero que se recoge.
+    addBlock({1.6f, 0.25f, -8.4f}, {1.0f, 0.25f, 0.3f}, rgba(96, 90, 84), Material::Stone);
+    interacts_ = {{"hoja", {0.9f, 0, -7.8f}, "Coger la hoja", "hoja"}};
+
     // Nodos cromáticos: uno junto a las cajas, otro en la terraza, otro en la plataforma alta.
     nodes_ = {{"nodo_oeste", {-9.5f, 0, -9.0f}, 11, kMagenta, "nodo_1"},
               {"nodo_terraza", {9.0f, 0.9f, 12.0f}, 11, kAmber, "nodo_2"},
               {"nodo_alto", {-10.6f, 2.6f, 10.6f}, 12, kCyan, "nodo_3"}};
     auto zone = [](Vec3 ctr, float r) { return AABB{ctr - Vec3{r, 1, r}, ctr + Vec3{r, 4, r}}; };
     encounters_ = {
-        {"despertar", zone({0, 0, -3}, 30), {{{EnemyKind::Dazzled, {4, 0, -10}}, {EnemyKind::Dazzled, {-4, 0, -10}}}}, {}, "primer_combate", ""},
+        {"despertar", zone({0, 0, -3}, 30), {{{EnemyKind::Hound, {6, 0, -14}}, {EnemyKind::Hound, {-6, 0, -14}}}}, {}, "perros", "",
+         false},
         {"nodo_oeste", zone({-9.5f, 0, -9}, 5), {{{EnemyKind::Dazzled, {-12, 0, -6}}, {EnemyKind::Dazzled, {-6, 0, -12}}, {EnemyKind::Dazzled, {-7, 0, -6}}}},
          {}, "", ""},
         {"nodo_terraza", zone({10, 0, 10}, 5), {{{EnemyKind::Dazzled, {8, 0.9f, 13}}, {EnemyKind::Brute, {12, 0.9f, 9}}}}, {}, "domo", ""},
         {"nodo_alto", zone({-10, 0, 9}, 5), {{{EnemyKind::Watcher, {-9, 0, 12}}, {EnemyKind::Watcher, {-13, 0, 8}}, {EnemyKind::Dazzled, {-8, 0, 5}}}},
          {}, "eco_enemigo", ""},
     };
-    echoes_ = {{{-7.5f, 1.3f, -11.0f}, "recuerdo_alba"}, {{-12.5f, 3.6f, 10.0f}, "recuerdo_promesa"}};
+    echoes_ = {{{-7.5f, 1.3f, -11.0f}, "eco_alba"}, {{-12.5f, 3.6f, 10.0f}, "eco_promesa"}};
 
+    LevelPart p0;
+    p0.title = "Despertar";
+    p0.objective = "Sigue la chispa";
+    p0.kind = PartKind::Interact;
+    p0.target = "hoja";
+    p0.marker = {0.9f, 0.6f, -7.8f};
     LevelPart p1;
-    p1.title = "Despertar";
-    p1.objective = "Defiéndete de los Grises";
+    p1.title = "Los perros";
+    p1.objective = "Sobrevive";
     p1.kind = PartKind::Encounter;
     p1.target = "despertar";
-    p1.marker = {0, 1, -8};
-    p1.sceneDone = "despertar_fin";
+    p1.marker = {0, 1, -10};
+    p1.sceneDone = "tras_perros";
     LevelPart p2;
     p2.title = "Los tres nodos";
     p2.objective = "Enciende los nodos cromáticos";
@@ -246,7 +273,8 @@ void Game::buildPlaza() {
     p2.sceneDone = "plaza_nodos";
     LevelPart p3;
     p3.title = "La puerta sellada";
-    p3.objective = "Lleva la luz del prisma hasta la puerta (F: girar espejos)";
+    p3.objective = "Lleva la luz hasta la puerta";
+    p3.sceneStart = "espejos";
     p3.kind = PartKind::Puzzle;
     p3.target = "receptor_puerta";
     p3.marker = {6, 1.5f, 0};
@@ -257,7 +285,7 @@ void Game::buildPlaza() {
     p4.kind = PartKind::Exit;
     p4.area = area({-2.5f, -1, 22}, {2.5f, 5, 28});
     p4.marker = {0, 1.5f, 22};
-    parts_ = {p1, p2, p3, p4};
+    parts_ = {p0, p1, p2, p3, p4};
     // El haz sale del pie de la fuente hacia el este; tres espejos (mal orientados al
     // principio) pueden llevarlo hasta la puerta.
     emitters_ = {{{0.55f, 1.4f, 0}, {1, 0, 0}, rgba(255, 200, 90)}};
@@ -271,7 +299,7 @@ void Game::buildPlaza() {
 // --- Escenario 2: Mercado de los Ecos -------------------------------------------------------
 
 void Game::buildMercado() {
-    levelName_ = "Mercado de los Ecos";
+    levelName_ = "Mercado Quemado";
     floorColor_ = rgba(104, 106, 112);
     floorMaterial_ = Material::Ground;
     const Mat4 id = Mat4::identity();
@@ -363,10 +391,10 @@ void Game::buildMercado() {
          {{{EnemyKind::Dazzled, {-6, 0, 42}}, {EnemyKind::Dazzled, {6, 0, 42}}, {EnemyKind::Brute, {0, 0, 46}}},
           {{EnemyKind::Watcher, {-8, 0, 38}}, {EnemyKind::Watcher, {8, 0, 38}}, {EnemyKind::Dazzled, {0, 0, 48}}}},
          {"plaza_entrada"}, "", ""},
-        {"jefe_nora", zone({-12, -1, 30}, {12, 5, 52}), {{{EnemyKind::Brute, {0, 0, 46}, true, "Nora, la que espera"}}}, {"plaza_entrada"}, "", "nora_libre",
+        {"jefe_nora", zone({-12, -1, 30}, {12, 5, 52}), {{{EnemyKind::Dazzled, {0, 0, 46}, true, "La que espera"}}}, {"plaza_entrada"}, "", "nora_libre",
          false},
     };
-    echoes_ = {{{-1.5f, 1.3f, 15.0f}, "recuerdo_nora"}};
+    echoes_ = {{{-1.5f, 1.3f, 15.0f}, "eco_nora"}};
 
     LevelPart p1;
     p1.title = "La calle de los toldos";
@@ -457,8 +485,13 @@ void Game::buildPuente() {
          {{{EnemyKind::Dazzled, {-3, 0.8f, 33}}, {EnemyKind::Dazzled, {3, 0.8f, 33}}, {EnemyKind::Watcher, {0, 0.8f, 36}}},
           {{EnemyKind::Watcher, {-4, 0.8f, 30}}, {EnemyKind::Watcher, {4, 0.8f, 30}}, {EnemyKind::Brute, {0, 0.8f, 34}}}},
          {"puente_a", "puente_b"}, "puente_combate", "puente_despejado"},
+        // A oscuras, tras el encuentro con Ilse: su jauría (la espera el guion).
+        {"sabuesos_ilse", AABB{{-8, 0, 59}, {8, 6, 76}},
+         {{{EnemyKind::Hound, {-5, 1.0f, 72}}, {EnemyKind::Hound, {5, 1.0f, 72}}, {EnemyKind::Hound, {0, 1.0f, 75}}},
+          {{EnemyKind::Hound, {-6, 1.0f, 62}}, {EnemyKind::Hound, {6, 1.0f, 62}}, {EnemyKind::Brute, {0, 1.0f, 74}}}},
+         {}, "", "", false},
     };
-    echoes_ = {{{-2.0f, 2.6f, 45.0f}, "recuerdo_teo"}};
+    echoes_ = {{{-2.0f, 2.6f, 45.0f}, "eco_teo"}};
 
     LevelPart p1;
     p1.title = "Los faroles de Nora";
@@ -480,7 +513,14 @@ void Game::buildPuente() {
     p3.area = area({-8, 0, 62}, {8, 6, 76});
     p3.marker = {0, 2.5f, 64};
     p3.sceneDone = "archivera";
-    parts_ = {p1, p2, p3};
+    LevelPart p4;
+    p4.title = "A oscuras";
+    p4.objective = "Sobrevive en la oscuridad";
+    p4.kind = PartKind::Encounter;
+    p4.target = "sabuesos_ilse";
+    p4.marker = {0, 2.0f, 68};
+    p4.sceneDone = "fin";
+    parts_ = {p1, p2, p3, p4};
     heroStart_ = {0, 0, -5};
     heroStartYaw_ = 0;
     lastLevel_ = true;
@@ -519,6 +559,7 @@ void Game::loadLevel(LevelId id) {
     islands_.clear();
     pools_.clear();
     holes_.clear();
+    ghosts_.clear();
     drink_ = 0;
     level_ = id;
     part_ = 0;
@@ -584,6 +625,17 @@ void Game::resetEncounter() {
     activeEncounter_ = -1;
 }
 
+// Dónde está ahora el objetivo de una parte (el primer nodo o farol que falta, si no su marca).
+Vec3 Game::objectivePos(const LevelPart& p) const {
+    if (p.kind == PartKind::Nodes)
+        for (const ColorNode& c : nodes_)
+            if (!c.lit) return c.pos + Vec3{0, 2.6f, 0};
+    if (p.kind == PartKind::Lanterns)
+        for (const Lantern& l : lanterns_)
+            if (!l.lit) return l.pos + Vec3{0, 2.6f, 0};
+    return p.marker;
+}
+
 bool Game::partDone(const LevelPart& p) const {
     switch (p.kind) {
         case PartKind::Encounter:
@@ -615,7 +667,7 @@ bool Game::partDone(const LevelPart& p) const {
 }
 
 void Game::updateLevel(float dt) {
-    partBanner_ = std::max(0.0f, partBanner_ - dt);
+    if (chapterBanner_ <= 0) partBanner_ = std::max(0.0f, partBanner_ - dt);  // tras el cartel del capítulo
     for (Gate& g : gates_) g.openTime += dt;
     for (ColorNode& n : nodes_)
         if (n.lit) n.litTime += dt;

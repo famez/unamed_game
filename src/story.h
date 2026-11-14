@@ -10,7 +10,8 @@
 //   !recuerdo                (opcional) escena de memoria: pantalla velada, voz lejana
 //   hablante: texto          una línea de diálogo (hablante: brizna, prota, voz, sistema...)
 //   !orden argumentos        una orden para el juego cuando se llega a ella
-//                            (levantarse, nombre <hablante> <Nombre>, oleadas, fin_capitulo...)
+//                            (levantarse, plano, eco, tutorial, poder, fin_capitulo...)
+//   !pausa segundos          espera antes de seguir (para encadenar planos y órdenes)
 
 #include <string>
 #include <vector>
@@ -70,6 +71,7 @@ private:
     size_t index_ = 0;
     float reveal_ = 0;
     float hold_ = 0;  // avisos: tiempo con la línea completa antes de pasar
+    float wait_ = 0;  // !pausa en curso
     int newChars_ = 0;
 };
 

@@ -8,9 +8,20 @@ diálogo: la historia se cuenta con escenas e imágenes (ver `docs/historia.md`)
 
 ## Historia
 
-La biblia está en `docs/historia.md`. Los guiones son ficheros de texto en `assets/story/`
-(formato explicado en `src/story.h`). *El capítulo 1 está pendiente de reescribirse con el
-enfoque nuevo (escenas visuales y tutoriales mínimos).*
+La biblia está en `docs/historia.md`. El capítulo 1, *La plaza parada*, se cuenta casi sin
+palabras (`assets/story/capitulo1.txt`, formato en `src/story.h` y `src/cinema.cpp`):
+
+- **Planos de cámara** (`!plano`) con bandas negras, encadenados con `!pausa`.
+- **Ecos**: siluetas de luz que repiten un recuerdo (una mujer arreglando una farola mientras
+  un chico le sujeta la escalera, alguien que busca por la calle, una hija que se despide de
+  su madre, un chico que no se atreve a cruzar el puente).
+- **Tutoriales mínimos** (`!tutorial`): una tecla y una palabra, hasta que se hace la acción.
+- **Poderes que vuelven** (`!poder`): se despierta sin fuerzas ni arma; al coger una hoja
+  vuelven la fuerza y el combate; los nodos devuelven la absorción y la luz; liberar a la
+  que espera, la Supernova; y al final Ilse apaga el puente entero y despierta la sombra.
+- **La chispa** no habla: se adelanta hacia el objetivo y espera sobre él.
+
+Para escribir escenas: `./build/game --escena eco_alba` salta la intro y la reproduce.
 
 ## Música y sonido
 
@@ -44,7 +55,7 @@ Dependencias del sistema: `libOpenGL`/`libGLX` (glvnd + Mesa), `libX11` y `libXi
 (`sudo apt install libxi-dev`). Incluidas en el repositorio: `stb_truetype.h` y las
 fuentes Orbitron y Exo 2.
 
-Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--autoplay` (un bot combate solo, sin capturar el ratón),
+Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena id` (reproduce una escena del guion), `--autoplay` (un bot combate solo, sin capturar el ratón),
 `--screenshot fichero.ppm segundos [frames]` (guarda frames y sale) y `--camyaw radianes`.
 
 ## Controles

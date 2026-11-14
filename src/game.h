@@ -305,6 +305,41 @@ struct BlackHole {
     float life = 0, age = 0;
 };
 
+// Poderes: la historia los va devolviendo (sin guion, todos desde el principio).
+struct Powers {
+    bool strong = true;       // sin fuerzas: anda despacio
+    bool attack = true, jump = true, dodge = true, sprint = true;
+    bool absorb = true, light = true, techniques = true, nova = true;
+};
+
+// Plano de una escena: la cámara mira a `focus` desde `eye` durante `duration` segundos.
+struct Shot {
+    Vec3 focus, eye;
+    float duration = 3;
+};
+
+// Eco: silueta de luz que repite un recuerdo (o Ilse, oscura). Sigue una lista de acciones.
+struct GhostAct {
+    enum Kind { Walk, Wait, Gesture, Face, Vanish } kind;
+    Vec3 p;      // Walk: destino; Face: hacia dónde mira
+    float t = 0; // Wait: segundos
+    GhostAct(Kind k, Vec3 point = {}, float secs = 0) : kind(k), p(point), t(secs) {}
+};
+struct Ghost {
+    Character body;
+    std::vector<GhostAct> acts;
+    size_t act = 0;
+    float t = 0, age = 0, fade = 0;  // fade > 0: desvaneciéndose
+    bool ilse = false;
+    bool loop = false;  // repite sus acciones (un recuerdo atascado)
+};
+
+// Tutorial mínimo: una tecla y una palabra, hasta que se hace la acción.
+struct Tutorial {
+    std::string key, action, word;
+    float age = 0, doneTime = -1;
+};
+
 // Bloque sólido del escenario con su aspecto.
 struct Block {
     AABB box;
@@ -329,6 +364,8 @@ public:
     // juego empieza directamente con las oleadas (lo usan los tests).
     void init(const char* assetDir = nullptr);
     void loadLevel(LevelId id);
+    // Desarrollo: salta la intro y reproduce ya una escena del guion (en el escenario que toque).
+    void jumpToScene(const std::string& id);
     // Modo de prueba con un escenario generado a partir de `seed`.
     void initTest(TestMode mode, uint32_t seed);
     TestMode testMode() const { return testMode_; }
@@ -395,7 +432,10 @@ public:
     float transition() const { return transition_; }
     // Historia.
     const Dialogue& dialogue() const { return dialogue_; }
-    bool dialogueBlocking() const { return dialogue_.blocking(); }
+    bool dialogueBlocking() const { return dialogue_.blocking() || !shots_.empty(); }
+    // Plano de escena en curso: desde dónde mira la cámara y a qué. Falso si no hay.
+    bool cinematic(Vec3& eye, Vec3& focus) const;
+    const Powers& powers() const { return powers_; }
     std::string speakerName(const std::string& id) const;
     // Sonidos emitidos desde la última llamada (los reproduce main con el audio).
     std::vector<SoundEvent> takeSounds() {
@@ -435,6 +475,7 @@ private:
     void addGate(const std::string& id, Vec3 c, Vec3 h, uint32_t color, bool closed);
     void updateLevel(float dt);
     bool partDone(const LevelPart& p) const;
+    Vec3 objectivePos(const LevelPart& p) const;
     void setGate(const std::string& id, bool closed);
     void spawnEnemy(const Spawn& s);
     void resetEncounter();
@@ -510,6 +551,12 @@ private:
     float randRange(float a, float b) { return a + (b - a) * random01(); }
 
     void playScene(const std::string& id);
+    bool cinemaCommand(const StoryLine& cmd);
+    void spawnEcho(const std::string& name);
+    void updateCinema(float dt, const Controls& c);
+    Controls filterControls(const Controls& c) const;
+    void drawGhosts(Renderer* solid, DebugDraw& lines, float alpha) const;
+    void drawCinemaHud(UiLayer& ui, const ViewInfo& view) const;
     void storyCommand(const StoryLine& cmd);
     void updateStory(float dt);
     void updateBrizna(float dt);
@@ -614,6 +661,12 @@ private:
     bool standingUp_ = false;
     bool seenShroom_ = false, seenMoth_ = false;
     std::vector<MemoryEcho> echoes_;
+    Powers powers_;
+    std::deque<Shot> shots_;
+    float shotTime_ = 0, cineBars_ = 0;
+    std::vector<Ghost> ghosts_;
+    std::deque<Tutorial> tutorials_;
+    float walkTime_ = 0;  // para el tutorial de andar
     Vec3 briznaPos_, briznaVel_;
     std::vector<SoundEvent> sounds_;
     Brain brains_[int(EnemyKind::Count)];
