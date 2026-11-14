@@ -96,6 +96,7 @@ const char kHelp[] =
     "  --debug                       solo esqueletos y cajas en alambre (también F12)\n"
     "  --autoplay                    un bot juega solo\n"
     "  --giros                       el bot solo corre haciendo curvas (para ver el giro)\n"
+    "  --focos                       el bot absorbe una farola y se funde en el foco de sombra\n"
     "  --retrato | --cuerpo          cámara frente a la cara o al cuerpo del protagonista\n"
     "  --camyaw RADIANES             orientación inicial de la cámara\n"
     "  --screenshot FICHERO SEG [N]  guarda N fotogramas (.ppm) desde SEG segundos y sale\n"
@@ -211,6 +212,7 @@ int main(int argc, char** argv) {
     bool portrait = false;  // --retrato: cámara frente a la cara del protagonista (para modelarlo)
     bool bodyShot = false;  // --cuerpo: lo mismo, con el cuerpo entero
     bool turnsBot = false;  // --giros: el bot solo corre haciendo curvas y medias vueltas
+    bool fociBot = false;   // --focos: el bot absorbe la luz de una farola y se funde en el foco
     float camYaw0 = 0;  // --camyaw: orientación inicial de la cámara (radianes)
     const char* shotPath = nullptr;
     double shotTime = 0;
@@ -221,6 +223,7 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--retrato") == 0) portrait = true;
         if (std::strcmp(argv[i], "--cuerpo") == 0) portrait = bodyShot = true;
         if (std::strcmp(argv[i], "--giros") == 0) autoplay = turnsBot = true;
+        if (std::strcmp(argv[i], "--focos") == 0) autoplay = fociBot = true;
         if (std::strcmp(argv[i], "--camyaw") == 0 && i + 1 < argc) camYaw0 = float(std::atof(argv[++i]));
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 2 < argc) {
             shotPath = argv[i + 1];
@@ -422,6 +425,27 @@ int main(int argc, char** argv) {
                         if (botStep % 300 == 150) c.jump = true;
                     }
                     c.interact = botStep % 30 == 0;
+                    if (fociBot) {  // a la farola más cercana, absorber, cambiar a sombra y fundirse
+                        c = Controls{};
+                        c.camForward = cam.forwardFlat();
+                        c.advance = botStep % 25 == 0;
+                        static int lamp = -1;
+                        const auto& lamps = game.lamps();
+                        Vec3 hp = game.hero().body.pos;
+                        if (lamp < 0)
+                            for (size_t i = 0; i < lamps.size(); ++i)
+                                if (lamp < 0 || length(flat(lamps[i].pos - hp)) < length(flat(lamps[size_t(lamp)].pos - hp)))
+                                    lamp = int(i);
+                        Vec3 to = lamp >= 0 ? flat(lamps[size_t(lamp)].pos - hp) : Vec3{};
+                        if (botStep < 300 && length(to) > 1.3f) c.move = normalize(to);
+                        else if (botStep < 300) c.absorb = true;
+                        else if (botStep == 300) c.swapMode = true;
+                        else if (botStep == 330) c.light = true;
+                        else if (botStep > 340) {
+                            float a = float(botStep) * 0.03f;
+                            c.move = Vec3{std::cos(a), 0, std::sin(a)};
+                        }
+                    }
                     if (turnsBot) {  // tramos: recto, curva de 90°, media vuelta, giro parado
                         int t = botStep % 360;
                         c = Controls{};
@@ -433,7 +457,8 @@ int main(int argc, char** argv) {
                         else if (a >= 0) c.move = Vec3{std::sin(a), 0, std::cos(a)};
                     }
                     // En los modos de prueba también cambia a sombra y lanza agujeros negros.
-                    if (game.testMode() == TestMode::Shadow) {  // se funde con la sombra y la recorre
+                    if (fociBot || turnsBot) {
+                    } else if (game.testMode() == TestMode::Shadow) {  // se funde con la sombra y la recorre
                         c.light = botStep % 240 == 40 || botStep % 240 == 200;
                         if (game.diving()) {
                             float a = float(botStep) * 0.02f;

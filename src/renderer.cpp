@@ -105,6 +105,11 @@ uniform vec4 uPaint[16];        // salpicaduras de color: xyz, radio
 uniform vec3 uPaintColor[16];
 uniform int uZoneCount;
 uniform vec4 uZone[8];          // zonas donde el color ya ha vuelto (nodos encendidos): xyz, radio
+uniform float uDarkness;        // cuánto se oscurece lo que no alumbra ninguna fuente
+uniform int uLitCount;
+uniform vec4 uLit[24];          // fuentes de luz (farolas, nodos, faroles): xyz, radio
+uniform int uFocusCount;
+uniform vec4 uFocus[12];        // focos de sombra: xyz, radio
 uniform vec4 uOutlineColor;  // a > 0: pasada de silueta (color plano, sin iluminación)
 uniform float uTime;
 out vec4 fragColor;
@@ -301,6 +306,31 @@ void main() {
         color = mix(color, mix(kHorizon, kZenith, 0.3) * 1.4, 0.3 + 0.6 * fr);
     }
     color *= edge;
+    // Oscuridad: fuera del alcance de toda luz (o dentro de un foco de sombra) el escenario
+    // se hunde en un violeta oscuro, con un borde fino que marca hasta dónde llega la luz
+    // (por ahí no pasa la sombra fundida). Es la misma cuenta que Game::shadowAt.
+    if (scenery && uDarkness > 0.0) {
+        float lit = 0.0;
+        for (int i = 0; i < uLitCount; ++i) {
+            float dy = uLit[i].y - vWorldPos.y;
+            if (dy < -1.0 || dy > 9.0) continue;
+            float r = uLit[i].w;
+            lit = max(lit, 1.0 - smoothstep(r * 0.6, r, length(vWorldPos.xz - uLit[i].xz)));
+        }
+        float open = 1.0;
+        for (int i = 0; i < uFocusCount; ++i) {
+            if (abs(vWorldPos.y - uFocus[i].y) > 3.0) continue;
+            float r = uFocus[i].w;
+            float wob = (noise(vWorldPos.xz * 1.7 + uTime * 0.3) - 0.5) * 0.5;  // borde que respira
+            open = min(open, smoothstep(r * 0.6, r, length(vWorldPos.xz - uFocus[i].xz) + wob));
+        }
+        float dark = 1.0 - lit * open;
+        vec3 night = color * vec3(0.22, 0.18, 0.32) + vec3(0.006, 0.003, 0.014);
+        color = mix(color, night, dark * uDarkness);
+        float band = 1.0 - smoothstep(0.0, fwidth(dark) * 1.5 + 0.02, abs(dark - 0.5));
+        color += vec3(0.3, 0.12, 0.6) * band * uDarkness * 0.6;
+        seamGlow = max(seamGlow, band * uDarkness * 0.5);
+    }
     color = mix(color, vec3(1.6), vParams.y);  // destello de impacto
 
     float dist = length(uCameraPos - vWorldPos);
@@ -1095,6 +1125,16 @@ void Renderer::light(Vec3 pos, Vec3 color, float radius) {
     lights_.push_back({pos, color, radius});
 }
 
+void Renderer::litArea(Vec3 pos, float radius) {
+    if (int(litAreas_.size() / 4) >= kMaxLitAreas || radius <= 0) return;
+    litAreas_.insert(litAreas_.end(), {pos.x, pos.y, pos.z, radius});
+}
+
+void Renderer::darkArea(Vec3 pos, float radius) {
+    if (int(darkAreas_.size() / 4) >= kMaxDarkAreas || radius <= 0) return;
+    darkAreas_.insert(darkAreas_.end(), {pos.x, pos.y, pos.z, radius});
+}
+
 void Renderer::colorZone(Vec3 pos, float radius) {
     if (zones_.size() / 4 >= 8 || radius <= 0) return;
     zones_.insert(zones_.end(), {pos.x, pos.y, pos.z, radius});
@@ -1471,6 +1511,12 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
         glUniform1f(glGetUniformLocation(prog, "uInflate"), 0.0f);
         glUniform4f(glGetUniformLocation(prog, "uOutlineColor"), 0, 0, 0, 0);
         glUniform1f(glGetUniformLocation(prog, "uWorldColor"), worldColor_);
+        glUniform1f(glGetUniformLocation(prog, "uDarkness"), darkness_);
+        int litCount = int(litAreas_.size() / 4), darkCount = int(darkAreas_.size() / 4);
+        glUniform1i(glGetUniformLocation(prog, "uLitCount"), litCount);
+        if (litCount > 0) glUniform4fv(glGetUniformLocation(prog, "uLit"), litCount, litAreas_.data());
+        glUniform1i(glGetUniformLocation(prog, "uFocusCount"), darkCount);
+        if (darkCount > 0) glUniform4fv(glGetUniformLocation(prog, "uFocus"), darkCount, darkAreas_.data());
         int zoneCount = int(zones_.size() / 4);
         glUniform1i(glGetUniformLocation(prog, "uZoneCount"), zoneCount);
         if (zoneCount > 0) glUniform4fv(glGetUniformLocation(prog, "uZone"), zoneCount, zones_.data());
@@ -1619,4 +1665,6 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
     scorches_.clear();
     paints_.clear();
     zones_.clear();
+    litAreas_.clear();
+    darkAreas_.clear();
 }

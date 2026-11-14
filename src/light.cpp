@@ -155,7 +155,9 @@ int Game::ambushTarget() const {
     return best;
 }
 
-float Game::lightAt(Vec3 p) const {
+float Game::lightAt(Vec3 p) const { return lightAtRaw(p) * focusOpen(p); }
+
+float Game::lightAtRaw(Vec3 p) const {
     float l = 0;
     for (const ColorNode& n : nodes_) {
         if (!n.lit) continue;
@@ -174,19 +176,29 @@ void Game::updateLight(float dt, const Controls& c) {
     float here = lightAt(hero_.body.pos);
     novaFlash_ = std::max(0.0f, novaFlash_ - dt);
 
-    // Absorber.
+    // Absorber: la luz de alrededor (nodos, faroles, farolas) pasa al protagonista y donde
+    // estaba queda un foco de sombra que crece mientras se absorbe. Cuando el foco ya no
+    // crece más, ahí no queda luz. La farola de la que bebe se va apagando.
     hero_.setAbsorb(c.absorb);
     if (hero_.absorbing()) {
-        float gain = kAbsorbRate * here * dt;
-        Vec3 source;
+        float raw = std::max(lightAtRaw(hero_.body.pos), lampLightAt(hero_.body.pos));
+        float gain = 0;
+        Vec3 source = hero_.body.pos + Vec3{0, 2.5f, 0};
         float best = 0;
         for (const ColorNode& n : nodes_)  // de dónde vienen las motas de luz
-            if (n.lit && lightAt(n.pos) > best) {
+            if (n.lit && lightAtRaw(n.pos) > best) {
                 best = 1;
                 source = n.pos + Vec3{0, 1.8f, 0};
             }
         for (const Lantern& ln : lanterns_)
             if (ln.lit && length(ln.pos - hero_.body.pos) < 6.0f) source = ln.pos + Vec3{0.42f, 1.95f, 0};
+        int lamp = nearLamp(8.0f, true);
+        if (lamp >= 0 && length(flat(lamps_[size_t(lamp)].pos - hero_.body.pos)) < lampRadius(lamps_[size_t(lamp)])) {
+            source = lamps_[size_t(lamp)].pos;
+            drainLamp(lamp, 0.18f * dt);
+        }
+        if (raw > 0.05f && growFocus(hero_.body.pos, dt)) gain = kAbsorbRate * raw * dt;
+        else raw = 0;
         bool drained = false;
         for (Enemy& e : enemies_) {
             if (!e.targetable() || e.state != AiState::Stagger || length(flat(e.body.pos - hero_.body.pos)) > 4.0f) continue;
@@ -201,12 +213,14 @@ void Game::updateLight(float dt, const Controls& c) {
             }
             if (e.health <= 0) killEnemy(e);
         }
-        if (here > 0.05f && random01() < dt * 40.0f * here && particles_.size() < 900) {
+        if (raw > 0.05f && random01() < dt * 50.0f * raw && particles_.size() < 900) {
             Vec3 from = source + Vec3{randRange(-0.5f, 0.5f), randRange(-0.3f, 0.3f), randRange(-0.5f, 0.5f)};
             particles_.push_back({from, (chest - from) * 1.8f, 0.55f, 0.55f, 0.06f, rgba(255, 240, 190), 0, true});
         }
         if (gain <= 0 && !drained && absorbHint_ <= 0) {
-            notify("Aquí no hay luz que absorber", rgba(200, 200, 215));
+            notify(lampLightAt(hero_.body.pos) > 0.05f || lightAtRaw(hero_.body.pos) > 0.05f ? "Aquí ya no queda luz"
+                                                                                               : "Aquí no hay luz que absorber",
+                   rgba(200, 200, 215));
             absorbHint_ = 3.0f;
         }
         mp_ = std::min(maxMp_, mp_ + gain);

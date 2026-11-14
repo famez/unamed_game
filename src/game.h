@@ -294,6 +294,14 @@ struct Lamp {
 };
 float lampRadius(const Lamp& l);  // lo que alumbra (según su energía)
 
+// Foco de sombra: lo deja la luz que se absorbe. Dentro no llega ninguna luz (ni de farolas
+// ni de nodos) hasta que se deshace solo o se absorbe su sombra.
+struct ShadowFocus {
+    Vec3 pos;
+    float radius = 0.5f;
+    float age = 0;
+};
+
 // Portal: cruzarlo cambia de luz a sombra o al revés.
 struct Portal {
     Vec3 pos;
@@ -417,11 +425,17 @@ public:
     const Brain& bossBrain() const { return bossBrain_; }
     // Intensidad de luz (0..1) en un punto: zonas de nodos encendidos y faroles.
     float lightAt(Vec3 p) const;
+    float lightAtRaw(Vec3 p) const;   // sin contar los focos de sombra
+    float lampLightAt(Vec3 p) const;  // luz de las farolas encendidas
+    float focusOpen(Vec3 p) const;    // 0 dentro de un foco de sombra, 1 fuera
+    const std::vector<ShadowFocus>& shadowFoci() const { return foci_; }
+    static constexpr float kFocusMax = 5.0f;
     // Viaje por la luz: dentro de una fuente, o la fuente señalada (al lado para entrar o, ya
     // dentro, la elegida para saltar; -1 si no hay).
     bool insideLight() const { return inLight_; }
     // Luz o sombra: el protagonista cambia de una a otra (Z) cuando ya ha despertado la sombra.
     bool shadowMode() const { return shadowMode_; }
+    const std::vector<Lamp>& lamps() const { return lamps_; }
     bool shadowUnlocked() const { return shadowUnlocked_; }
     void unlockShadow() { shadowUnlocked_ = true; }
     // Oscuridad (0..1) en un punto: donde no llega la luz de las farolas, nodos y faroles.
@@ -651,6 +665,12 @@ private:
     bool diving_ = false;      // fundido con la sombra del suelo
     Vec3 diveFrom_, lastDark_;
     std::vector<Portal> portals_;
+    std::vector<ShadowFocus> foci_;
+    float darkShown_ = 0;  // cuánto se oscurece en pantalla lo que no alumbra ninguna luz
+    // Absorber: de luz deja (o agranda) un foco de sombra; de sombra los deshace.
+    bool growFocus(Vec3 at, float dt);
+    void updateFoci(float dt);
+    void absorbShadow(float dt);
     std::vector<BlackHole> holes_;
     Vec3 lightLockPos_;
     float lightHint_ = 0;

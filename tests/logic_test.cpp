@@ -954,6 +954,35 @@ int main() {
         g.hitEnemy(g.enemies_[1], {1, 0, 0}, 10, 0, 0, false);
         CHECK(hd - g.enemies_[0].health > hb - g.enemies_[1].health, "en modo sombra se hiere más a los de luz");
     }
+    {  // Absorber: la luz absorbida deja un foco de sombra; la sombra absorbida lo deshace
+        Game g = fresh();
+        g.unlockShadow();
+        g.portals_.clear();
+        Vec3 lamp = g.lamps_[1].pos;
+        place(g, {lamp.x + 1.2f, 0, lamp.z});
+        g.mp_ = 0;
+        float e0 = g.lamps_[1].energy;
+        Controls hold;
+        hold.absorb = true;
+        CHECK(g.shadowAt(g.hero_.body.pos) < 0.2f, "junto a la farola hay luz");
+        run(g, 2.0f, hold);
+        CHECK(g.mp_ > 10 && !g.foci_.empty() && g.foci_[0].radius > 2.0f && g.lamps_[1].energy < e0,
+              "absorber luz da Luz (%.0f), deja un foco de sombra (%.1f m) y apaga la farola", g.mp_,
+              g.foci_.empty() ? 0.0f : g.foci_[0].radius);
+        CHECK(g.shadowAt(g.hero_.body.pos) > 0.9f, "dentro del foco está oscuro aunque la farola siga encendida");
+        run(g, 3.0f, hold);
+        float full = g.mp_;
+        run(g, 1.0f, hold);
+        CHECK(g.foci_[0].radius == Game::kFocusMax && g.mp_ == full, "con el foco a tope ahí ya no queda luz (%.0f)", g.mp_);
+        g.shadowMode_ = true;
+        g.shadow_ = 0;
+        float r0 = g.foci_[0].radius;
+        run(g, 1.5f, hold);
+        CHECK(g.shadow_ > 10 && g.foci_[0].radius < r0, "en modo sombra, absorber sombra da Sombra (%.0f) y deshace el foco",
+              g.shadow_);
+        run(g, 0.1f, press(&Controls::light));
+        CHECK(g.diving(), "en el foco puede fundirse con la sombra");
+    }
     {  // La luz se gasta: saltar de farola en farola cuesta Luz y apaga las farolas que se usan
         Game g = fresh();
         Vec3 lampA = g.lamps_[1].pos, lampB = g.lamps_[2].pos;

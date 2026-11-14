@@ -21,6 +21,7 @@ constexpr float kDiveCost = 6.0f;          // Sombra por segundo fundido en la s
 constexpr float kDiveSpeed = 1.7f;         // multiplicador de la carrera
 constexpr float kRelightRate = 0.35f;      // energía por segundo que recuperan las farolas cercanas
 constexpr float kRelightRange = 5.0f;
+constexpr float kShadowAbsorb = 30.0f;     // Sombra por segundo en plena oscuridad
 constexpr float kHoleCost = 60.0f, kHoleLife = 2.6f, kHolePull = 7.0f;
 const uint32_t kShadowCol = rgba(150, 80, 255), kShadowDark = rgba(30, 16, 48);
 }  // namespace
@@ -28,8 +29,8 @@ const uint32_t kShadowCol = rgba(150, 80, 255), kShadowDark = rgba(30, 16, 48);
 // Radio que alumbra una farola según su energía.
 float lampRadius(const Lamp& l) { return 2.5f + 4.0f * l.energy; }
 
-float Game::shadowAt(Vec3 p) const {
-    float light = lightAt(p);
+float Game::lampLightAt(Vec3 p) const {
+    float light = 0;
     for (const Lamp& l : lamps_) {
         if (!l.on || !l.bulb) continue;
         float dy = l.pos.y - p.y;
@@ -37,7 +38,76 @@ float Game::shadowAt(Vec3 p) const {
         float r = lampRadius(l);
         light = std::max(light, 1.0f - smoothstep01((length(flat(p - l.pos)) - r * 0.6f) / (r * 0.4f)));
     }
-    return 1.0f - light;
+    return light;
+}
+
+float Game::focusOpen(Vec3 p) const {
+    float open = 1;
+    for (const ShadowFocus& f : foci_) {
+        if (std::fabs(p.y - f.pos.y) > 3.0f) continue;
+        open = std::min(open, smoothstep01((length(flat(p - f.pos)) - f.radius * 0.6f) / (f.radius * 0.4f)));
+    }
+    return open;
+}
+
+float Game::shadowAt(Vec3 p) const { return 1.0f - std::max(lightAtRaw(p), lampLightAt(p)) * focusOpen(p); }
+
+// Al absorber luz el foco de sombra de ese sitio crece (o nace uno). Devuelve false si ya
+// tiene el tamaño máximo: ahí no queda luz.
+bool Game::growFocus(Vec3 at, float dt) {
+    ShadowFocus* f = nullptr;
+    for (ShadowFocus& g : foci_)
+        if (length(flat(g.pos - at)) < std::max(1.5f, g.radius * 0.5f) && std::fabs(g.pos.y - at.y) < 1.5f) f = &g;
+    if (!f) {
+        if (foci_.size() >= 12) foci_.erase(foci_.begin());
+        foci_.push_back({at, 0.6f, 0});
+        f = &foci_.back();
+        spawnRing(at + Vec3{0, 0.04f, 0}, 1.0f, 0.4f, kShadowCol);
+    }
+    if (f->radius >= kFocusMax) return false;
+    f->radius = std::min(kFocusMax, f->radius + 1.4f * dt);
+    f->age = 0;
+    if (random01() < dt * 30.0f && particles_.size() < 900) {  // humo oscuro que brota del borde
+        float a = random01() * 2.0f * kPi;
+        Vec3 p = f->pos + Vec3{std::cos(a) * f->radius * 0.8f, 0.05f, std::sin(a) * f->radius * 0.8f};
+        particles_.push_back({p, {0, 0.7f, 0}, 0.9f, 0.9f, 0.18f, kShadowDark, 0, false});
+    }
+    return true;
+}
+
+// Los focos aguantan un buen rato y luego se cierran despacio.
+void Game::updateFoci(float dt) {
+    for (ShadowFocus& f : foci_) {
+        f.age += dt;
+        if (f.age > 60.0f) f.radius -= 0.05f * dt;
+    }
+    foci_.erase(std::remove_if(foci_.begin(), foci_.end(), [](const ShadowFocus& f) { return f.radius < 0.3f; }), foci_.end());
+}
+
+// Absorber sombra (modo sombra, Q mantenida en la oscuridad): da Sombra; los focos de
+// alrededor se deshacen y las farolas apagadas cercanas se van encendiendo.
+void Game::absorbShadow(float dt) {
+    Vec3 chest = hero_.body.pos + Vec3{0, 1.0f, 0};
+    float dark = shadowAt(hero_.body.pos);
+    if (dark < 0.5f) {
+        if (absorbHint_ <= 0) notify("Aquí no hay sombra que absorber", rgba(180, 160, 210));
+        absorbHint_ = 3.0f;
+        return;
+    }
+    shadow_ = std::min(maxShadow_, shadow_ + kShadowAbsorb * dark * dt);
+    for (ShadowFocus& f : foci_)
+        if (length(flat(f.pos - hero_.body.pos)) < f.radius + 2.0f) f.radius -= 1.0f * dt;
+    for (size_t i = 0; i < lamps_.size(); ++i) {
+        Lamp& l = lamps_[i];
+        if (!l.bulb || l.on || length(flat(l.pos - hero_.body.pos)) > kRelightRange) continue;
+        l.energy += kRelightRate * 0.6f * dt;
+        if (l.energy >= 1.0f) relightLamp(int(i));
+    }
+    if (random01() < dt * 45.0f && particles_.size() < 900) {  // la sombra sube del suelo al pecho
+        float a = random01() * 2.0f * kPi, r = randRange(1.0f, 3.0f);
+        Vec3 from = hero_.body.pos + Vec3{std::cos(a) * r, 0.05f, std::sin(a) * r};
+        particles_.push_back({from, (chest - from) * 1.6f, 0.6f, 0.6f, 0.08f, random01() < 0.6f ? kShadowDark : kShadowCol, 0, true});
+    }
 }
 
 // Multiplicador de daño según la mitad que usa el protagonista y la familia del enemigo
@@ -167,7 +237,9 @@ void Game::updateShadow(float dt, const Controls& c) {
         }
         return;
     }
-    if (c.light) {
+    hero_.setAbsorb(c.absorb);
+    if (hero_.absorbing()) absorbShadow(dt);
+    if (c.light && !hero_.absorbing()) {
         if (dark > 0.6f && shadow_ > 1.0f) startDive();
         else if (lightHint_ <= 0) {
             notify(shadow_ <= 1.0f ? "Sin Sombra" : "Busca la oscuridad: lejos de las farolas encendidas", rgba(180, 160, 210));

@@ -359,6 +359,19 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
     }
     // Todo el escenario se ve con el croma actual; las salpicaduras de color lo devuelven.
     solid->setWorldColor(cromaShown_);
+    // Oscuridad: en cuanto la sombra ha despertado se ve con claridad qué está a oscuras
+    // (más aún en modo sombra, que solo puede moverse por ahí).
+    solid->setDarkness(darkShown_);
+    if (darkShown_ > 0) {
+        for (const Lamp& l : lamps_)
+            if (l.on && l.bulb) solid->litArea(l.pos, lampRadius(l));
+        for (const ColorNode& n : nodes_)
+            if (n.lit) solid->litArea(n.pos, n.radius * smoothstep01(n.litTime / 3.0f));
+        for (const Lantern& ln : lanterns_)
+            if (ln.lit) solid->litArea(ln.pos, 6.0f);
+        if (inLight_) solid->litArea(hostPos_, 5.0f);
+        for (const ShadowFocus& sf : foci_) solid->darkArea(sf.pos, sf.radius);
+    }
     solid->setScenery(true);
     // Charcos de oscuridad (antes que las salpicaduras: tienen prioridad en el límite).
     for (const ColorSplash& sp : splashes_) solid->paint(sp.pos, sp.radius * smoothstep01(sp.age / 0.3f), sp.color);

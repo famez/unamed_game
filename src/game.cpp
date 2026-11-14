@@ -125,9 +125,14 @@ void Game::update(float dt, const Controls& input) {
     swapCooldown_ = std::max(0.0f, swapCooldown_ - dt);
     modeFlash_ = std::max(0.0f, modeFlash_ - dt);
     levelFlash_ = std::max(0.0f, levelFlash_ - dt);
+    {
+        float want = shadowUnlocked_ ? (shadowMode_ ? 0.9f : 0.65f) : 0.0f;
+        darkShown_ = moveTowards(darkShown_, want, 1.5f * dt);
+    }
     absorbHint_ = std::max(0.0f, absorbHint_ - dt);
     lightHint_ = std::max(0.0f, lightHint_ - dt);
     updatePortals(dt);
+    updateFoci(dt);
     guardFlash_ = std::max(0.0f, guardFlash_ - dt);
     heroInvuln_ = std::max(0.0f, heroInvuln_ - dt);
     shake_ = std::max(0.0f, shake_ - dt * 1.5f);
