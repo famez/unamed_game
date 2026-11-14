@@ -10,9 +10,12 @@
 #include "text.h"
 #include "vmath.h"
 
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <execinfo.h>
+#include <unistd.h>
 #include <string>
 #include <vector>
 
@@ -59,9 +62,23 @@ void saveScreenshot(const char* path, int w, int h) {
     std::fclose(f);
 }
 
+// Si el juego se cae (segfault, aborto...), imprime la pila de llamadas antes de salir: así
+// cualquier cuelgue deja rastro en la terminal aunque el sistema no guarde el volcado.
+void crashHandler(int sig) {
+    const char msg[] = "\n*** El juego se ha caído. Pila de llamadas (pásala para depurar):\n";
+    ssize_t r = write(STDERR_FILENO, msg, sizeof(msg) - 1);
+    (void)r;
+    void* frames[64];
+    int n = backtrace(frames, 64);
+    backtrace_symbols_fd(frames, n, STDERR_FILENO);
+    std::signal(sig, SIG_DFL);
+    std::raise(sig);  // y el volcado normal, si el sistema lo guarda
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
+    for (int sig : {SIGSEGV, SIGABRT, SIGFPE, SIGBUS, SIGILL}) std::signal(sig, crashHandler);
     WindowDesc desc;
     desc.title = "unamed_game";
     desc.msaaSamples = 0;  // el antialiasing lo hace el buffer de la escena (según la calidad)
