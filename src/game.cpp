@@ -492,6 +492,12 @@ void Game::resolveImpact(Move m) {
         p.reflected = true;
         projectiles_.push_back(p);
     }
+    if (m == Move::Charged) {  // corte cargado: lanza una onda de luz que lo atraviesa todo
+        Projectile p{ProjectileKind::Wave, origin + Vec3{0, 1.0f, 0} + fwd * 0.8f, fwd * 16.0f, 0.7f};
+        projectiles_.push_back(p);
+        shake_ = std::max(shake_, 0.3f);
+        sound(Sfx::Whip, origin, 1.0f, 0.7f);
+    }
     if (m == Move::Finisher) {
         shake_ = std::max(shake_, 0.25f);
         spawnRing(origin + Vec3{0, 0.05f, 0}, range, 0.45f, w.trail);
@@ -907,6 +913,18 @@ void Game::updateProjectiles(float dt) {
         if (steer > 0) p.vel = normalize(p.vel + (normalize(goal - p.pos) * speed - p.vel) * std::min(1.0f, steer * dt)) * speed;
 
         Vec3 next = p.pos + p.vel * dt;
+        if (p.kind == ProjectileKind::Wave) {  // atraviesa: daña a cada Gris una sola vez
+            for (size_t i = 0; i < enemies_.size() && i < 32; ++i) {
+                Enemy& e = enemies_[i];
+                if (!e.targetable() || (p.hitMask & (1u << i)) || length(flat(e.center() - next)) > 1.6f + e.body.radius ||
+                    std::fabs(e.center().y - next.y) > 1.5f)
+                    continue;
+                p.hitMask |= 1u << i;
+                hitEnemy(e, normalize(flat(p.vel)), (inv_.weaponStats().power + inv_.powerBonus) * 1.6f * formDamage(), 6.0f, 2.0f, true);
+            }
+            p.pos = next;
+            continue;
+        }
         // Distancia del segmento recorrido a un punto (para chocar con cuerpos redondos).
         auto segDist = [&](Vec3 c) {
             Vec3 ab = next - p.pos;

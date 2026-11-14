@@ -78,7 +78,7 @@ struct SpellDef {
 };
 const SpellDef& spellDef(Spell s);
 
-enum class ProjectileKind { Fire, Ice, EnemyOrb };
+enum class ProjectileKind { Fire, Ice, EnemyOrb, Wave };
 
 struct Projectile {
     ProjectileKind kind;
@@ -88,6 +88,7 @@ struct Projectile {
     bool reflected = false;  // orbe enemigo devuelto de un golpe: ahora daña a los enemigos
     bool dead = false;
     float seed = 0;
+    uint32_t hitMask = 0;  // onda: Grises ya alcanzados (por índice, los 32 primeros)
 };
 
 enum class PickupKind { Hp, Mp, Munny, Item };

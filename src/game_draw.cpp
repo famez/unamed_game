@@ -724,6 +724,20 @@ void Game::drawEffects(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Vi
             continue;
         }
         switch (p.kind) {
+            case ProjectileKind::Wave: {  // onda del corte cargado: arco de luz que avanza
+                Vec3 d = normalize(flat(p.vel)), sd{-d.z, 0, d.x};
+                float fade = clampf(p.life / 0.3f, 0, 1);
+                uint32_t wc = inv_.weaponStats().trail;
+                for (int k = -4; k < 4; ++k) {
+                    float a0 = float(k) * 0.2f, a1 = float(k + 1) * 0.2f;
+                    Vec3 q0 = p.pos + sd * std::sin(a0) * 1.4f - d * (1.0f - std::cos(a0)) * 1.4f;
+                    Vec3 q1 = p.pos + sd * std::sin(a1) * 1.4f - d * (1.0f - std::cos(a1)) * 1.4f;
+                    glow.quad(q0 - Vec3{0, 0.5f, 0}, q1 - Vec3{0, 0.5f, 0}, q1 + Vec3{0, 0.5f, 0}, q0 + Vec3{0, 0.5f, 0},
+                              withAlpha(wc, 0.5f * fade));
+                }
+                solid->box(translate(p.pos) * rotateY(std::atan2(d.x, d.z)), {}, Vec3{1.2f, 0.4f, 0.04f} * fade, wc, Material::Glow);
+                break;
+            }
             case ProjectileKind::Fire: {  // lanza de luz
                 Vec3 d = normalize(p.vel);
                 solid->ellipsoid(translate(p.pos) * basisY(d), {}, {0.07f, 0.5f, 0.07f}, rgba(255, 245, 210), Material::Glow);

@@ -22,7 +22,8 @@ especie, la primera oleada, el croma, la primera caída y los ecos.
 ## Música y sonido
 
 Todo está sintetizado por código (`src/synth.cpp`), sin ficheros de audio en el
-repositorio. La música (Si menor / Re mayor, 84 BPM, 16 compases en bucle) son cuatro capas
+repositorio. Hay una pista por escenario y otra de jefe (cada una con su tonalidad, modo, tempo e
+instrumentos, y melodías generadas por frases a partir de la armonía); cada pista son cuatro capas
 sincronizadas cuyo volumen decide el juego: el **colchón** siempre, la **melodía** cuando
 vuelve el color, el **pulso** (bajo y percusión) en combate y el **brillo** (arpegio) cuando
 la ciudad ya brilla. Se genera la primera vez en segundo plano (~2 s) y se guarda en
@@ -49,48 +50,55 @@ Dependencias del sistema: `libOpenGL`/`libGLX` (glvnd + Mesa), `libX11` y `libXi
 (`sudo apt install libxi-dev`). Incluidas en el repositorio: `stb_truetype.h` y las
 fuentes Orbitron y Exo 2.
 
-Opciones de desarrollo: `--autoplay` (un bot combate solo, sin capturar el ratón),
+Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--autoplay` (un bot combate solo, sin capturar el ratón),
 `--screenshot fichero.ppm segundos [frames]` (guarda frames y sale) y `--camyaw radianes`.
 
 ## Controles
 
 | Tecla | Acción |
 |---|---|
-| W A S D | Correr (relativo a la cámara; el personaje gira hacia donde va) |
-| Espacio | Saltar (también cancela la recuperación de un golpe) |
-| Clic izquierdo | Atacar: combo de suelo o aéreo, con acercamiento automático al objetivo |
-| Clic derecho (mantener) | Guardia. Si el golpe llega justo al levantarla: **bloqueo perfecto** |
-| Shift | Voltereta de esquiva (invulnerable mientras dura) |
-| Tab | Fijar objetivo / pasar al siguiente. Clic central o X: soltarlo |
-| Rueda + E | Elegir y usar una entrada del menú de comandos |
-| 1 2 3 | Magias: Fuego, Hielo, Cura |
-| 4 5 6 | Atajos de objetos (se asignan en el inventario) |
-| F | Abrir cápsulas |
-| I | Inventario (pausa): usar objetos, equipar prismas, asignar atajos |
-| Ratón / flechas | Orbitar la cámara (con objetivo fijado gira sola para encuadrarlo) |
-| F12 / º | Modo debug: solo esqueletos y cajas en alambre |
-| F1 / F2 / F3 / F4 | (en modo debug) Huesos / articulaciones / cajas / cuadrícula |
-| Esc / P | Pausa: continuar, reiniciar, sensibilidad, **calidad gráfica**, salir |
-| Clic / E / Espacio / Enter | En las escenas: pasar el diálogo |
+| W A S D | Correr (relativo a la cámara). **Shift**: correr más rápido |
+| Espacio | Saltar; en el aire, **doble salto** con voltereta |
+| Clic izquierdo | Atacar (combo según el arma). **Mantener**: corte cargado (lanza una onda) |
+| Clic derecho (mantener) | Guardia (se puede andar mirando a la cámara). Justo a tiempo: bloqueo perfecto |
+| C / Ctrl | Voltereta de esquiva (invulnerable); un golpe justo después es un **contraataque** |
+| Q | **Hacerse luz**: haz que atraviesa Grises y cruza vacíos. **Mantener Q**: absorber luz |
+| V | **Supernova** (con la Luz llena) |
+| G | **Transformarse** (con un núcleo) |
+| T | **Invocar compañero** (chispa aliada o el eco de Nora) |
+| R / clic central | Fijar objetivo / pasar al siguiente · X: soltarlo |
+| 1 2 3 · 4 5 6 · Rueda + E | Técnicas de luz · atajos de objetos · menú de comandos |
+| F | Interactuar: cápsulas, nodos, faroles, espejos, objetos |
+| Tab / I | Inventario y **taller** (pausa) |
+| Esc / P | Pausa: sensibilidad, calidad gráfica, reiniciar, salir |
+| F12 / º | Modo debug (esqueletos, zonas, haces y la táctica de cada Gris) |
+
+Especiales de combate: atacar corriendo = **embestida**; atacar con la guardia =
+**lanzador** (sube al enemigo); en el aire con la guardia = **picado**.
 
 ## Jugabilidad
 
-- **Croma**: el mundo empieza casi gris (12 %). Cada Gris disipado devuelve un 3,5 % y deja
-  una salpicadura de su color en el suelo; cada oleada superada, un 10 % más. Los neones
-  se encienden y el cielo se satura según el croma (medidor arcoíris arriba a la izquierda).
-- **Prisma modular**: tajos con la hoja de luz, el giro y el remolino aéreo con un látigo
-  más largo y el remate con un martillo de luz que lanza por los aires.
-- **Combos**: tajo, revés, giro de 360° y remate con salto y voltereta; combo aéreo de dos
-  golpes y remolino flotando. Un clic durante un golpe queda en cola.
-- **Peso y fluidez**: golpes con preparación, impacto seco y rebote; paso adelante;
-  parón al impactar; mezcla de poses entre estados; inclinación al acelerar y girar;
-  pelo y cinta con inercia; cámara con muelle; render interpolado entre pasos.
-- **Guardia, esquiva y magias** (Fuego, Hielo, Cura) como antes; los orbes de los Eco se
-  devuelven de un golpe.
-- **Grises**: *Rastrero* (se lanza con las garras), *Domo* (salta y aplasta con una onda;
-  se esquiva saltando) y *Eco* (vuela y dispara orbes). IA por estados con aviso del ataque.
-- **Botín**: lúmenes (moneda), orbes de PV y PM y objetos; cápsulas con prismas nuevos;
-  células de energía que se rompen.
+- **La Luz** (mecánica propia): no se regenera sola; se absorbe junto a nodos encendidos
+  y faroles, o arrancándole el color a un Gris aturdido. Con ella: hacerse luz (gratis y
+  más lejos dentro de las zonas con color: se salta de luz en luz), las técnicas (*Lanza de
+  luz*, *Refracción*, *Calidez*) y la Supernova (explosión de área que devuelve croma).
+- **Croma**: cada escenario empieza casi gris; encender nodos y faroles devuelve el color
+  en una zona que crece a su alrededor; cada Gris disipado deja una salpicadura.
+- **Escenarios por partes** con objetivos, combates de zona con barreras, un jefe, faroles
+  como puntos de control y caídas al vacío.
+- **Rompecabezas de luz**: espejos que se giran (F) para llevar un haz a su receptor;
+  algunos tiñen la luz y hay receptores que solo aceptan un color.
+- **Armas**: prisma básico, estelar y aurora (hoja), lanza de luz (estocadas) y
+  guanteletes de luz (puñetazos), cada una con su juego de movimientos.
+- **Taller**: recetas con los materiales de los Grises (armas, núcleos, afiladores que
+  suben la fuerza de forma permanente, consumibles mejores).
+- **Formas prismáticas** (25 s, consumen un núcleo): Aurora (rápida), Coloso (golpes con
+  onda, no se inmuta) y Eco (casi sin gravedad, orbes con cada golpe).
+- **Compañeros**: chispa aliada (40 de Luz) y el eco de Nora (cura y aturde).
+- **IA con aprendizaje por refuerzo** (Q-learning): cada especie elige tácticas (acercarse,
+  atacar, retroceder, rodear, esperar, amagar) según lo que haces, aprende de lo que le
+  funciona contra ti y lo recuerda entre partidas (`~/.cache/unamed_game/ia_*.q`). El
+  jefe aprende muy deprisa durante el combate y avisa cuando cambia de táctica.
 
 ## Modo debug (F12)
 
@@ -154,6 +162,10 @@ src/
   synth.h/.cpp                   Síntesis de la música (capas) y los efectos; WAV
   audio.h/.cpp                   Salida (PulseAudio con dlopen) y mezclador en un hilo
   sfx.h                          Lista de efectos y eventos de sonido de la lógica
+  levels.cpp                     Escenarios, partes, combates de zona, puertas, rompecabezas
+  light.cpp                      La Luz: absorber, hacerse luz, Supernova
+  allies.cpp                     Formas prismáticas y compañeros
+  brain.h/.cpp                   Aprendizaje por refuerzo de los Grises (Q-learning)
   game_draw.cpp                  Dibujado del mundo, efectos y HUD (y su versión debug)
   inventory_menu.h/.cpp          Menú de inventario
   text.h/.cpp                    Fuentes SDF (Orbitron, Exo 2) con stb_truetype: HUD y menús

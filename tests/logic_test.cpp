@@ -350,6 +350,24 @@ int main() {
               "el Rastrero aprende jugando: %d decisiones, atacar vale %.2f cuando acierta", imp.experience(), bestAttack);
         CHECK(g.bossBrain().experience() == 0, "el jefe tiene su propio cerebro (aun sin estrenar)");
     }
+    {  // Corte cargado: mantener el clic carga; al soltar, la onda atraviesa a varios
+        Game g = fresh();
+        place(g, {0, 0, -12});
+        addEnemy(g, EnemyKind::Shroom, {0, 0, -7});
+        addEnemy(g, EnemyKind::Shroom, {0, 0, -3});
+        for (Enemy& e : g.enemies_) {
+            e.state = AiState::Recover;
+            e.stateTime = -100;
+        }
+        Controls hold;
+        hold.attackHeld = true;
+        hold.camForward = {0, 0, 1};
+        for (int i = 0; i < 80; ++i) g.update(dt, hold);
+        CHECK(g.hero_.charge() >= 1.0f, "carga completa al mantener el clic");
+        run(g, 1.5f);
+        CHECK(g.enemies_[0].health < 60 && g.enemies_[1].health < 60, "la onda alcanza a los dos Domos (%.0f, %.0f)",
+              g.enemies_[0].health, g.enemies_[1].health);
+    }
     {  // Transformaciones y compañeros
         Game g = fresh();
         place(g, {0, 0, -10});
