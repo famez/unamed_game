@@ -456,117 +456,183 @@ StereoBuffer renderSfx(Sfx id) {
             t.add(s0 + i, std::sin(kTau * ph) * std::exp(-tt / decay) * gain, 0);
         }
     };
-    auto burst = [&](float start, float dur, float cutoff, float gain) {
+    // Chasquido de impacto: ruido muy agudo de pocos milisegundos (el "clac" del contacto).
+    auto click = [&](float start, float gain) {
+        LowPass lp;
+        size_t s0 = at(start), n = at(0.012f);
+        for (size_t i = 0; i < n; ++i) {
+            float tt = float(i) / kSampleRate, x = nz.next();
+            t.add(s0 + i, (x - lp.process(x, 3000.0f)) * std::exp(-tt / 0.0025f) * gain, 0);
+        }
+    };
+    // Crujido: ruido en banda, áspero (se satura al final con el resto).
+    auto crunch = [&](float start, float dur, float fc, float gain, float pan = 0) {
+        LowPass lp, hp;
+        size_t s0 = at(start), n = at(dur);
+        for (size_t i = 0; i < n; ++i) {
+            float tt = float(i) / kSampleRate, x = nz.next();
+            float band = lp.process(x - hp.process(x, fc * 0.4f), fc * 1.6f);
+            float grain = 0.6f + 0.4f * nz.next();  // textura granulada
+            t.add(s0 + i, band * grain * std::exp(-tt / (dur * 0.35f)) * gain, pan);
+        }
+    };
+    // Timbre metálico: parciales inarmónicos que se apagan rápido (filo contra algo duro).
+    auto metal = [&](float start, float f, float decay, float gain, float pan = 0) {
+        const float ratios[4] = {1.0f, 2.76f, 5.4f, 8.93f}, amps[4] = {1.0f, 0.6f, 0.35f, 0.2f};
+        size_t s0 = at(start), n = at(decay * 5.0f);
+        for (size_t i = 0; i < n; ++i) {
+            float tt = float(i) / kSampleRate, v = 0;
+            for (int k = 0; k < 4; ++k) v += std::sin(kTau * f * ratios[k] * tt) * amps[k] * std::exp(-tt * (1.0f + float(k)) / decay);
+            t.add(s0 + i, v * gain * 0.4f, pan);
+        }
+    };
+    // Grave sostenido (sub): da peso a los golpes fuertes y a las explosiones.
+    auto sub = [&](float start, float f0, float f1, float dur, float gain) {
+        size_t s0 = at(start), n = at(dur);
+        float ph = 0;
+        for (size_t i = 0; i < n; ++i) {
+            float u = float(i) / float(n);
+            ph += (f0 + (f1 - f0) * u) / kSampleRate;
+            float env = std::min(1.0f, u * 40.0f) * (1.0f - u) * (1.0f - u);
+            t.add(s0 + i, std::sin(kTau * ph) * env * gain, 0);
+        }
+    };
+    // Soplido al revés: crece y se corta en seco (absorber, aparecer).
+    auto swell = [&](float start, float dur, float fc, float gain) {
         LowPass lp;
         size_t s0 = at(start), n = at(dur);
         for (size_t i = 0; i < n; ++i) {
-            float tt = float(i) / kSampleRate;
-            float x = nz.next();
-            float v = cutoff > 0 ? lp.process(x, cutoff) : x - lp.process(x, -cutoff);
-            t.add(s0 + i, v * std::exp(-tt / (dur * 0.3f)) * gain, 0);
+            float u = float(i) / float(n);
+            t.add(s0 + i, lp.process(nz.next(), fc * (0.3f + u)) * u * u * gain, 0);
         }
     };
-    auto bell = [&](float start, float midi, float gain, float decay, float pan = 0) {
-        fmNote(t, start, midi, gain, pan, 3.5f, 1.6f, decay, decay * 4.0f);
-    };
-    float wet = 0.15f;
+    float wet = 0.12f, drive = 1.0f;  // drive > 1: saturación (más agresivo)
     switch (id) {
-        case Sfx::Slash: whoosh(0, 0.2f, 2600, 700, 0.9f, 0.2f); break;
-        case Sfx::Whip: whoosh(0, 0.28f, 3500, 900, 0.9f, -0.2f); burst(0.24f, 0.04f, -3000, 0.6f); break;
-        case Sfx::Hammer: whoosh(0, 0.3f, 900, 300, 0.9f, 0); thump(0.25f, 140, 45, 0.18f, 0.9f); wet = 0.3f; break;
-        case Sfx::Hit:
-            thump(0, 170, 60, 0.05f, 0.8f);
-            burst(0, 0.05f, -2500, 0.5f);
-            bell(0, 88, 0.12f, 0.12f);  // los Grises suenan a cristal
+        case Sfx::Slash: whoosh(0, 0.16f, 3800, 900, 1.2f, 0.2f); click(0.13f, 0.25f); break;
+        case Sfx::Whip: whoosh(0, 0.22f, 4200, 700, 1.2f, -0.2f); click(0.2f, 0.5f); break;
+        case Sfx::Hammer: whoosh(0, 0.26f, 1200, 250, 1.1f, 0); sub(0.22f, 90, 38, 0.3f, 0.9f); crunch(0.22f, 0.15f, 700, 0.8f); drive = 2.0f; break;
+        case Sfx::Hit:  // golpe seco con cuerpo y filo
+            click(0, 0.9f);
+            thump(0, 190, 55, 0.045f, 1.0f);
+            crunch(0, 0.09f, 1600, 0.9f);
+            metal(0.002f, 610, 0.05f, 0.35f);
+            drive = 2.5f;
             break;
-        case Sfx::HitHeavy:
-            thump(0, 150, 40, 0.12f, 1.0f);
-            burst(0, 0.12f, 1800, 0.8f);
-            bell(0, 83, 0.15f, 0.2f);
+        case Sfx::HitHeavy:  // remate: impacto, crujido largo y grave que retumba
+            click(0, 1.0f);
+            thump(0, 160, 38, 0.1f, 1.1f);
+            sub(0.01f, 70, 32, 0.45f, 0.8f);
+            crunch(0, 0.22f, 900, 1.1f);
+            metal(0.004f, 420, 0.09f, 0.4f);
+            drive = 3.0f;
+            wet = 0.22f;
+            break;
+        case Sfx::Jump: whoosh(0, 0.12f, 400, 1100, 0.35f, 0); break;
+        case Sfx::Dodge: whoosh(0, 0.24f, 500, 2600, 0.8f, 0); break;
+        case Sfx::Guard: click(0, 0.8f); metal(0, 520, 0.12f, 0.7f); crunch(0, 0.05f, 2500, 0.5f); drive = 1.8f; break;
+        case Sfx::PerfectGuard:  // choque limpio que resuena
+            click(0, 1.0f);
+            metal(0, 780, 0.35f, 0.8f, -0.2f);
+            metal(0.01f, 1170, 0.3f, 0.5f, 0.2f);
+            sub(0, 120, 60, 0.2f, 0.5f);
+            drive = 1.5f;
             wet = 0.3f;
             break;
-        case Sfx::Jump: whoosh(0, 0.15f, 500, 1400, 0.35f, 0); break;
-        case Sfx::Dodge: whoosh(0, 0.28f, 600, 2200, 0.6f, 0); break;
-        case Sfx::Guard: fmNote(t, 0, 79, 0.35f, 0, 1.41f, 6.0f, 0.12f, 0.6f); burst(0, 0.03f, -4000, 0.4f); break;
-        case Sfx::PerfectGuard:
-            bell(0, 86, 0.3f, 0.5f, -0.3f);
-            bell(0.03f, 93, 0.25f, 0.5f, 0.3f);
-            wet = 0.5f;
-            break;
-        case Sfx::HeroHurt: thump(0, 110, 50, 0.1f, 0.9f); burst(0, 0.08f, 900, 0.5f); break;
-        case Sfx::EnemyWindup: {  // zumbido de estática que sube: aviso del ataque
-            size_t n = len(0.35f);
-            float ph = 0;
-            for (size_t i = 0; i < n; ++i) {
-                float tt = float(i) / kSampleRate;
-                ph += (180.0f + 500.0f * tt) / kSampleRate;
-                float sq = std::sin(kTau * ph) > 0 ? 1.0f : -1.0f;
-                t.add(i, (sq * 0.3f + nz.next() * 0.4f) * std::min(1.0f, tt / 0.3f) * 0.25f, 0);
-            }
-            break;
-        }
-        case Sfx::EnemyDie:  // chasquido de estática y el color que vuelve: arpegio que sube
-            burst(0, 0.08f, -2000, 0.6f);
-            for (int i = 0; i < 4; ++i) bell(0.06f + 0.06f * float(i), float(74 + (i == 0 ? 0 : i == 1 ? 4 : i == 2 ? 7 : 12)), 0.16f, 0.35f, -0.4f + 0.25f * float(i));
-            wet = 0.45f;
-            break;
-        case Sfx::Pickup: bell(0, 86, 0.18f, 0.12f); break;
-        case Sfx::Coin: bell(0, 95, 0.14f, 0.07f); bell(0.06f, 100, 0.14f, 0.12f); break;
-        case Sfx::ItemGet:
-            bell(0, 81, 0.2f, 0.3f, -0.3f);
-            bell(0.09f, 85, 0.2f, 0.3f, 0);
-            bell(0.18f, 88, 0.22f, 0.5f, 0.3f);
-            wet = 0.4f;
-            break;
-        case Sfx::Fire: whoosh(0, 0.45f, 300, 1200, 0.8f, 0); break;
-        case Sfx::FireBoom: burst(0, 0.6f, 700, 1.1f); thump(0, 90, 35, 0.2f, 0.9f); wet = 0.3f; break;
-        case Sfx::Ice:
-            for (int i = 0; i < 5; ++i) bell(0.03f * float(i), float(96 - i * 2), 0.1f, 0.15f, -0.5f + 0.25f * float(i));
-            wet = 0.35f;
-            break;
-        case Sfx::Cure:
-            for (int i = 0; i < 5; ++i) bell(0.07f * float(i), float(74 + i * 3 + (i > 2 ? 1 : 0)), 0.13f, 0.5f, -0.4f + 0.2f * float(i));
-            wet = 0.5f;
-            break;
-        case Sfx::Chest:
-            for (int i = 0; i < 6; ++i) bell(0.05f * float(i), float(69 + i * 2 + (i > 3 ? 1 : 0)), 0.14f, 0.5f, -0.5f + 0.2f * float(i));
-            bell(0.35f, 93, 0.2f, 0.8f);
-            wet = 0.5f;
-            break;
-        case Sfx::Crate: burst(0, 0.12f, -1500, 0.6f); bell(0, 91, 0.12f, 0.1f); thump(0, 200, 90, 0.05f, 0.4f); break;
-        case Sfx::WaveStart: {  // oleaje grave que crece, con estática
-            size_t n = len(1.2f);
+        case Sfx::HeroHurt: click(0, 0.6f); thump(0, 120, 45, 0.09f, 1.0f); crunch(0, 0.12f, 500, 0.8f); drive = 2.5f; break;
+        case Sfx::EnemyWindup: {  // gruñido grave que sube: aviso del ataque
+            size_t n = len(0.4f);
             float ph = 0;
             LowPass lp;
             for (size_t i = 0; i < n; ++i) {
                 float tt = float(i) / kSampleRate;
-                ph += 55.0f / kSampleRate;
-                float env = std::sin(std::min(1.0f, tt / 1.2f) * 3.14159f);
-                t.add(i, (std::sin(kTau * ph) * 0.6f + lp.process(nz.next(), 400.0f) * 0.8f) * env * 0.5f, 0);
+                ph += (70.0f + 90.0f * tt) / kSampleRate;
+                float saw = 2.0f * (ph - std::floor(ph)) - 1.0f;
+                t.add(i, lp.process(saw + nz.next() * 0.5f, 900.0f) * std::min(1.0f, tt / 0.25f) * 0.5f, 0);
             }
+            drive = 2.0f;
+            break;
+        }
+        case Sfx::EnemyDie:  // se deshace: desgarro, grave que cae y un soplo que se apaga
+            click(0, 0.7f);
+            crunch(0, 0.35f, 600, 1.0f);
+            sub(0, 110, 30, 0.6f, 0.7f);
+            swell(0.05f, 0.4f, 1800, 0.25f);
+            drive = 2.0f;
+            wet = 0.35f;
+            break;
+        case Sfx::Pickup: click(0, 0.3f); fmNote(t, 0, 69, 0.12f, 0, 1.0f, 1.2f, 0.12f, 0.4f); break;
+        case Sfx::Coin: metal(0, 1400, 0.05f, 0.25f); break;
+        case Sfx::ItemGet:  // acorde grave y abierto, sin campanitas
+            fmNote(t, 0, 50, 0.25f, -0.2f, 1.0f, 0.8f, 0.6f, 1.6f);
+            fmNote(t, 0.04f, 57, 0.2f, 0.2f, 1.0f, 0.8f, 0.6f, 1.6f);
+            fmNote(t, 0.08f, 62, 0.15f, 0, 2.0f, 0.6f, 0.6f, 1.6f);
+            wet = 0.4f;
+            break;
+        case Sfx::Fire: whoosh(0, 0.4f, 250, 1400, 1.0f, 0); crunch(0.05f, 0.3f, 400, 0.4f); drive = 1.5f; break;
+        case Sfx::FireBoom:  // explosión: impacto, grave largo y escombros
+            click(0, 1.0f);
+            thump(0, 120, 30, 0.2f, 1.1f);
+            sub(0, 60, 25, 0.9f, 1.0f);
+            crunch(0, 0.7f, 500, 1.2f);
+            crunch(0.15f, 0.5f, 2200, 0.3f);
+            drive = 3.0f;
+            wet = 0.3f;
+            break;
+        case Sfx::Ice:  // golpe de luz: cristal que se quiebra
+            click(0, 0.8f);
+            metal(0, 1800, 0.08f, 0.5f, -0.3f);
+            metal(0.015f, 2300, 0.07f, 0.4f, 0.3f);
+            crunch(0, 0.1f, 4000, 0.5f);
+            drive = 1.6f;
+            break;
+        case Sfx::Cure: swell(0, 0.5f, 900, 0.5f); fmNote(t, 0.4f, 57, 0.18f, 0, 1.0f, 0.7f, 0.5f, 1.0f); wet = 0.4f; break;
+        case Sfx::Chest:  // cerrojo pesado y un tono grave
+            click(0, 0.7f);
+            thump(0, 220, 80, 0.04f, 0.6f);
+            metal(0.08f, 300, 0.12f, 0.5f);
+            click(0.2f, 0.6f);
+            fmNote(t, 0.25f, 45, 0.2f, 0, 1.0f, 0.6f, 0.6f, 1.2f);
+            drive = 1.5f;
+            wet = 0.3f;
+            break;
+        case Sfx::Crate: click(0, 0.8f); crunch(0, 0.18f, 1200, 1.0f); thump(0, 210, 80, 0.05f, 0.6f); drive = 2.2f; break;
+        case Sfx::WaveStart: {  // golpe grave lejano y un zumbido que crece
+            sub(0, 50, 40, 1.4f, 0.8f);
+            swell(0, 1.1f, 500, 0.6f);
+            thump(1.1f, 90, 35, 0.15f, 0.9f);
+            drive = 1.8f;
             wet = 0.4f;
             break;
         }
-        case Sfx::Echo: {  // acorde que crece desde la nada (como un sonido al revés)
-            const int notes[4] = {62, 66, 69, 74};
+        case Sfx::Echo: {  // acorde menor grave que crece desde la nada
+            const int notes[4] = {45, 52, 57, 60};
             for (int k = 0; k < 4; ++k) {
-                float f = midiHz(float(notes[k] + 12));
+                float f = midiHz(float(notes[k]));
                 size_t n = len(1.4f);
                 float ph = 0;
                 for (size_t i = 0; i < n; ++i) {
                     float tt = float(i) / kSampleRate;
                     ph += f / kSampleRate;
-                    float env = tt < 1.0f ? tt * tt : std::exp(-(tt - 1.0f) / 0.1f);
-                    t.add(i, std::sin(kTau * ph) * env * 0.07f, -0.6f + 0.4f * float(k));
+                    float env = tt < 1.0f ? tt * tt : std::exp(-(tt - 1.0f) / 0.12f);
+                    t.add(i, std::sin(kTau * ph) * env * 0.12f, -0.6f + 0.4f * float(k));
                 }
             }
-            wet = 0.6f;
+            swell(0, 1.0f, 1200, 0.15f);
+            wet = 0.5f;
             break;
         }
-        case Sfx::Blip: triNote(t, 0, 84, 0.08f, 0, 0.012f); break;
-        case Sfx::MenuMove: triNote(t, 0, 88, 0.1f, 0, 0.015f); break;
-        case Sfx::MenuOk: triNote(t, 0, 83, 0.1f, 0, 0.03f); triNote(t, 0.05f, 90, 0.1f, 0, 0.05f); break;
+        case Sfx::Blip: click(0, 0.25f); break;
+        case Sfx::MenuMove: click(0, 0.3f); break;
+        case Sfx::MenuOk: click(0, 0.45f); thump(0, 200, 120, 0.03f, 0.3f); break;
         case Sfx::Count: break;
+    }
+    // Saturación suave (tanh normalizada): golpes con más mordida, sin recortar.
+    if (drive > 1.0f) {
+        float norm = 1.0f / std::tanh(drive);
+        for (size_t i = 0; i < t.size(); ++i) {
+            t.l[i] = std::tanh(t.l[i] * drive) * norm * 0.9f;
+            t.r[i] = std::tanh(t.r[i] * drive) * norm * 0.9f;
+        }
     }
     if (wet > 0) reverb(t, wet, 0.8f, 0.4f);
     // Recorta el silencio del final.
