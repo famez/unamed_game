@@ -392,7 +392,13 @@ int main(int argc, char** argv) {
                     }
                     c.interact = botStep % 30 == 0;
                     // En los modos de prueba también cambia a sombra y lanza agujeros negros.
-                    if (game.testMode() != TestMode::None) {
+                    if (game.testMode() == TestMode::Shadow) {  // se funde con la sombra y la recorre
+                        c.light = botStep % 240 == 40 || botStep % 240 == 200;
+                        if (game.diving()) {
+                            float a = float(botStep) * 0.02f;
+                            c.move = Vec3{std::cos(a), 0, std::sin(a)};
+                        }
+                    } else if (game.testMode() != TestMode::None) {
                         c.swapMode = botStep == 30;
                         c.nova = c.nova || botStep % 240 == 120;
                     }
