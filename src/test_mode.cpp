@@ -212,12 +212,12 @@ bool Game::spawnTestEnemy() {
         if (!free) continue;
         Spawn s;
         float r = random01();
-        s.kind = r < 0.45f ? EnemyKind::Imp : r < 0.75f ? EnemyKind::Moth : EnemyKind::Shroom;
+        s.kind = r < 0.3f ? EnemyKind::Dazzled : r < 0.5f ? EnemyKind::Watcher : r < 0.8f ? EnemyKind::Hound : EnemyKind::Brute;
         s.pos = p;
         bool bossAlive = false;
         for (const Enemy& e : enemies_) bossAlive |= e.boss && e.alive();
         if (kills_ >= testBossAt_ && !bossAlive) {  // Gris mayor
-            s.kind = EnemyKind::Shroom;
+            s.kind = EnemyKind::Brute;
             s.boss = true;
             s.name = "Gris mayor";
             testBossAt_ += 30;

@@ -15,7 +15,7 @@
 #include <cstdio>
 #include <string>
 
-enum class Intent { Approach, Attack, Retreat, Circle, Wait, Feint, Count };
+enum class Intent { Approach, Attack, Retreat, Circle, Wait, Feint, Flank, Count };
 const char* intentName(Intent i);
 
 // Situación vista por un Gris.
@@ -24,16 +24,17 @@ struct BrainInput {
     int heroAction;     // 0 quieto/andando, 1 atacando, 2 en guardia, 3 esquivando o hecho luz, 4 en el aire
     float healthFrac;   // su vida (0..1)
     bool canAttack;     // sin espera de ataque pendiente
+    bool watched;       // el Prismero le está mirando (si no, es buen momento para atacar)
 };
 
 class Brain {
 public:
-    static constexpr int kStates = 3 * 5 * 2 * 2;
+    static constexpr int kStates = 3 * 5 * 2 * 2 * 2;
     static constexpr int kActions = int(Intent::Count);
 
-    float alpha = 0.15f;   // velocidad de aprendizaje
+    float alpha = 0.3f;    // velocidad de aprendizaje (alta: se adaptan pronto a tu forma de jugar)
     float gamma = 0.8f;    // peso del futuro
-    float epsilon = 0.15f; // exploración
+    float epsilon = 0.12f; // exploración (baja con la experiencia, ver choose)
 
     static int state(const BrainInput& in);
     // `r1`, `r2` ∈ [0,1): números aleatorios (para explorar y elegir al azar).

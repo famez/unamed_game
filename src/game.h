@@ -93,7 +93,7 @@ struct Projectile {
     uint32_t hitMask = 0;  // onda: Grises ya alcanzados (por índice, los 32 primeros)
 };
 
-enum class PickupKind { Hp, Mp, Munny, Item };
+enum class PickupKind { Hp, Mp, Munny, Item, Shadow };  // Mp = Luz
 
 // Botín: salta del enemigo, rebota y, al acercarse el jugador, vuela hacia él.
 struct Pickup {
@@ -333,6 +333,8 @@ public:
     float maxHp() const { return maxHp_; }
     float mp() const { return mp_; }
     float maxMp() const { return maxMp_; }
+    float shadow() const { return shadow_; }
+    float maxShadow() const { return maxShadow_; }
     Inventory& inventory() { return inv_; }
     const Inventory& inventory() const { return inv_; }
     // Usar un consumible (desde el inventario o un atajo). Falso si no hay o no hace falta.
@@ -444,7 +446,8 @@ private:
     void explodeFire(Vec3 point);
     void updatePickups(float dt);
     void collect(Pickup& p);
-    void dropLoot(Vec3 pos, int munny, int hpOrbs, int mpOrbs, ItemId item, bool withItem);
+    void dropLoot(Vec3 pos, int munny, int hpOrbs, int mpOrbs, ItemId item, bool withItem, bool shadow = false);
+    bool heroWatches(const Enemy& e) const;
     void updateEffects(float dt);
     void breakCrate(Crate& c);
     void notify(const std::string& text, uint32_t color);
@@ -528,6 +531,7 @@ private:
     Inventory inv_;
     float hp_ = 100, maxHp_ = 100;
     float mp_ = 40, maxMp_ = 100;  // Luz: se absorbe del mundo (no se regenera sola)
+    float shadow_ = 0, maxShadow_ = 100;  // Sombra: la sueltan los Vaciados
     float hpGhost_ = 100;     // barra roja que va detrás al perder vida
     float heroInvuln_ = 0;    // tras un golpe, un momento sin recibir otro
     float heroFlash_ = 0;

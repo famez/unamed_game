@@ -639,7 +639,7 @@ void Game::drawEnemies(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Dr
             for (int k = 0; k < 2; ++k)
                 glowStar(glow, view, e.center() + Vec3{std::sin(time_ * 2 + float(k) * 3), 0.3f * float(k), std::cos(time_ * 2 + float(k) * 3)} * 0.45f,
                          0.12f, time_ * 2.0f, withAlpha(rgba(170, 230, 255), 0.6f));
-        if (e.kind == EnemyKind::Moth && !dying) solid->light(e.center(), Vec3{0.5f, 1.0f, 0.9f} * 0.6f, 2.5f);
+        if (e.kind == EnemyKind::Watcher && !dying) solid->light(e.center(), Vec3{1.0f, 0.9f, 0.7f} * 0.7f, 3.0f);
         if (e.burn > 0 && !dying) solid->fireColumn(e.body.pos, d.radius + 0.1f, d.height * 1.3f, float(i) * 13.0f, std::min(1.0f, e.burn));
         // Retícula del objetivo fijado: rombos que giran alrededor.
         if (int(i) == lock_) {
@@ -693,7 +693,8 @@ void Game::drawEffects(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Vi
         float bob = p.resting ? 0.12f + 0.05f * std::sin(time_ * 3.0f + p.seed) : 0.05f;
         Vec3 c = p.pos + Vec3{0, bob, 0};
         uint32_t col = p.kind == PickupKind::Hp      ? rgba(110, 255, 130)
-                       : p.kind == PickupKind::Mp    ? rgba(110, 160, 255)
+                       : p.kind == PickupKind::Mp    ? rgba(255, 226, 160)
+                       : p.kind == PickupKind::Shadow ? rgba(150, 80, 255)
                        : p.kind == PickupKind::Munny ? rgba(255, 210, 60)
                                                      : itemDef(p.item).color;
         if (!solid) {
@@ -706,6 +707,7 @@ void Game::drawEffects(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Vi
         switch (p.kind) {
             case PickupKind::Hp:
             case PickupKind::Mp:
+            case PickupKind::Shadow:
                 solid->ellipsoid(Mat4::identity(), c, {0.08f, 0.08f, 0.08f}, col, Material::Glow);
                 glowDot(glow, view, c, 0.22f, withAlpha(col, 0.35f));
                 break;
@@ -1034,9 +1036,11 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
                rgba(255, 60, 120), int(maxHp_ / 10));
         segBar(d, right - 14, cy - 12, maxMp_ * 1.8f, 10, mp_ / maxMp_, mp_ / maxMp_, rgba(255, 225, 140), 0, 10);
         uiText(ui, right - 14 - maxMp_ * 1.8f - 12, cy - 16, 14, "LUZ", rgba(255, 230, 150), FontFace::Title, Align::Right);
+        segBar(d, right - 24, cy + 8, maxShadow_ * 1.8f, 10, shadow_ / maxShadow_, shadow_ / maxShadow_, rgba(150, 80, 255), 0, 10);
+        uiText(ui, right - 24 - maxShadow_ * 1.8f - 12, cy + 4, 14, "SOMBRA", rgba(180, 130, 255), FontFace::Title, Align::Right);
         if (mp_ >= maxMp_) {  // Supernova lista
             float pulse = 0.6f + 0.4f * std::sin(time_ * 6.0f);
-            uiText(ui, right - 14, cy + 4, 15, "V · SUPERNOVA", withAlpha(rgba(255, 230, 150), pulse), FontFace::Title,
+            uiText(ui, right - 60, cy + 26, 15, "V · SUPERNOVA", withAlpha(rgba(255, 230, 150), pulse), FontFace::Title,
                    Align::Right, pulse);
         }
         if (lightAt(hero_.body.pos) > 0.3f)

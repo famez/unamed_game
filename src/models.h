@@ -49,7 +49,7 @@ void bindMatrices(const ModelDef& def, Mat4* out);
 // Genera la malla en la CPU (lógica pura; también la usan los tests).
 void buildSkinnedMesh(const ModelDef& def, std::vector<SkinVertex>& verts, std::vector<uint32_t>& indices);
 
-enum class ModelId { Hero, Imp, Shroom, Moth, Count };
+enum class ModelId { Hero, Dazzled, Brute, Watcher, Hound, Count };  // enemigos: 1 + EnemyKind
 // Modelo del cuerpo de un enemigo.
 ModelId enemyModel(int enemyKind);
 // Formas de un enemigo que no van en su malla (brillan o son demasiado finas) y se dibujan aparte.

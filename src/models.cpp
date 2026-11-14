@@ -299,12 +299,12 @@ const Pose kHeroBind = heroBindPose();
 ModelDef kModels[int(ModelId::Count)] = {
     {kSkeleton, JointCount, kHeroPrims, int(sizeof(kHeroPrims) / sizeof(kHeroPrims[0])), 0.011f, &kHeroBind},
 };
-std::vector<BodyPrim> gEnemyPrims[3];
-Pose gEnemyBind[3];
+std::vector<BodyPrim> gEnemyPrims[int(EnemyKind::Count)];
+Pose gEnemyBind[int(EnemyKind::Count)];
 
 // Los enemigos reutilizan sus formas (enemy.cpp): las opacas y gruesas forman la malla.
 void defineEnemyModels() {
-    for (int k = 0; k < 3; ++k) {
+    for (int k = 0; k < int(EnemyKind::Count); ++k) {
         const EnemyDef& d = enemyDef(EnemyKind(k));
         std::vector<BodyPrim>& prims = gEnemyPrims[k];
         prims.clear();
@@ -314,7 +314,7 @@ void defineEnemyModels() {
             prims.push_back({sh.joint, false, sh.center, {}, sh.radii, sh.color, 0.03f});
         }
         gEnemyBind[k] = enemyBindPose(EnemyKind(k));
-        kModels[1 + k] = {d.rig, d.jointCount, prims.data(), int(prims.size()), k == 1 ? 0.017f : 0.012f, &gEnemyBind[k]};
+        kModels[1 + k] = {d.rig, d.jointCount, prims.data(), int(prims.size()), k == int(EnemyKind::Brute) ? 0.017f : 0.011f, &gEnemyBind[k]};
     }
 }
 

@@ -221,11 +221,11 @@ void Game::buildPlaza() {
               {"nodo_alto", {-10.6f, 2.6f, 10.6f}, 12, kCyan, "nodo_3"}};
     auto zone = [](Vec3 ctr, float r) { return AABB{ctr - Vec3{r, 1, r}, ctr + Vec3{r, 4, r}}; };
     encounters_ = {
-        {"despertar", zone({0, 0, -3}, 30), {{{EnemyKind::Imp, {4, 0, -10}}, {EnemyKind::Imp, {-4, 0, -10}}}}, {}, "primer_combate", ""},
-        {"nodo_oeste", zone({-9.5f, 0, -9}, 5), {{{EnemyKind::Imp, {-12, 0, -6}}, {EnemyKind::Imp, {-6, 0, -12}}, {EnemyKind::Imp, {-7, 0, -6}}}},
+        {"despertar", zone({0, 0, -3}, 30), {{{EnemyKind::Dazzled, {4, 0, -10}}, {EnemyKind::Dazzled, {-4, 0, -10}}}}, {}, "primer_combate", ""},
+        {"nodo_oeste", zone({-9.5f, 0, -9}, 5), {{{EnemyKind::Dazzled, {-12, 0, -6}}, {EnemyKind::Dazzled, {-6, 0, -12}}, {EnemyKind::Dazzled, {-7, 0, -6}}}},
          {}, "", ""},
-        {"nodo_terraza", zone({10, 0, 10}, 5), {{{EnemyKind::Imp, {8, 0.9f, 13}}, {EnemyKind::Shroom, {12, 0.9f, 9}}}}, {}, "domo", ""},
-        {"nodo_alto", zone({-10, 0, 9}, 5), {{{EnemyKind::Moth, {-9, 0, 12}}, {EnemyKind::Moth, {-13, 0, 8}}, {EnemyKind::Imp, {-8, 0, 5}}}},
+        {"nodo_terraza", zone({10, 0, 10}, 5), {{{EnemyKind::Dazzled, {8, 0.9f, 13}}, {EnemyKind::Brute, {12, 0.9f, 9}}}}, {}, "domo", ""},
+        {"nodo_alto", zone({-10, 0, 9}, 5), {{{EnemyKind::Watcher, {-9, 0, 12}}, {EnemyKind::Watcher, {-13, 0, 8}}, {EnemyKind::Dazzled, {-8, 0, 5}}}},
          {}, "eco_enemigo", ""},
     };
     echoes_ = {{{-7.5f, 1.3f, -11.0f}, "recuerdo_alba"}, {{-12.5f, 3.6f, 10.0f}, "recuerdo_promesa"}};
@@ -356,14 +356,14 @@ void Game::buildMercado() {
     auto zone = [](Vec3 lo, Vec3 hi) { return AABB{lo, hi}; };
     encounters_ = {
         {"emboscada", zone({-4, -1, 9}, {4, 5, 17}),
-         {{{EnemyKind::Moth, {0, 0, 19}}, {EnemyKind::Imp, {-2, 0, 18}}, {EnemyKind::Imp, {2, 0, 7}}},
-          {{EnemyKind::Moth, {-2, 0, 8}}, {EnemyKind::Moth, {2, 0, 20}}, {EnemyKind::Imp, {0, 0, 16}}}},
+         {{{EnemyKind::Watcher, {0, 0, 19}}, {EnemyKind::Dazzled, {-2, 0, 18}}, {EnemyKind::Dazzled, {2, 0, 7}}},
+          {{EnemyKind::Watcher, {-2, 0, 8}}, {EnemyKind::Watcher, {2, 0, 20}}, {EnemyKind::Dazzled, {0, 0, 16}}}},
          {"calle_atras", "calle_frente"}, "emboscada", "calle_despejada"},
         {"plaza", zone({-11, -1, 30}, {11, 5, 38}),
-         {{{EnemyKind::Imp, {-6, 0, 42}}, {EnemyKind::Imp, {6, 0, 42}}, {EnemyKind::Shroom, {0, 0, 46}}},
-          {{EnemyKind::Moth, {-8, 0, 38}}, {EnemyKind::Moth, {8, 0, 38}}, {EnemyKind::Imp, {0, 0, 48}}}},
+         {{{EnemyKind::Dazzled, {-6, 0, 42}}, {EnemyKind::Dazzled, {6, 0, 42}}, {EnemyKind::Brute, {0, 0, 46}}},
+          {{EnemyKind::Watcher, {-8, 0, 38}}, {EnemyKind::Watcher, {8, 0, 38}}, {EnemyKind::Dazzled, {0, 0, 48}}}},
          {"plaza_entrada"}, "", ""},
-        {"jefe_nora", zone({-12, -1, 30}, {12, 5, 52}), {{{EnemyKind::Shroom, {0, 0, 46}, true, "Nora, la que espera"}}}, {"plaza_entrada"}, "", "nora_libre",
+        {"jefe_nora", zone({-12, -1, 30}, {12, 5, 52}), {{{EnemyKind::Brute, {0, 0, 46}, true, "Nora, la que espera"}}}, {"plaza_entrada"}, "", "nora_libre",
          false},
     };
     echoes_ = {{{-1.5f, 1.3f, 15.0f}, "recuerdo_nora"}};
@@ -454,8 +454,8 @@ void Game::buildPuente() {
     chests_ = {ch};
     encounters_ = {
         {"puente_centro", AABB{{-6, 0, 28.5f}, {6, 5, 36.5f}},
-         {{{EnemyKind::Imp, {-3, 0.8f, 33}}, {EnemyKind::Imp, {3, 0.8f, 33}}, {EnemyKind::Moth, {0, 0.8f, 36}}},
-          {{EnemyKind::Moth, {-4, 0.8f, 30}}, {EnemyKind::Moth, {4, 0.8f, 30}}, {EnemyKind::Shroom, {0, 0.8f, 34}}}},
+         {{{EnemyKind::Dazzled, {-3, 0.8f, 33}}, {EnemyKind::Dazzled, {3, 0.8f, 33}}, {EnemyKind::Watcher, {0, 0.8f, 36}}},
+          {{EnemyKind::Watcher, {-4, 0.8f, 30}}, {EnemyKind::Watcher, {4, 0.8f, 30}}, {EnemyKind::Brute, {0, 0.8f, 34}}}},
          {"puente_a", "puente_b"}, "puente_combate", "puente_despejado"},
     };
     echoes_ = {{{-2.0f, 2.6f, 45.0f}, "recuerdo_teo"}};
@@ -557,7 +557,7 @@ void Game::spawnEnemy(const Spawn& s) {
     Enemy e = makeEnemy(s.kind, s.pos, std::atan2(to.x, to.z), random01() * 10.0f);
     if (s.boss) {  // jefe: mucho más grande y resistente
         e.boss = true;
-        e.size = 2.2f;
+        e.size = s.kind == EnemyKind::Brute ? 1.5f : 2.2f;  // el Coloso ya es enorme
         e.body.radius *= e.size;
         e.body.height *= e.size;
         e.health = e.def().maxHealth * 7.0f;

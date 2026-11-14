@@ -8,6 +8,7 @@
 #include <cstdio>
 
 const float dt = 1.0f / 60;
+const float kBruteHp = enemyDef(EnemyKind::Brute).maxHealth;
 int fails = 0;
 #define CHECK(c, ...)                                   \
     do {                                                \
@@ -91,7 +92,7 @@ int main() {
     {  // Combo de suelo: 3 golpes + remate, con daño según el arma
         Game g = fresh();
         place(g, {0, 0, -10});
-        Enemy& e = addEnemy(g, EnemyKind::Shroom, {0, 0, -8.6f});
+        Enemy& e = addEnemy(g, EnemyKind::Brute, {0, 0, -8.6f});
         (void)e;
         std::vector<Move> seen;
         for (int i = 0; i < 4; ++i) {
@@ -105,13 +106,13 @@ int main() {
         bool order = seen.size() >= 4 && seen[0] == Move::Slash1 && seen[1] == Move::Slash2 &&
                      seen[2] == Move::Slash3 && seen[3] == Move::Finisher;
         CHECK(order, "combo: tajo, reves, giro y remate (%zu movimientos)", seen.size());
-        float dealt = 60 - g.enemies_[0].health;
+        float dealt = kBruteHp - g.enemies_[0].health;
         CHECK(std::fabs(dealt - 54) < 1e-3f, "dano del combo: %.0f (10+10+12+22 con la espada de madera)", dealt);
     }
     {  // Un combo completo derrota a un duende, que suelta dinero y orbes
         Game g = fresh();
         place(g, {0, 0, -10});
-        addEnemy(g, EnemyKind::Imp, {0, 0, -8.8f});
+        addEnemy(g, EnemyKind::Dazzled, {0, 0, -8.8f});
         for (int i = 0; i < 4; ++i) run(g, 0.6f, press(&Controls::attack));
         CHECK(g.kills_ == 1, "duende derrotado con el combo (derrotados %d)", g.kills_);
         int coins = 0;
@@ -125,11 +126,11 @@ int main() {
     {  // Acercamiento automático: el golpe arrastra al jugador hacia el objetivo
         Game g = fresh();
         place(g, {0, 0, -12});
-        addEnemy(g, EnemyKind::Shroom, {0, 0, -8.0f});
+        addEnemy(g, EnemyKind::Brute, {0, 0, -8.0f});
         run(g, 0.3f, press(&Controls::attack));
         float moved = g.hero_.body.pos.z + 12;
         CHECK(moved > 1.5f, "golpe a 4 m: se acerca %.2f m", moved);
-        CHECK(g.enemies_[0].health < 60, "y alcanza a la seta (vida %.0f)", g.enemies_[0].health);
+        CHECK(g.enemies_[0].health < kBruteHp, "y alcanza a la seta (vida %.0f)", g.enemies_[0].health);
     }
     {  // Combo aéreo: flota mientras golpea y solo hay un remate por salto
         Game g = fresh();
@@ -152,13 +153,13 @@ int main() {
     {  // IA: el duende persigue y golpea; la voltereta esquiva; la guardia bloquea
         Game g = fresh();
         place(g, {0, 0, -10});
-        addEnemy(g, EnemyKind::Imp, {0, 0, -5}, AiState::Chase);
+        addEnemy(g, EnemyKind::Dazzled, {0, 0, -5}, AiState::Chase);
         run(g, 3.0f);
         CHECK(g.hp_ < 100, "el duende persigue y ataca: PV %.0f", g.hp_);
 
         Game r = fresh();
         place(r, {0, 0, -10});
-        Enemy& e = addEnemy(r, EnemyKind::Imp, {0, 0, -8.2f}, AiState::Chase);
+        Enemy& e = addEnemy(r, EnemyKind::Dazzled, {0, 0, -8.2f}, AiState::Chase);
         e.yaw = kPi;
         r.enemyStartAttack(e);
         Controls d = press(&Controls::dodge);
@@ -168,7 +169,7 @@ int main() {
 
         Game b = fresh();
         place(b, {0, 0, -10});
-        Enemy& eb = addEnemy(b, EnemyKind::Imp, {0, 0, -8.6f}, AiState::Chase);
+        Enemy& eb = addEnemy(b, EnemyKind::Dazzled, {0, 0, -8.6f}, AiState::Chase);
         Controls guard;
         guard.guard = true;
         run(b, 0.1f, guard);  // guardia recién levantada: bloqueo perfecto
@@ -181,13 +182,13 @@ int main() {
     {  // Seta: la onda al caer se esquiva saltando
         Game g = fresh();
         place(g, {0, 0, -10});
-        Enemy& e = addEnemy(g, EnemyKind::Shroom, {0, 0, -8.0f}, AiState::Chase);
+        Enemy& e = addEnemy(g, EnemyKind::Brute, {0, 0, -8.0f}, AiState::Chase);
         g.enemyStartAttack(e);
         run(g, 1.5f);
         float hit = g.hp_;
         Game j = fresh();
         place(j, {0, 0, -10});
-        Enemy& ej = addEnemy(j, EnemyKind::Shroom, {0, 0, -8.0f}, AiState::Chase);
+        Enemy& ej = addEnemy(j, EnemyKind::Brute, {0, 0, -8.0f}, AiState::Chase);
         j.enemyStartAttack(ej);
         run(j, 0.5f);
         j.update(dt, press(&Controls::jump));
@@ -197,13 +198,13 @@ int main() {
     {  // Técnicas de luz: la lanza gasta Luz y daña; Calidez cura; sin Luz no salen
         Game g = fresh();
         place(g, {0, 0, -10});
-        addEnemy(g, EnemyKind::Shroom, {0, 0, -5});
+        addEnemy(g, EnemyKind::Brute, {0, 0, -5});
         float l0 = g.mp_;
         Controls c;
         c.command = 0;
         run(g, 1.5f, c);
         CHECK(std::fabs(g.mp_ - (l0 - 20)) < 1e-3f, "la lanza de luz gasta 20 de Luz (queda %.0f)", g.mp_);
-        CHECK(g.enemies_[0].health < 60, "y daña a la seta (vida %.0f)", g.enemies_[0].health);
+        CHECK(g.enemies_[0].health < kBruteHp, "y daña a la seta (vida %.0f)", g.enemies_[0].health);
         g.hp_ = 40;
         g.mp_ = 60;
         c.command = 2;
@@ -236,7 +237,7 @@ int main() {
         run(g, 0.8f, press(&Controls::light));
         CHECK(g.mp_ >= 50 && !g.insideLight() && !g.travelingByLight() && length(flat(g.hero_.body.pos - p0)) < 0.1f,
               "Q lejos de una fuente de luz: no se mueve ni gasta Luz");
-        addEnemy(g, EnemyKind::Imp, {0, 0, -7}, AiState::Idle);
+        addEnemy(g, EnemyKind::Dazzled, {0, 0, -7}, AiState::Idle);
         // Arrancar el color a un Gris aturdido.
         Enemy& e = g.enemies_[0];
         e.state = AiState::Stagger;
@@ -249,21 +250,21 @@ int main() {
         CHECK(g.mp_ > 3 && (g.enemies_.empty() || g.enemies_[0].health < hpE), "absorber de un Gris aturdido: le arranca su color (+%.0f de Luz)", g.mp_);
         // Supernova: solo con la Luz llena.
         g.enemies_.clear();
-        for (int i = 0; i < 4; ++i) addEnemy(g, EnemyKind::Shroom, g.hero_.body.pos + Vec3{std::cos(float(i)) * 3, 0, std::sin(float(i)) * 3});
+        for (int i = 0; i < 4; ++i) addEnemy(g, EnemyKind::Brute, g.hero_.body.pos + Vec3{std::cos(float(i)) * 3, 0, std::sin(float(i)) * 3});
         g.mp_ = 50;
         run(g, 0.5f, press(&Controls::nova));
-        CHECK(g.enemies_[0].health == 60, "sin la Luz llena no hay Supernova");
+        CHECK(g.enemies_[0].health == kBruteHp, "sin la Luz llena no hay Supernova");
         g.mp_ = 100;
         float c0 = g.croma_;
         run(g, 1.0f, press(&Controls::nova));
         bool all = true;
-        for (const Enemy& en : g.enemies_) all = all && en.health < 30;
+        for (const Enemy& en : g.enemies_) all = all && en.health < kBruteHp - 25;
         CHECK(all && g.mp_ == 0 && g.croma_ > c0, "Supernova: dana a todos alrededor, gasta la Luz y devuelve croma");
     }
     {  // Hielo congela: el enemigo va más lento
         Game g = fresh();
         place(g, {0, 0, -10});
-        addEnemy(g, EnemyKind::Shroom, {0, 0, -6});
+        addEnemy(g, EnemyKind::Brute, {0, 0, -6});
         Controls c;
         c.command = 1;
         run(g, 0.8f, c);
@@ -317,12 +318,12 @@ int main() {
     {  // Aprendizaje por refuerzo de los Grises
         Brain b;
         b.epsilon = 0;
-        int st = Brain::state({1.5f, 0, 1.0f, true});
+        int st = Brain::state({1.5f, 0, 1.0f, true, true});
         for (int i = 0; i < 30; ++i) b.learn(st, Intent::Attack, 1.0f, st, true);
         b.learn(st, Intent::Wait, -0.5f, st, true);
         CHECK(b.q(st, Intent::Attack) > 0.9f && b.choose(st, 0.5f, 0.5f) == Intent::Attack,
               "Q-learning: una tactica premiada pasa a ser la elegida (Q=%.2f)", b.q(st, Intent::Attack));
-        int guarding = Brain::state({1.5f, 2, 1.0f, true});
+        int guarding = Brain::state({1.5f, 2, 1.0f, true, true});
         CHECK(guarding != st, "ver al Prismero en guardia es otra situacion distinta");
         Brain c;
         std::string path = "/tmp/unamed_game_test.q";
@@ -332,9 +333,9 @@ int main() {
 
         Game g = fresh();
         place(g, {0, 0, -10});
-        addEnemy(g, EnemyKind::Imp, {0, 0, -7}, AiState::Chase);
+        addEnemy(g, EnemyKind::Dazzled, {0, 0, -7}, AiState::Chase);
         run(g, 12.0f);
-        const Brain& imp = g.brain(int(EnemyKind::Imp));
+        const Brain& imp = g.brain(int(EnemyKind::Dazzled));
         float bestAttack = -1e9f;
         for (int s2 = 0; s2 < Brain::kStates; ++s2) bestAttack = std::max(bestAttack, imp.q(s2, Intent::Attack));
         CHECK(g.hp_ < 100 && imp.experience() > 5 && bestAttack > 0,
@@ -354,7 +355,7 @@ int main() {
         run(g, 1.0f, press(&Controls::light));
         CHECK(g.insideLight() && length(g.hostLight() - lampA) < 0.01f && g.mp_ > l0, "Q: entra en la farola (y recupera Luz)");
         // Dentro no le ven ni le hieren.
-        Enemy& imp = addEnemy(g, EnemyKind::Imp, {lampA.x + 3, 0, lampA.z}, AiState::Chase);
+        Enemy& imp = addEnemy(g, EnemyKind::Dazzled, {lampA.x + 3, 0, lampA.z}, AiState::Chase);
         g.hurtHero({1, 0, 0}, 30, 2, &imp);
         run(g, 0.3f);
         CHECK(g.hp_ == 100 && g.enemies_[0].state == AiState::Idle, "dentro de la luz los Grises no le ven ni le hieren");
@@ -392,7 +393,7 @@ int main() {
         CHECK(!g.insideLight() && !g.travelingByLight() && d < 1.5f && g.hero_.body.grounded, "Espacio: sale junto a la farola (a %.2f m)", d);
         // Emboscada: desde dentro, el clic cae sobre el Gris más cercano.
         run(g, 1.0f, press(&Controls::light));
-        Enemy& shroom = addEnemy(g, EnemyKind::Shroom, {lampB.x - 4, 0, lampB.z + 2});
+        Enemy& shroom = addEnemy(g, EnemyKind::Brute, {lampB.x - 4, 0, lampB.z + 2});
         float hp0 = shroom.health;
         run(g, 1.0f, press(&Controls::attack));
         CHECK(!g.insideLight() && g.enemies_[0].health < hp0 && length(flat(g.hero_.body.pos - g.enemies_[0].body.pos)) < 2.5f,
@@ -415,11 +416,14 @@ int main() {
         Game w = fresh();
         w.nodes_[0].lit = true;
         w.nodes_[0].litTime = 10;
-        addEnemy(w, EnemyKind::Shroom, w.nodes_[0].pos + Vec3{1, 0, 0});
-        addEnemy(w, EnemyKind::Shroom, {0, 0, 10});
+        addEnemy(w, EnemyKind::Brute, w.nodes_[0].pos + Vec3{1, 0, 0});
+        addEnemy(w, EnemyKind::Brute, {0, 0, 10});
         w.hitEnemy(w.enemies_[0], {1, 0, 0}, 10, 0, 0, false);
         w.hitEnemy(w.enemies_[1], {1, 0, 0}, 10, 0, 0, false);
-        CHECK(w.enemies_[0].health == 45 && w.enemies_[1].health == 50, "en la luz el golpe hace un 50%% mas");
+        CHECK(w.enemies_[0].health == kBruteHp - 15 && w.enemies_[1].health == kBruteHp - 10, "en la luz el golpe a uno de sombra hace un 50%% mas");
+        addEnemy(w, EnemyKind::Dazzled, w.nodes_[0].pos + Vec3{-1, 0, 0});
+        w.hitEnemy(w.enemies_[2], {1, 0, 0}, 10, 0, 0, false);
+        CHECK(w.enemies_[2].health == enemyDef(EnemyKind::Dazzled).maxHealth - 8, "a uno de luz, en la luz, un 20%% menos");
         place(w, w.nodes_[0].pos + Vec3{2, 0, 0});
         w.mp_ = 0;
         w.enemies_.clear();
@@ -429,8 +433,8 @@ int main() {
     {  // Corte cargado: mantener el clic carga; al soltar, la onda atraviesa a varios
         Game g = fresh();
         place(g, {0, 0, -12});
-        addEnemy(g, EnemyKind::Shroom, {0, 0, -7});
-        addEnemy(g, EnemyKind::Shroom, {0, 0, -3});
+        addEnemy(g, EnemyKind::Brute, {0, 0, -7});
+        addEnemy(g, EnemyKind::Brute, {0, 0, -3});
         for (Enemy& e : g.enemies_) {
             e.state = AiState::Recover;
             e.stateTime = -100;
@@ -441,7 +445,7 @@ int main() {
         for (int i = 0; i < 80; ++i) g.update(dt, hold);
         CHECK(g.hero_.charge() >= 1.0f, "carga completa al mantener el clic");
         run(g, 1.5f);
-        CHECK(g.enemies_[0].health < 60 && g.enemies_[1].health < 60, "la onda alcanza a los dos Domos (%.0f, %.0f)",
+        CHECK(g.enemies_[0].health < kBruteHp && g.enemies_[1].health < kBruteHp, "la onda alcanza a los dos Domos (%.0f, %.0f)",
               g.enemies_[0].health, g.enemies_[1].health);
     }
     {  // Transformaciones y compañeros
@@ -462,7 +466,7 @@ int main() {
 
         Game h = fresh();
         place(h, {0, 0, -10});
-        addEnemy(h, EnemyKind::Shroom, {0, 0, -5});
+        addEnemy(h, EnemyKind::Brute, {0, 0, -5});
         h.mp_ = 30;
         h.update(dt, press(&Controls::summon));
         CHECK(h.companions_.empty(), "la chispa necesita 40 de Luz");
@@ -470,7 +474,7 @@ int main() {
         h.update(dt, press(&Controls::summon));
         CHECK(h.companions_.size() == 1 && h.mp_ == 10, "chispa aliada invocada (cuesta 40)");
         run(h, 4.0f);
-        CHECK(h.enemies_[0].health < 60, "la chispa dispara al Domo (vida %.0f)", h.enemies_[0].health);
+        CHECK(h.enemies_[0].health < kBruteHp, "la chispa dispara al Domo (vida %.0f)", h.enemies_[0].health);
         h.inventory().add(ItemId::NoraLantern);
         h.mp_ = 60;
         h.hp_ = 50;
@@ -500,8 +504,8 @@ int main() {
     {  // Fijar objetivo: elige el que tiene delante la cámara y pasa al siguiente
         Game g = fresh();
         place(g, {0, 0, -10});
-        addEnemy(g, EnemyKind::Imp, {6, 0, -10});
-        addEnemy(g, EnemyKind::Imp, {0, 0, -4});
+        addEnemy(g, EnemyKind::Dazzled, {6, 0, -10});
+        addEnemy(g, EnemyKind::Dazzled, {0, 0, -4});
         Controls c = press(&Controls::lockOn);
         c.camForward = {0, 0, 1};
         g.update(dt, c);
@@ -519,7 +523,7 @@ int main() {
     {  // Polilla: su orbe se devuelve de un golpe y la daña
         Game g = fresh();
         place(g, {0, 0, -10});
-        Enemy& m = addEnemy(g, EnemyKind::Moth, {0, 0, -4}, AiState::Chase);
+        Enemy& m = addEnemy(g, EnemyKind::Watcher, {0, 0, -4}, AiState::Chase);
         g.enemyStartAttack(m);
         m.state = AiState::Recover;
         m.stateTime = -10;  // que no vuelva a disparar durante el test
@@ -539,14 +543,14 @@ int main() {
         float c0 = g.croma_;
         CHECK(std::fabs(c0 - 0.05f) < 1e-4f, "cada escenario empieza casi sin color (croma %.0f%%)", c0 * 100);
         for (int i = 0; i < 3; ++i) {
-            g.enemies_.push_back(makeEnemy(EnemyKind::Imp, {0, 0, 5}, 0, 0));
+            g.enemies_.push_back(makeEnemy(EnemyKind::Dazzled, {0, 0, 5}, 0, 0));
             g.killEnemy(g.enemies_.back());
         }
         CHECK(std::fabs(g.croma_ - (c0 + 3 * 0.015f)) < 1e-4f && g.splashes_.size() == 3,
               "3 Grises disipados: croma %.1f%%, %zu salpicaduras", g.croma_ * 100, g.splashes_.size());
         run(g, 1.0f);
         g.enemies_.clear();
-        g.enemies_.push_back(makeEnemy(EnemyKind::Imp, g.nodes_[0].pos + Vec3{3, 0, 0}, 0, 0));
+        g.enemies_.push_back(makeEnemy(EnemyKind::Dazzled, g.nodes_[0].pos + Vec3{3, 0, 0}, 0, 0));
         g.enemies_.back().state = AiState::Recover;
         g.enemies_.back().stateTime = -100;
         place(g, g.nodes_[0].pos + Vec3{1.0f, 0, 0});
@@ -557,7 +561,7 @@ int main() {
         g.update(dt, press(&Controls::interact));
         CHECK(g.nodes_[0].lit && std::fabs(g.croma_ - (c1 + 0.18f)) < 1e-4f, "nodo encendido: +18%% de croma");
         for (int i = 0; i < 80; ++i) {
-            g.enemies_.push_back(makeEnemy(EnemyKind::Imp, {0, 0, 5}, 0, 0));
+            g.enemies_.push_back(makeEnemy(EnemyKind::Dazzled, {0, 0, 5}, 0, 0));
             g.killEnemy(g.enemies_.back());
         }
         CHECK(g.croma_ == 1.0f && g.splashes_.size() == size_t(Renderer::kMaxPaints),
@@ -629,7 +633,7 @@ int main() {
         skipDialogues(g);
         place(g, {0, 0, 44});
         run(g, 0.5f);
-        bool boss = g.enemies_.size() == 1 && g.enemies_[0].boss && g.enemies_[0].size > 2.0f;
+        bool boss = g.enemies_.size() == 1 && g.enemies_[0].boss && g.enemies_[0].size > 1.4f;
         CHECK(boss, "tras examinar el puesto aparece «%s»", g.enemies_.empty() ? "-" : g.enemies_[0].name());
     }
     {  // Puente: sin suelo, caer devuelve al último farol encendido
@@ -777,6 +781,49 @@ int main() {
         g.hero_.body.pos = {cp.x + 50, -12, cp.z};
         run(g, 0.2f);
         CHECK(length(g.hero_.body.pos - cp) < 1.5f && g.hp_ == g.maxHp_, "al caer al vacío vuelve a la última isla");
+    }
+    {  // Enemigos nuevos: turnos de ataque, oportunistas por la espalda, botín de su familia
+        Game g = fresh();
+        place(g, {0, 0, -10});
+        for (int i = 0; i < 5; ++i) {
+            float a = float(i) * 1.25f;
+            Enemy& e = addEnemy(g, EnemyKind::Dazzled, Vec3{std::cos(a) * 1.8f, 0, -10 + std::sin(a) * 1.8f}, AiState::Chase);
+            e.intent = Intent::Attack;
+            e.decisionTimer = 10;
+        }
+        int maxBusy = 0;
+        for (int k = 0; k < 30; ++k) {
+            g.update(dt, {});
+            int busy = 0;
+            for (const Enemy& e : g.enemies_) busy += e.state == AiState::Windup || e.state == AiState::Attack;
+            maxBusy = std::max(maxBusy, busy);
+        }
+        CHECK(maxBusy >= 1 && maxBusy <= 2, "cinco Deslumbrados: como mucho dos atacan a la vez (%d)", maxBusy);
+        Game h = fresh();
+        place(h, {0, 0, -10}, 0);  // mirando a +z
+        Enemy& hound = addEnemy(h, EnemyKind::Hound, {0, 0, -12}, AiState::Chase);
+        hound.intent = Intent::Wait;
+        hound.decisionTimer = 10;
+        bool lunged = false;
+        for (int k = 0; k < 20 && !lunged; ++k) {
+            h.update(dt, {});
+            lunged = h.enemies_[0].state == AiState::Windup || h.enemies_[0].state == AiState::Attack;
+        }
+        CHECK(lunged, "el Sabueso ataca por la espalda aunque su táctica fuera esperar");
+        Game k = fresh();
+        place(k, {0, 0, -10});
+        int shadowOrbs = 0, lightOrbs = 0;
+        for (int i = 0; i < 6; ++i) {
+            k.enemies_.clear();
+            k.pickups_.clear();
+            Enemy& e = addEnemy(k, i % 2 ? EnemyKind::Hound : EnemyKind::Watcher, {3, 0, -10});
+            k.killEnemy(e);
+            for (const Pickup& p : k.pickups_) shadowOrbs += p.kind == PickupKind::Shadow, lightOrbs += p.kind == PickupKind::Mp;
+        }
+        CHECK(shadowOrbs > 0 && lightOrbs > 0, "los de sombra sueltan Sombra (%d) y los de luz, Luz (%d)", shadowOrbs, lightOrbs);
+        float s0 = k.shadow_;
+        run(k, 3.0f);
+        CHECK(k.shadow_ > s0, "recoger Sombra la suma (%.0f)", k.shadow_);
     }
     {  // Derrota y vuelta a empezar
         Game g = fresh();

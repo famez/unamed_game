@@ -11,7 +11,8 @@
 
 #include <cstdint>
 
-enum class EnemyKind { Imp, Shroom, Moth, Count };
+// Deslumbrado y Vigía son de luz; Coloso y Sabueso, de sombra.
+enum class EnemyKind { Dazzled, Brute, Watcher, Hound, Count };
 
 // Ciclo de combate: aparece, persigue, avisa (preparación), ataca y se recupera. Un golpe
 // le hace tambalearse (interrumpe la preparación).
@@ -43,12 +44,13 @@ struct EnemyDef {
     bool flying;
     float hoverHeight;    // voladores: altura del cuerpo sobre el suelo
     int munnyMin, munnyMax;
+    bool shadow;          // familia: sombra (Vaciados) o luz (Deslumbrados)
 };
 
 const EnemyDef& enemyDef(EnemyKind k);
 
 struct Enemy {
-    EnemyKind kind = EnemyKind::Imp;
+    EnemyKind kind = EnemyKind::Dazzled;
     Body body;
     float yaw = 0;
     float health = 1;
@@ -61,6 +63,8 @@ struct Enemy {
     float seed = 0;       // desfase de animación y de la deambulación
     float phase = 0;      // ciclo de pasos / aleteo
     bool attackHit = false;  // el ataque en curso ya ha golpeado
+    int attackStep = 0;      // golpe dentro de un ataque encadenado (Deslumbrado: dos zarpazos)
+    float dodgeCooldown = 0; // hasta poder volver a apartarse de un golpe
     bool boss = false;    // jefe: más grande y resistente; invoca ayuda
     float size = 1;       // escala del cuerpo (jefes)
     int bossPhase = 0;

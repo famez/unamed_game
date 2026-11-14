@@ -44,14 +44,9 @@ constexpr float kPerfectGuard = 0.35f;  // bloquear al poco de levantar la guard
 constexpr float kHpOrb = 8, kMpOrb = 6;
 constexpr size_t kMaxParticles = 900;
 
-// El color que cada especie de Gris ha robado (y devuelve al disiparse).
-uint32_t enemyColor(EnemyKind k) {
-    switch (k) {
-        case EnemyKind::Imp: return rgba(255, 70, 190);
-        case EnemyKind::Shroom: return rgba(255, 185, 50);
-        default: return rgba(40, 225, 255);
-    }
-}
+// Lo que suelta cada familia al liberarse: luz cálida o sombra violeta.
+uint32_t enemyColor(EnemyKind k) { return enemyDef(k).shadow ? rgba(150, 80, 255) : rgba(255, 226, 160); }
+constexpr int kMaxAttackers = 2;  // a la vez (sin contar jefes): los demás rodean y esperan
 constexpr float kCromaPerKill = 0.015f;
 
 }  // namespace
@@ -528,7 +523,8 @@ void Game::resolveImpact(Move m) {
 }
 
 void Game::hitEnemy(Enemy& e, Vec3 dir, float damage, float knock, float lift, bool heavy) {
-    if (lightAt(e.body.pos) > 0.3f) damage *= 1.5f;  // en la luz, los Grises se debilitan
+    // La luz debilita a los de sombra; a los de luz, en cambio, los hace más duros.
+    if (lightAt(e.body.pos) > 0.3f) damage *= e.def().shadow ? 1.5f : 0.8f;
     e.health -= damage;
     e.rlReward -= damage / 15.0f;
     e.hitFlash = 0.12f;
@@ -542,12 +538,12 @@ void Game::hitEnemy(Enemy& e, Vec3 dir, float damage, float knock, float lift, b
         return;
     }
     // Las setas, mientras saltan para aplastar, solo se detienen con un remate.
-    bool armored = (e.kind == EnemyKind::Shroom && e.state == AiState::Attack && !heavy) || (e.boss && !heavy);
+    bool armored = (e.kind == EnemyKind::Brute && e.state == AiState::Attack && !heavy) || (e.boss && !heavy);
     if (armored) return;
     e.state = AiState::Stagger;
     e.stateTime = 0;
     e.knock = dir * (knock * (d.flying ? 0.6f : 1.0f));
-    if (!d.flying) e.body.vel.y = std::max(e.body.vel.y, lift * (e.kind == EnemyKind::Shroom ? 0.6f : 1.0f));
+    if (!d.flying) e.body.vel.y = std::max(e.body.vel.y, lift * (e.kind == EnemyKind::Brute ? 0.6f : 1.0f));
 }
 
 void Game::killEnemy(Enemy& e) {
@@ -578,22 +574,22 @@ void Game::killEnemy(Enemy& e) {
                               0.09f, col, 9.8f, false});
     }
     // El "alma" del enemigo: un destello grande que sube despacio.
-    particles_.push_back({c, {0, 1.6f, 0}, 1.3f, 1.3f, 0.5f, rgba(255, 150, 220), -0.2f, true});
+    particles_.push_back({c, {0, 1.6f, 0}, 1.3f, 1.3f, 0.5f, col, -0.2f, true});
 
     // Botín: dinero siempre, orbes casi siempre y, a veces, un objeto.
     int munny = d.munnyMin + int(random01() * float(d.munnyMax - d.munnyMin + 1));
     int hpOrbs = random01() < 0.7f ? 1 + int(random01() * 2.0f) : 0;
-    int mpOrbs = random01() < 0.45f ? 1 + int(random01() * 2.0f) : 0;
+    int mpOrbs = random01() < 0.75f ? 1 + int(random01() * 2.0f) : 0;  // Luz o Sombra según la familia
     float r = random01();
     ItemId item = ItemId::Potion;
     bool withItem = true;
     switch (e.kind) {
-        case EnemyKind::Imp:
+        case EnemyKind::Dazzled:
             if (r < 0.30f) item = ItemId::ShinyShard;
             else if (r < 0.42f) item = ItemId::Potion;
             else withItem = false;
             break;
-        case EnemyKind::Shroom:
+        case EnemyKind::Brute:
             if (r < 0.40f) item = ItemId::GoldSpore;
             else if (r < 0.60f) item = ItemId::Potion;
             else if (r < 0.68f) item = ItemId::HiPotion;
@@ -605,7 +601,7 @@ void Game::killEnemy(Enemy& e) {
             else withItem = false;
             break;
     }
-    dropLoot(c, munny, hpOrbs, mpOrbs, item, withItem);
+    dropLoot(c, munny, hpOrbs, mpOrbs, item, withItem, d.shadow);
 }
 
 void Game::hurtHero(Vec3 dir, float damage, float knock, Enemy* source) {
@@ -668,6 +664,14 @@ void Game::respawnHero() {
 
 // --- Enemigos ------------------------------------------------------------------------
 
+// El Prismero tiene al enemigo delante (o fijado): no es buen momento para atacarle.
+bool Game::heroWatches(const Enemy& e) const {
+    if (lock_ >= 0 && &enemies_[size_t(lock_)] == &e) return true;
+    Vec3 to = flat(e.body.pos - hero_.body.pos);
+    float d = length(to);
+    return d < 0.1f || dot(to * (1.0f / d), hero_.forward()) > 0.4f;
+}
+
 Brain& Game::brainFor(const Enemy& e) { return e.boss ? bossBrain_ : brains_[int(e.kind)]; }
 
 // Qué está haciendo el Prismero, tal como lo ve un Gris.
@@ -683,7 +687,7 @@ int Game::heroActionCode() const {
 void Game::decideIntent(Enemy& e, float dist) {
     Brain& b = brainFor(e);
     BrainInput in{dist, heroActionCode(), std::max(0.0f, e.health) / (e.def().maxHealth * (e.boss ? 7.0f : 1.0f)),
-                  e.cooldown <= 0};
+                  e.cooldown <= 0, heroWatches(e)};
     int s = Brain::state(in);
     if (e.rlState >= 0) {
         Intent before = b.best(e.rlState);
@@ -706,7 +710,8 @@ void Game::updateEnemy(Enemy& e, float dt) {
     for (int i = 0; i < d.jointCount; ++i) e.prevJoints[i] = e.joints[i];
     e.prevPos = e.body.pos;
     float slow = e.freeze > 0 ? 0.45f : 1.0f;  // congelado: todo más lento
-    if (lightAt(e.body.pos) > 0.3f) slow *= 0.8f;  // la luz les pesa
+    if (lightAt(e.body.pos) > 0.3f) slow *= d.shadow ? 0.8f : 1.1f;  // la luz pesa a los de sombra y aviva a los de luz
+    e.dodgeCooldown = std::max(0.0f, e.dodgeCooldown - dt);
     float edt = dt * slow;
     e.stateTime += edt;
     e.hitFlash = std::max(0.0f, e.hitFlash - dt);
@@ -761,8 +766,17 @@ void Game::updateEnemy(Enemy& e, float dt) {
             Vec3 approach = d.flying ? (dirHero * (dist > 6.5f ? 1.0f : dist < 4.0f ? -1.0f : 0.0f) + tangent * 0.7f) * d.speed
                             : dist > contact ? dirHero * d.speed : Vec3{};
             bool attack = false;
+            bool watched = heroWatches(e);
             switch (e.intent) {
                 case Intent::Approach: desired = approach; break;
+                case Intent::Flank: {  // rodea hasta la espalda del Prismero y ataca desde ahí
+                    Vec3 side{-hero_.forward().z, 0, hero_.forward().x};
+                    Vec3 spot = hero_.body.pos - hero_.forward() * (contact + 0.8f) + side * (std::fmod(e.seed, 2.0f) < 1.0f ? 0.8f : -0.8f);
+                    Vec3 to = flat(spot - e.body.pos);
+                    desired = length(to) > 0.4f ? normalize(to) * (d.speed * 1.1f) : Vec3{};
+                    attack = inRange && !watched;
+                    break;
+                }
                 case Intent::Attack:
                     desired = approach;
                     attack = inRange;
@@ -783,21 +797,59 @@ void Game::updateEnemy(Enemy& e, float dt) {
                     break;
                 case Intent::Count: break;
             }
+            // Oportunistas: si les das la espalda, atacan aunque su táctica fuera otra.
+            if (!watched && inRange && (e.kind == EnemyKind::Hound || e.kind == EnemyKind::Dazzled)) attack = true;
+            // Turnos: como mucho dos atacan a la vez; el resto rodea, y así te encierran.
+            if (attack && !e.boss) {
+                int busy = 0;
+                for (const Enemy& o : enemies_)
+                    if (&o != &e && !o.boss && (o.state == AiState::Windup || o.state == AiState::Attack)) ++busy;
+                if (busy >= kMaxAttackers) {
+                    attack = false;
+                    desired = (tangent * 0.9f + dirHero * (dist > 3.5f ? 0.3f : -0.3f)) * d.speed;
+                }
+            }
             if (attack) {
                 e.state = AiState::Windup;
                 e.stateTime = 0;
+                e.attackStep = 0;
+            }
+            // Esquivar: si el Prismero lanza un golpe y le tiene delante, se aparta de un
+            // salto (más a menudo cuanto más ha aprendido su especie).
+            if (!attack && !d.flying && e.dodgeCooldown <= 0 && isAttack(hero_.move()) && dist < 3.0f && watched &&
+                e.kind != EnemyKind::Brute) {
+                e.dodgeCooldown = 1.2f;
+                float skill = std::min(1.0f, float(brainFor(e).experience()) / 800.0f);
+                float chance = (e.kind == EnemyKind::Hound ? 0.35f : 0.25f) + 0.3f * skill;
+                if (random01() < chance) {
+                    Vec3 side = tangent * (random01() < 0.5f ? 1.0f : -1.0f);
+                    e.knock = side * 7.5f - dirHero * 3.0f;
+                    e.body.vel.y = 3.0f;
+                    e.rlReward += 0.2f;
+                    sound(Sfx::Dodge, e.center(), 0.5f, 1.2f);
+                }
             }
             break;
         }
         case AiState::Windup:
             faceHero = true;
             if (e.stateTime > d.windup) enemyStartAttack(e);
-            else if (e.stateTime <= edt) sound(Sfx::EnemyWindup, e.center(), 0.6f, e.kind == EnemyKind::Shroom ? 0.7f : 1.0f);
+            else if (e.stateTime <= edt)
+                sound(Sfx::EnemyWindup, e.center(), 0.6f, e.kind == EnemyKind::Brute ? 0.7f : e.kind == EnemyKind::Hound ? 1.3f : 1.0f);
             break;
         case AiState::Attack: {
             Vec3 heroChest = hero_.body.pos + Vec3{0, 0.9f, 0};
-            if (e.kind == EnemyKind::Imp) {
-                if (!e.attackHit && length(e.center() - heroChest) < 0.95f + e.body.radius) {
+            if (e.kind == EnemyKind::Dazzled && e.attackStep == 0 && e.stateTime > 0.25f) {
+                // Segundo zarpazo: otro impulso hacia el Prismero.
+                e.attackStep = 1;
+                if (!e.attackHit) e.rlReward -= 0.1f;
+                e.attackHit = false;
+                e.knock = dirHero * 6.5f;
+                sound(Sfx::Slash, e.center(), 0.7f, 0.8f);
+            }
+            if (e.kind == EnemyKind::Dazzled || e.kind == EnemyKind::Hound) {
+                Vec3 aim = e.kind == EnemyKind::Hound ? e.center() + e.forward() * 0.5f : e.center();
+                if (!e.attackHit && length(aim - heroChest) < 0.95f + e.body.radius) {
                     e.attackHit = true;
                     hurtHero(e.forward(), d.damage * (e.boss ? 1.6f : 1.0f), d.knock, &e);
                 }
@@ -806,7 +858,7 @@ void Game::updateEnemy(Enemy& e, float dt) {
                     e.state = AiState::Recover;
                     e.stateTime = 0;
                 }
-            } else if (e.kind == EnemyKind::Shroom) {
+            } else if (e.kind == EnemyKind::Brute) {
                 // Aterriza: onda alrededor. Saltar a tiempo la esquiva.
                 if ((e.body.grounded && e.stateTime > 0.2f) || e.stateTime > 2.0f) {
                     const float radius = 2.6f * e.size;
@@ -877,7 +929,8 @@ void Game::updateEnemy(Enemy& e, float dt) {
         int phase = frac < 0.33f ? 2 : frac < 0.66f ? 1 : 0;
         if (phase > e.bossPhase) {
             e.bossPhase = phase;
-            for (float sx : {-1.0f, 1.0f}) spawnEnemy({EnemyKind::Imp, e.body.pos + Vec3{sx * 3.0f, 0, -2.0f}});
+            for (float sx : {-1.0f, 1.0f})  // llama a su jauría
+                spawnEnemy({e.def().shadow ? EnemyKind::Hound : EnemyKind::Dazzled, e.body.pos + Vec3{sx * 3.0f, 0, -2.0f}});
             shake_ = std::max(shake_, 0.3f);
         }
     }
@@ -891,21 +944,26 @@ void Game::enemyStartAttack(Enemy& e) {
     Vec3 to = flat(hero_.body.pos - e.body.pos);
     float dist = length(to);
     switch (e.kind) {
-        case EnemyKind::Imp:  // salto con zarpazo
-            e.knock = e.forward() * 9.5f;
-            e.body.vel.y = 2.5f;
+        case EnemyKind::Dazzled:  // se lanza con el primer zarpazo
+            e.knock = e.forward() * 8.0f;
+            e.body.vel.y = 1.5f;
+            sound(Sfx::Slash, e.center(), 0.7f, 0.7f);
             break;
-        case EnemyKind::Shroom:  // salta hacia el jugador para caerle encima
+        case EnemyKind::Hound:  // salto a la garganta
+            e.knock = (dist > 1e-3f ? to * (1.0f / dist) : e.forward()) * std::min(11.0f, dist * 4.0f + 3.0f);
+            e.body.vel.y = 3.2f;
+            break;
+        case EnemyKind::Brute:  // salta hacia el jugador para caerle encima
             e.body.vel.y = 7.5f;
             e.knock = (dist > 1e-3f ? to * (1.0f / dist) : e.forward()) * (std::min(dist, 3.5f) / 0.75f);
             break;
-        case EnemyKind::Moth: {  // orbe de luz que persigue un poco al jugador
+        case EnemyKind::Watcher: {  // orbe de luz que persigue un poco al jugador
             Vec3 origin = e.center() + e.forward() * 0.35f;
             Vec3 aim = normalize(hero_.body.pos + Vec3{0, 1.0f, 0} - origin);
-            Projectile p{ProjectileKind::EnemyOrb, origin, aim * 7.0f, 4.0f};
+            Projectile p{ProjectileKind::EnemyOrb, origin, aim * 10.0f, 4.0f};
             p.seed = random01() * 100.0f;
             projectiles_.push_back(p);
-            spawnSparks(origin, aim, 8, rgba(255, 180, 240), 2.0f);
+            spawnSparks(origin, aim, 8, rgba(255, 240, 200), 2.0f);
             break;
         }
         case EnemyKind::Count: break;
@@ -931,7 +989,7 @@ void Game::updateProjectiles(float dt) {
         float steer = 0;
         if (hostile && hero_.downTimer < 0) {
             goal = heroChest;
-            steer = 1.2f;
+            steer = 1.6f;
         } else if (p.target >= 0) {
             goal = enemies_[size_t(p.target)].center();
             steer = 5.0f;
@@ -959,7 +1017,7 @@ void Game::updateProjectiles(float dt) {
         };
         if (hostile) {
             if (!hero_.rolling() && hero_.downTimer < 0 && segDist(heroChest) < 0.55f) {
-                hurtHero(normalize(flat(p.vel)), enemyDef(EnemyKind::Moth).damage, enemyDef(EnemyKind::Moth).knock,
+                hurtHero(normalize(flat(p.vel)), enemyDef(EnemyKind::Watcher).damage, enemyDef(EnemyKind::Watcher).knock,
                          nullptr);
                 spawnSparks(p.pos, -p.vel * 0.1f, 10, rgba(255, 180, 240), 3.0f);
                 p.dead = true;
@@ -1028,7 +1086,7 @@ void Game::explodeFire(Vec3 point) {
 
 // --- Botín ----------------------------------------------------------------------------
 
-void Game::dropLoot(Vec3 pos, int munny, int hpOrbs, int mpOrbs, ItemId item, bool withItem) {
+void Game::dropLoot(Vec3 pos, int munny, int hpOrbs, int mpOrbs, ItemId item, bool withItem, bool shadow) {
     auto pop = [&](PickupKind kind, ItemId id, int value) {
         float a = random01() * 2.0f * kPi, r = randRange(1.2f, 2.8f);
         Pickup p;
@@ -1046,7 +1104,7 @@ void Game::dropLoot(Vec3 pos, int munny, int hpOrbs, int mpOrbs, ItemId item, bo
         munny -= v;
     }
     for (int i = 0; i < hpOrbs; ++i) pop(PickupKind::Hp, ItemId::Potion, 0);
-    for (int i = 0; i < mpOrbs; ++i) pop(PickupKind::Mp, ItemId::Potion, 0);
+    for (int i = 0; i < mpOrbs; ++i) pop(shadow ? PickupKind::Shadow : PickupKind::Mp, ItemId::Potion, 0);
     if (withItem) pop(PickupKind::Item, item, 1);
 }
 
@@ -1098,7 +1156,12 @@ void Game::collect(Pickup& p) {
     uint32_t col = rgba(255, 255, 255);
     switch (p.kind) {
         case PickupKind::Hp: heal(kHpOrb, 0); col = rgba(120, 255, 140); uiSound(Sfx::Pickup, 0.5f, 1.0f); break;
-        case PickupKind::Mp: heal(0, kMpOrb); col = rgba(120, 170, 255); uiSound(Sfx::Pickup, 0.5f, 1.25f); break;
+        case PickupKind::Mp: heal(0, kMpOrb); col = rgba(255, 226, 160); uiSound(Sfx::Pickup, 0.5f, 1.25f); break;
+        case PickupKind::Shadow:
+            shadow_ = std::min(maxShadow_, shadow_ + kMpOrb);
+            col = rgba(150, 80, 255);
+            uiSound(Sfx::Pickup, 0.5f, 0.8f);
+            break;
         case PickupKind::Munny:
             inv_.munny += p.value;
             col = rgba(255, 220, 80);
