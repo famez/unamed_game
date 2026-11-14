@@ -234,7 +234,8 @@ void Game::update(float dt, const Controls& input) {
             b.body.pos -= n * ((minDist - dist) * 0.5f);
         }
 
-    for (Enemy& e : enemies_) updateEnemy(e, dt);
+    // Por índice: un jefe puede añadir enemigos mientras se recorren (los nuevos se mueven ya).
+    for (size_t i = 0; i < enemies_.size(); ++i) updateEnemy(enemies_[i], dt);
     // Los que han terminado de desvanecerse se quitan (manteniendo el índice del fijado).
     {
         size_t out = 0;
@@ -948,18 +949,20 @@ void Game::updateEnemy(Enemy& e, float dt) {
         e.body.vel.y = (targetY - e.body.pos.y) * 3.0f + kGravity * dt;
     }
     moveBody(e.body, world_, dt, 0.3f);
-    // Jefe: al bajar de 2/3 y de 1/3 de vida llama a dos Rastreros.
+    animateEnemy(e, time_, dt);
+    // Jefe: al bajar de 2/3 y de 1/3 de vida llama a su jauría. Va lo último: al añadir
+    // enemigos el vector puede moverse en memoria y `e` deja de valer.
     if (e.boss && e.alive()) {
         float frac = e.health / (d.maxHealth * 7.0f);
         int phase = frac < 0.33f ? 2 : frac < 0.66f ? 1 : 0;
         if (phase > e.bossPhase) {
             e.bossPhase = phase;
-            for (float sx : {-1.0f, 1.0f})  // llama a su jauría
-                spawnEnemy({e.def().shadow ? EnemyKind::Hound : EnemyKind::Dazzled, e.body.pos + Vec3{sx * 3.0f, 0, -2.0f}});
+            EnemyKind kind = d.shadow ? EnemyKind::Hound : EnemyKind::Dazzled;
+            Vec3 at = e.body.pos;
             shake_ = std::max(shake_, 0.3f);
+            for (float sx : {-1.0f, 1.0f}) spawnEnemy({kind, at + Vec3{sx * 3.0f, 0, -2.0f}});
         }
     }
-    animateEnemy(e, time_, dt);
 }
 
 void Game::enemyStartAttack(Enemy& e) {

@@ -930,6 +930,18 @@ int main() {
         run(g, 0.2f, press(&Controls::interact));
         CHECK(g.lamps_[1].on && g.mp_ == 35, "en modo luz, F enciende la farola (cuesta 15 de Luz)");
     }
+    {  // Un jefe que llama a su jauría en mitad del combate (antes corrompía la memoria)
+        Game g = fresh();
+        place(g, {0, 0, -12});
+        for (int i = 0; i < 3; ++i) addEnemy(g, EnemyKind::Dazzled, {float(i) * 2 - 2, 0, -4}, AiState::Chase);
+        g.spawnEnemy({EnemyKind::Brute, {0, 0, -6}, true, "Prueba"});
+        g.enemies_.back().state = AiState::Chase;
+        g.enemies_.back().health = enemyDef(EnemyKind::Brute).maxHealth * 7.0f * 0.3f;  // de golpe bajo 1/3
+        run(g, 0.5f);
+        int hounds = 0;
+        for (const Enemy& e : g.enemies_) hounds += e.kind == EnemyKind::Hound;
+        CHECK(hounds == 2, "el jefe de sombra llama a dos sabuesos (%d) sin romper nada", hounds);
+    }
     {  // Derrota y vuelta a empezar
         Game g = fresh();
         g.hurtHero({0, 0, 1}, 500, 2, nullptr);
