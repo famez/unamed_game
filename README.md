@@ -62,7 +62,7 @@ Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--autoplay
 | Clic izquierdo | Atacar (combo según el arma). **Mantener**: corte cargado (lanza una onda) |
 | Clic derecho (mantener) | Guardia (se puede andar mirando a la cámara). Justo a tiempo: bloqueo perfecto |
 | C / Ctrl | Voltereta de esquiva (invulnerable); un golpe justo después es un **contraataque** |
-| Q | **Hacerse luz**: haz que atraviesa Grises y cruza vacíos. **Mantener Q**: absorber luz |
+| Q | Mirando a una luz: **viajar hasta ella**. Si no: **hacerse luz** (haz que atraviesa Grises y cruza vacíos). **Mantener Q**: absorber luz |
 | V | **Supernova** (con la Luz llena) |
 | G | **Transformarse** (con un núcleo) |
 | T | **Invocar compañero** (chispa aliada o el eco de Nora) |
@@ -82,6 +82,11 @@ Especiales de combate: atacar corriendo = **embestida**; atacar con la guardia =
   y faroles, o arrancándole el color a un Gris aturdido. Con ella: hacerse luz (gratis y
   más lejos dentro de las zonas con color: se salta de luz en luz), las técnicas (*Lanza de
   luz*, *Refracción*, *Calidez*) y la Supernova (explosión de área que devuelve croma).
+- **Viaje por la luz**: al mirar a una farola, un nodo o farol encendido, un emisor o las
+  luces de las torres del puente aparece «Q · viajar»; el Prismero se vuelve luz y vuela
+  en arco hasta ella (35 m, a la vista; 10 de Luz o gratis desde la luz). Encadenando
+  fuentes se cruza el mapa y se llega a sitios altos. En la luz, los Grises reciben un 50 %
+  más de daño y van más lentos, y la Luz del Prismero se recarga sola.
 - **Croma**: cada escenario empieza casi gris; encender nodos y faroles devuelve el color
   en una zona que crece a su alrededor; cada Gris disipado deja una salpicadura.
 - **Escenarios por partes** con objetivos, combates de zona con barreras, un jefe, faroles

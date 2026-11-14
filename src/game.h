@@ -53,6 +53,7 @@ struct Controls {
     int commandScroll = 0;   // mover la selección del menú de comandos
     Vec3 camForward{0, 0, 1};  // hacia dónde mira la cámara (para elegir objetivo)
     bool advance = false;      // pasar la línea de diálogo
+    Vec3 aimOrigin, aimDir{0, 0, 1};  // rayo de la cámara (para apuntar a fuentes de luz)
     bool sprint = false;       // mantener: correr
     bool absorb = false;       // mantener Q: absorber luz
     bool beam = false;         // pulsar Q: hacerse luz (haz)
@@ -336,6 +337,10 @@ public:
     const Brain& bossBrain() const { return bossBrain_; }
     // Intensidad de luz (0..1) en un punto: zonas de nodos encendidos y faroles.
     float lightAt(Vec3 p) const;
+    // Viaje por la luz: fuente a la que apunta la cámara (o -1) y su posición.
+    int lightTarget() const { return lightTarget_; }
+    Vec3 lightTargetPos() const { return lightTarget_ >= 0 ? lightPoints_[size_t(lightTarget_)].pos : Vec3{}; }
+    bool travelingByLight() const { return travel_; }
     Form form() const { return form_; }
     float formTime() const { return formTime_; }
     // Escenario y objetivo actuales.
@@ -427,6 +432,13 @@ private:
     void updateAllies(float dt, const Controls& c);
     float formDamage() const;
     void updateLight(float dt, const Controls& c);
+    struct LightPoint {
+        Vec3 pos;     // la luz
+        Vec3 arrive;  // dónde se llega al viajar hasta ella
+    };
+    void gatherLightPoints();
+    void updateLightTarget(const Controls& c);
+    void updateTravel(float dt);
     void spawnSparks(Vec3 pos, Vec3 dir, int count, uint32_t color, float speed, bool stars = true);
     void spawnRing(Vec3 pos, float radius, float life, uint32_t color);
     float groundHeight(Vec3 p) const;
@@ -496,6 +508,11 @@ private:
     std::vector<int> beamHits_;         // Grises ya atravesados por el haz en curso
     float absorbHint_ = 0;              // para no repetir el aviso de "no hay luz"
     float novaFlash_ = 0;
+    std::vector<LightPoint> lightPoints_;
+    int lightTarget_ = -1;
+    bool travel_ = false;
+    Vec3 travelFrom_, travelTo_;
+    float travelTime_ = 0, travelDur_ = 0;
     int commandSel_ = 0;
     int lock_ = -1;           // enemigo fijado
     std::vector<Enemy> enemies_;

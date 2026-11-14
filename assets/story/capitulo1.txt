@@ -48,6 +48,8 @@ sistema: Acércate a un nodo y pulsa F para encenderlo. Los Grises cercanos te l
 brizna: Una cosa más. Tú no solo llevas color: puedes beberte la luz.
 brizna: Junto a un nodo encendido, mantén Q y absórbela. Con ella podrás hacerte luz tú mismo: pulsa Q y cruzarás lo que sea.
 sistema: Q: hacerse luz (cuesta Luz; gratis dentro de las zonas con color) · Mantén Q: absorber luz (también de un Gris aturdido) · V con la Luz llena: Supernova.
+brizna: Y otra cosa: si miras a una farola o a cualquier luz y pulsas Q, viajarás hasta ella hecho luz.
+brizna: De luz en luz se cruza la ciudad en un suspiro. Y en la luz, los Grises se debilitan.
 
 == domo
 !aviso

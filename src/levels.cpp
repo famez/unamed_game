@@ -314,6 +314,14 @@ void Game::buildMercado() {
     }
     addBlock({0, 2, 64.5f}, {3.8f, 2, 0.5f}, kWhite);
     addTree({-9, 0, 33}, 1.0f, rgba(255, 120, 190));
+    // Farolas: la red de luz del mercado (se puede viajar de una a otra).
+    for (Vec3 lp : {Vec3{-3.1f, 0, 9.5f}, Vec3{3.1f, 0, 16.5f}, Vec3{-3.1f, 0, 23.0f}, Vec3{-8.5f, 0, 42.0f},
+                    Vec3{8.0f, 0, 34.0f}, Vec3{0, 0, 51.0f}}) {
+        addBlock(lp + Vec3{0, 1.6f, 0}, {0.08f, 1.6f, 0.08f}, kWhite, Material::Metal);
+        addDecor(id, lp + Vec3{0, 3.35f, 0}, {0.2f, 0.2f, 0.2f}, kAmber, Material::Glow, true);
+        addDecor(id, lp + Vec3{0, 3.1f, 0}, {0.16f, 0.03f, 0.16f}, kWhite, Material::Metal, false);
+        lamps_.push_back(lp + Vec3{0, 3.35f, 0});
+    }
     addTree({9, 0, 49}, 1.1f, rgba(110, 200, 255));
     // Puesto de Nora: el de los farolillos, con un farolillo grande apagado.
     Vec3 nora{8.5f, 0, 44.5f};
@@ -426,6 +434,7 @@ void Game::buildPuente() {
         for (float sz : {28.5f, 36.5f}) {
             addBlock({sx * 5.4f, 4.8f, sz}, {0.35f, 4.0f, 0.35f}, kWhite);
             addDecor(id, {sx * 5.4f, 8.9f, sz}, {0.18f, 0.18f, 0.18f}, kCyan, Material::Glow, true);
+            lamps_.push_back({sx * 5.4f, 8.9f, sz});  // lo alto de las torres: se llega viajando por la luz
         }
     for (int i = 0; i < 12; ++i) {
         float z = 2 + float(i) * 2.2f;

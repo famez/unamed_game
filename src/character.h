@@ -78,6 +78,11 @@ public:
     bool absorbing() const;
     bool startBeam(Vec3 dir, float duration);
     bool beaming() const { return beamTime_ > 0; }
+    void stopBeam() {
+        beamTime_ = 0;
+        body.vel = {};
+        speed = 0;
+    }
     Vec3 beamDir() const { return beamDir_; }
     static constexpr float kBeamSpeed = 32.0f;
     // Ventana de contraataque tras una esquiva.

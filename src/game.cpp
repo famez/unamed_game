@@ -134,6 +134,7 @@ void Game::update(float dt, const Controls& c) {
         hero_.downTimer += dt;
         if (hero_.downTimer > kHeroRespawn) respawnHero();
     } else {
+        updateLightTarget(c);
         updateLight(dt, c);
         updateAllies(dt, c);
         if (c.lockOn) cycleLock(c.camForward);
@@ -171,6 +172,7 @@ void Game::update(float dt, const Controls& c) {
     hero_.setAttackHeld(c.attackHeld);
     hero_.update(dt, down ? Vec3{} : c.move, !down && c.jump, world_, std::atan2(c.camForward.x, c.camForward.z));
     if (c.jump && wasGrounded && hero_.body.vel.y > 1.0f) sound(Sfx::Jump, hero_.body.pos, 0.7f);
+    updateTravel(dt);
     updateBrizna(dt);
     Move impact = hero_.takeImpact();
     if (impact != Move::None) resolveImpact(impact);
@@ -506,6 +508,7 @@ void Game::resolveImpact(Move m) {
 }
 
 void Game::hitEnemy(Enemy& e, Vec3 dir, float damage, float knock, float lift, bool heavy) {
+    if (lightAt(e.body.pos) > 0.3f) damage *= 1.5f;  // en la luz, los Grises se debilitan
     e.health -= damage;
     e.rlReward -= damage / 15.0f;
     e.hitFlash = 0.12f;
@@ -681,6 +684,7 @@ void Game::updateEnemy(Enemy& e, float dt) {
     for (int i = 0; i < d.jointCount; ++i) e.prevJoints[i] = e.joints[i];
     e.prevPos = e.body.pos;
     float slow = e.freeze > 0 ? 0.45f : 1.0f;  // congelado: todo más lento
+    if (lightAt(e.body.pos) > 0.3f) slow *= 0.8f;  // la luz les pesa
     float edt = dt * slow;
     e.stateTime += edt;
     e.hitFlash = std::max(0.0f, e.hitFlash - dt);

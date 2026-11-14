@@ -826,6 +826,9 @@ void Game::drawStory(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const View
             glowStar(glow, view, p, 0.06f, time_ * 4.0f, withAlpha(rgba(255, 255, 255), 0.8f));
         }
     }
+    // Fuente de luz señalada para viajar: un destello que la rodea.
+    if (lightTarget_ >= 0 && solid)
+        glowStar(glow, view, lightTargetPos(), 0.7f + 0.1f * std::sin(time_ * 8.0f), time_ * 2.0f, withAlpha(rgba(255, 245, 210), 0.8f));
     // Compañeros: la chispa aliada (cian) y el eco de Nora (un farolillo cálido).
     for (const Companion& m : companions_) {
         float fade = clampf(m.life / 1.0f, 0, 1);
@@ -1075,7 +1078,7 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
             uiText(ui, x0 + width - 10, y + 6, 15, value, sel ? rgba(60, 70, 110) : kUiDim, FontFace::Title, Align::Right);
         }
         skewRect(d, x - 6, h - 30, x + 700, h - 8, 6, kUiPanel);
-        uiText(ui, x, h - 28, 14, "Clic atacar · Q luz · V supernova · G forma · T compañero · C esquivar · Shift correr · R fijar · Tab inventario", kUiDim);
+        uiText(ui, x, h - 28, 14, "Clic atacar · Q luz (apunta a una luz: viajar) · V supernova · G forma · T compañero · C esquivar · Shift correr · R fijar", kUiDim);
     }
 
     // Objetivo fijado arriba a la derecha.
@@ -1180,6 +1183,18 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
         }
     }
 
+    // Fuente de luz señalada: se puede viajar hasta ella con Q.
+    if (lightTarget_ >= 0 && hero_.downTimer < 0) {
+        float sx, sy;
+        Vec3 lp = lightTargetPos();
+        if (project(view, lp, sx, sy)) {
+            float pulse = 1.0f + 0.12f * std::sin(time_ * 8.0f);
+            fillCircle(d, sx, sy, 22 * pulse, withAlpha(rgba(255, 240, 190), 0.25f), 20);
+            fillCircle(d, sx, sy, 6, rgba(255, 250, 225), 12);
+            std::snprintf(buf, sizeof(buf), "Q · viajar por la luz  %.0f m", double(length(lp - hero_.body.pos)));
+            uiText(ui, sx, sy + 26, 15, buf, rgba(255, 240, 190), FontFace::Body, Align::Center, 0.4f);
+        }
+    }
     InteractTarget it = nearbyInteract();
     if (it.kind >= 0 && hero_.downTimer < 0) {
         const char* msg = it.label.c_str();

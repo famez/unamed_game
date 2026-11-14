@@ -313,6 +313,8 @@ int main(int argc, char** argv) {
                 c.attackHeld = playing && captured && input.mouseLeft && !game.dialogueBlocking();
                 c.commandScroll = pending.scroll;
                 c.camForward = cam.forwardFlat();
+                c.aimOrigin = cam.eye();
+                c.aimDir = normalize(cam.target - cam.eye());
                 if (autoplay) {
                     c.advance = botStep % 25 == 0;  // el bot pasa los diálogos
                     // Bot: fija al enemigo más cercano, se acerca y encadena combos; de vez

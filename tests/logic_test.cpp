@@ -236,7 +236,7 @@ int main() {
         beam.camForward = {0, 0, 1};
         run(g, 0.8f, beam);
         float lit = length(flat(g.hero_.body.pos - p0));
-        CHECK(g.mp_ == l1 && lit > 11.0f, "haz dentro de la luz: gratis y recorre %.1f m", lit);
+        CHECK(g.mp_ >= l1 && lit > 11.0f, "haz dentro de la luz: gratis y recorre %.1f m", lit);
         place(g, {0, 0, -12});
         g.mp_ = 50;
         p0 = g.hero_.body.pos;
@@ -349,6 +349,60 @@ int main() {
         CHECK(g.hp_ < 100 && imp.experience() > 5 && bestAttack > 0,
               "el Rastrero aprende jugando: %d decisiones, atacar vale %.2f cuando acierta", imp.experience(), bestAttack);
         CHECK(g.bossBrain().experience() == 0, "el jefe tiene su propio cerebro (aun sin estrenar)");
+    }
+    {  // Viaje por la luz: apuntar a una farola y llegar hasta ella hecho luz
+        Game g = fresh();
+        place(g, {0, 0, -12});
+        Vec3 lamp = g.lamps_[1];  // farola en (5,5, 3,35, -5,5)
+        Controls aim;
+        aim.aimOrigin = {0, 2.5f, -16};
+        aim.aimDir = normalize(lamp - aim.aimOrigin);
+        g.update(dt, aim);
+        CHECK(g.lightTarget() >= 0 && length(g.lightTargetPos() - lamp) < 0.01f, "mirando a la farola, queda senalada");
+        float l0 = g.mp_;
+        Controls go = aim;
+        go.beam = true;
+        g.update(dt, go);
+        CHECK(g.travelingByLight() && g.mp_ == l0 - 10, "Q: viaja hecho luz (cuesta 10 fuera de la luz)");
+        run(g, 1.5f, aim);
+        float d = length(flat(g.hero_.body.pos - lamp));
+        CHECK(!g.travelingByLight() && d < 1.0f && g.hero_.body.grounded, "llega junto a la farola (a %.2f m)", d);
+        // Hasta lo alto de una torre del puente.
+        Game p = fresh();
+        p.loadLevel(LevelId::Puente);
+        place(p, {0, 0.8f, 32});
+        Vec3 top{5.4f, 8.9f, 28.5f};
+        Controls up;
+        up.aimOrigin = {-3, 3, 36};
+        up.aimDir = normalize(top - up.aimOrigin);
+        p.update(dt, up);
+        Controls upGo = up;
+        upGo.beam = true;
+        p.update(dt, upGo);
+        run(p, 2.0f);
+        CHECK(p.hero_.body.pos.y > 8.0f && p.hero_.body.grounded, "de luz en luz hasta lo alto de una torre (y=%.1f)", p.hero_.body.pos.y);
+        // Lo que tapa la luz impide viajar.
+        Game q = fresh();
+        place(q, {0, 0, -3.6f});
+        Controls hidden;
+        hidden.aimOrigin = {0, 2.0f, -7};
+        hidden.aimDir = normalize(Vec3{0, 3.0f, 0} - hidden.aimOrigin);  // el prisma de la fuente, sobre la columna
+        q.update(dt, hidden);
+        CHECK(q.lightTarget() < 0 || length(q.lightTargetPos() - Vec3{0, 3.0f, 0}) < 0.01f, "solo se senalan luces a la vista");
+        // En la luz, los Grises se debilitan y la Luz se recarga sola.
+        Game w = fresh();
+        w.nodes_[0].lit = true;
+        w.nodes_[0].litTime = 10;
+        addEnemy(w, EnemyKind::Shroom, w.nodes_[0].pos + Vec3{1, 0, 0});
+        addEnemy(w, EnemyKind::Shroom, {0, 0, 10});
+        w.hitEnemy(w.enemies_[0], {1, 0, 0}, 10, 0, 0, false);
+        w.hitEnemy(w.enemies_[1], {1, 0, 0}, 10, 0, 0, false);
+        CHECK(w.enemies_[0].health == 45 && w.enemies_[1].health == 50, "en la luz el golpe hace un 50%% mas");
+        place(w, w.nodes_[0].pos + Vec3{2, 0, 0});
+        w.mp_ = 0;
+        w.enemies_.clear();
+        run(w, 2.0f);
+        CHECK(w.mp_ > 3, "en la luz la Luz se recarga sola (%.1f en 2 s)", w.mp_);
     }
     {  // Corte cargado: mantener el clic carga; al soltar, la onda atraviesa a varios
         Game g = fresh();
