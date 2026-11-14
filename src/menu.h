@@ -7,7 +7,7 @@
 // Menú de pausa: navegable con teclado (W/S o flechas + Enter) y con el ratón.
 class PauseMenu {
 public:
-    enum class Result { None, Resume, Restart, Quit, QualityChanged };
+    enum class Result { None, Resume, Restart, TestCombat, TestLight, Quit, QualityChanged };
 
     bool open = false;
     float sensitivity = 1.0f;  // multiplicador de la sensibilidad del ratón
@@ -18,7 +18,7 @@ public:
     void draw(UiLayer& ui, int width, int height) const;
 
 private:
-    enum Item { Continue, Restart, Sensitivity, QualityItem, Quit, ItemCount };
+    enum Item { Continue, Restart, TestCombatItem, TestLightItem, Sensitivity, QualityItem, Quit, ItemCount };
 
     struct Rect {
         float x0, y0, x1, y1;

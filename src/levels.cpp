@@ -515,6 +515,7 @@ void Game::loadLevel(LevelId id) {
     trail_.clear();
     particles_.clear();
     companions_.clear();
+    islands_.clear();
     level_ = id;
     part_ = 0;
     activeEncounter_ = -1;
@@ -526,6 +527,8 @@ void Game::loadLevel(LevelId id) {
         case LevelId::Plaza: buildPlaza(); break;
         case LevelId::Mercado: buildMercado(); break;
         case LevelId::Puente: buildPuente(); break;
+        case LevelId::Prueba: buildPrueba(); break;
+        case LevelId::PruebaLuz: buildPruebaLuz(); break;
         case LevelId::Count: break;
     }
     rebuildSolids();
@@ -639,6 +642,7 @@ void Game::updateLevel(float dt) {
     for (Enemy& e : enemies_)
         if (e.alive() && e.body.pos.y < -10.0f) killEnemy(e);
 
+    updateTestMode(dt);
     if (!story_) return;
     // Combates: empiezan al entrar en su zona; las rondas siguen al vencer la anterior.
     for (size_t i = 0; i < encounters_.size(); ++i) {

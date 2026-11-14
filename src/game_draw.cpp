@@ -1156,7 +1156,7 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
         }
         // Indicador del objetivo: rombo sobre su posición o, si está fuera de la pantalla,
         // flecha en el borde hacia él.
-        if (p && hero_.downTimer < 0) {
+        if (p && hero_.downTimer < 0 && testMode_ != TestMode::Combat) {
             float sx, sy;
             Vec3 m = p->marker;
             if (p->kind == PartKind::Nodes)

@@ -28,6 +28,7 @@ set(LOGIC_SOURCES
     src/game_story.cpp
     src/levels.cpp
     src/light.cpp
+    src/test_mode.cpp
     src/brain.cpp
     src/allies.cpp
     src/story.cpp

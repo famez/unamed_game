@@ -680,6 +680,74 @@ int main() {
         CHECK(saveWav(path, a) && loadWav(path, b) && a.data == b.data, "WAV: se guarda y se lee identico");
         std::remove(path.c_str());
     }
+    {  // Modo prueba: Grises sin fin en un patio aleatorio, con vida y Luz infinitas
+        Game g;
+        g.initTest(TestMode::Combat, 7);
+        int lit = 0;
+        for (const ColorNode& n : g.nodes_) lit += n.lit;
+        CHECK(g.level() == LevelId::Prueba && !g.story_ && g.lamps_.size() >= 4 && lit >= 1,
+              "patio aleatorio: %zu farolas y %d nodos encendidos", g.lamps_.size(), lit);
+        Game same, other;
+        same.initTest(TestMode::Combat, 7);
+        other.initTest(TestMode::Combat, 8);
+        auto sig = [](const Game& x) {
+            float s = 0;
+            for (const Block& b : x.blocks_) s += b.box.min.x * 3.1f + b.box.max.z;
+            return s + float(x.blocks_.size());
+        };
+        CHECK(sig(same) == sig(g) && sig(other) != sig(g), "la misma semilla da el mismo escenario; otra, otro");
+        run(g, 6.0f);
+        CHECK(g.enemies_.size() >= 3, "aparecen Grises solos (%zu)", g.enemies_.size());
+        g.hurtHero({0, 0, 1}, 500, 2, nullptr);
+        run(g, 0.1f);
+        CHECK(g.hero_.downTimer < 0 && g.hp_ == g.maxHp_, "vida infinita: un golpe de 500 no derriba");
+        g.mp_ = 0;
+        run(g, 0.05f);
+        CHECK(g.mp_ == g.maxMp_, "Luz infinita");
+        for (int wave = 0; wave < 3; ++wave) {
+            for (Enemy& e : g.enemies_)
+                if (e.alive()) g.killEnemy(e);
+            run(g, 5.0f);
+        }
+        int alive = 0;
+        for (const Enemy& e : g.enemies_) alive += e.alive();
+        CHECK(g.kills_ >= 9 && alive >= 3, "al disiparlos vuelven más (bajas %d, vivos %d)", g.kills_, alive);
+        CHECK(g.inv_.count(ItemId::CoreAurora) > 0 && g.inv_.count(ItemId::LightLance) > 0, "con armas y núcleos para probar");
+    }
+    {  // Modo prueba de luz: islas flotantes unidas por balizas a menos de 35 m
+        Game g;
+        g.initTest(TestMode::Light, 3);
+        bool linked = true;
+        for (size_t i = 1; i < g.islands_.size(); ++i) {
+            float best = 1e9f;
+            for (size_t j = 0; j < g.islands_.size(); ++j)
+                if (j != i) best = std::min(best, length(g.islands_[i].lamp - g.islands_[j].lamp));
+            if (best > 35.0f) linked = false;
+        }
+        CHECK(!g.world_.ground && g.islands_.size() >= 10 && linked, "archipiélago de %zu islas, todas al alcance de otra",
+              g.islands_.size());
+        run(g, 0.3f);
+        // Viajar a la primera baliza de otra isla que se pueda señalar.
+        bool went = false;
+        for (size_t i = 1; i < g.islands_.size() && !went; ++i) {
+            Controls aim;
+            Vec3 chest = g.hero_.body.pos + Vec3{0, 1.0f, 0};
+            aim.aimOrigin = chest - normalize(g.islands_[i].lamp - chest) * 3.0f;
+            aim.aimDir = normalize(g.islands_[i].lamp - aim.aimOrigin);
+            g.update(dt, aim);
+            if (g.lightTarget() < 0) continue;
+            aim.beam = true;
+            run(g, 2.5f, aim);
+            went = true;
+        }
+        int visited = 0;
+        for (const auto& t : g.islands_) visited += t.visited;
+        CHECK(went && visited >= 2, "viajando por la luz se alcanza otra isla (%d visitadas)", visited);
+        Vec3 cp = g.checkpoint_;
+        g.hero_.body.pos = {cp.x + 50, -12, cp.z};
+        run(g, 0.2f);
+        CHECK(length(g.hero_.body.pos - cp) < 1.5f && g.hp_ == g.maxHp_, "al caer al vacío vuelve a la última isla");
+    }
     {  // Derrota y vuelta a empezar
         Game g = fresh();
         g.hurtHero({0, 0, 1}, 500, 2, nullptr);

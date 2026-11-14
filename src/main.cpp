@@ -121,9 +121,30 @@ int main(int argc, char** argv) {
     if (platform::msaaEnabled()) glEnable(GL_MULTISAMPLE);
     glClearColor(0.08f, 0.09f, 0.11f, 1.0f);
 
+    // --prueba [combate|luz] [semilla]: modo de prueba (vida y Luz infinitas) en un
+    // escenario aleatorio; sin semilla, una distinta cada vez.
+    TestMode testMode = TestMode::None;
+    uint32_t testSeed = uint32_t(platform::timeSeconds() * 1000.0) ^ 0x5bd1e995u;
+    for (int i = 1; i < argc; ++i)
+        if (std::strcmp(argv[i], "--prueba") == 0) {
+            testMode = TestMode::Combat;
+            if (i + 1 < argc && std::strcmp(argv[i + 1], "luz") == 0) testMode = TestMode::Light, ++i;
+            else if (i + 1 < argc && std::strcmp(argv[i + 1], "combate") == 0) ++i;
+            if (i + 1 < argc && argv[i + 1][0] != '-') testSeed = uint32_t(std::strtoul(argv[++i], nullptr, 10));
+        }
     Game game;
-    game.init(assetDir);
-    game.loadBrains(dataDir);
+    auto startGame = [&] {
+        game.saveBrains();
+        game = Game{};
+        if (testMode != TestMode::None) {
+            game.initTest(testMode, testSeed);
+            std::printf("modo prueba (%s), semilla %u\n", testMode == TestMode::Light ? "luz" : "combate", testSeed);
+        } else {
+            game.init(assetDir);
+        }
+        game.loadBrains(dataDir);
+    };
+    startGame();
     OrbitCamera cam;
     cam.target = game.hero().body.pos + Vec3{0, 1.0f, 0};
     Vec3 camVel;  // velocidad del muelle de la cámara
@@ -208,13 +229,18 @@ int main(int argc, char** argv) {
             else
                 openMenu();
         } else if (menu.open) {
-            switch (menu.update(uiInput, uw, uh)) {
+            PauseMenu::Result result = menu.update(uiInput, uw, uh);
+            switch (result) {
                 case PauseMenu::Result::Resume: closeMenu(); break;
                 case PauseMenu::Result::Restart:
-                    game.saveBrains();
-                    game = Game{};
-                    game.init(assetDir);
-                    game.loadBrains(dataDir);
+                case PauseMenu::Result::TestCombat:
+                case PauseMenu::Result::TestLight:
+                    // Las opciones de prueba generan un escenario nuevo; reiniciar repite el actual.
+                    if (result != PauseMenu::Result::Restart) {
+                        testMode = result == PauseMenu::Result::TestLight ? TestMode::Light : TestMode::Combat;
+                        testSeed = uint32_t(platform::timeSeconds() * 1000.0) ^ 0x5bd1e995u;
+                    }
+                    startGame();
                     cam = OrbitCamera{};
                     cam.target = game.hero().body.pos + Vec3{0, 1.0f, 0};
                     closeMenu();
@@ -492,8 +518,9 @@ int main(int argc, char** argv) {
             // Una pista por escenario; la del jefe mientras haya uno.
             TrackId track = game.bossAlive() ? TrackId::Jefe
                             : game.level() == LevelId::Mercado ? TrackId::Mercado
-                            : game.level() == LevelId::Puente  ? TrackId::Puente
-                                                                : TrackId::Plaza;
+                            : game.level() == LevelId::Puente || game.level() == LevelId::PruebaLuz ? TrackId::Puente
+                            : game.level() == LevelId::Prueba ? TrackId(game.testSeed() % 3)
+                                                              : TrackId::Plaza;
             audio.playTrack(track);
             audio.setMasterVolume((paused ? 0.35f : 0.8f) * masterVolume);
         }

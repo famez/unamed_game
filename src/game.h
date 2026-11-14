@@ -176,7 +176,11 @@ struct Companion {
 // encender faroles, usar algo, llegar a un sitio, salir). Al cumplirlo se abren puertas,
 // suena su escena y empieza la siguiente.
 
-enum class LevelId { Plaza, Mercado, Puente, Count };
+enum class LevelId { Plaza, Mercado, Puente, Prueba, PruebaLuz, Count };
+
+// Modos de prueba (sin historia, con vida y Luz infinitas): un escenario aleatorio con
+// Grises sin fin, o un archipiélago de islas flotantes para practicar el viaje por la luz.
+enum class TestMode { None, Combat, Light };
 
 struct Spawn {
     EnemyKind kind;
@@ -301,6 +305,10 @@ public:
     // juego empieza directamente con las oleadas (lo usan los tests).
     void init(const char* assetDir = nullptr);
     void loadLevel(LevelId id);
+    // Modo de prueba con un escenario generado a partir de `seed`.
+    void initTest(TestMode mode, uint32_t seed);
+    TestMode testMode() const { return testMode_; }
+    uint32_t testSeed() const { return testSeed_; }
     void update(float dt, const Controls& c);
 
     // Con `solid` (render con shaders) los cuerpos van ahí, `glow` recibe los efectos
@@ -379,6 +387,11 @@ private:
     void buildPlaza();
     void buildMercado();
     void buildPuente();
+    void buildPrueba();
+    void buildPruebaLuz();
+    void updateTestMode(float dt);
+    bool spawnTestEnemy();
+    void addLampPost(Vec3 base, uint32_t color);
     void addBlock(Vec3 c, Vec3 h, uint32_t col, Material m = Material::Stone);
     void addDecor(const Mat4& t, Vec3 c, Vec3 h, uint32_t col, Material m, bool sphere);
     void addRim(Vec3 c, float hx, float hz, uint32_t col);
@@ -564,4 +577,16 @@ private:
     float lastHitRange_ = 0, lastHitCos_ = 1, lastHitAge_ = 10;
     float time_ = 0;
     uint32_t rng_ = 12345;
+    // Modos de prueba.
+    TestMode testMode_ = TestMode::None;
+    uint32_t testSeed_ = 0;
+    float testArena_ = 20;       // medio lado del escenario de combate
+    float testSpawnTimer_ = 0;
+    int testBossAt_ = 30;        // bajas con las que aparece el siguiente Gris mayor
+    struct TestIsland {
+        AABB top;   // zona de la cara superior (para saber si se ha llegado)
+        Vec3 lamp;  // su baliza
+        bool visited = false;
+    };
+    std::vector<TestIsland> islands_;
 };

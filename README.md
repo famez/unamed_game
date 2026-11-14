@@ -105,6 +105,24 @@ Especiales de combate: atacar corriendo = **embestida**; atacar con la guardia =
   funciona contra ti y lo recuerda entre partidas (`~/.cache/unamed_game/ia_*.q`). El
   jefe aprende muy deprisa durante el combate y avisa cuando cambia de táctica.
 
+## Modos de prueba
+
+Sin historia, con **vida y Luz infinitas** y todas las armas y núcleos de forma en el inventario.
+Se abren desde el menú de pausa (cada vez con un escenario nuevo) o al arrancar:
+
+```bash
+./build/game --prueba                 # Grises sin fin en un patio aleatorio
+./build/game --prueba luz             # archipiélago de islas flotantes para el viaje por la luz
+./build/game --prueba combate 1234    # con semilla: la misma semilla da el mismo escenario
+```
+
+- **Grises sin fin**: patio cerrado por edificios, con pilares, plataformas, árboles, cajas, farolas
+  y nodos ya encendidos, todo colocado al azar. Siempre hay Grises (de 3 a 9 a la vez, más cuantos más
+  disipas) y cada 30 bajas aparece un Gris mayor.
+- **Viaje por la luz**: islas sobre el vacío, cada una con su baliza a menos de 35 m de otra y
+  agujas con una luz arriba. El objetivo cuenta las islas alcanzadas y señala la baliza más cercana
+  que falta; al caer vuelves a la última isla pisada.
+
 ## Modo debug (F12)
 
 No usa el render con shaders: se dibuja en alambre con un único buffer de líneas
