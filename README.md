@@ -9,7 +9,7 @@ diálogo: la historia se cuenta con escenas e imágenes (ver `docs/historia.md`)
 ## Historia
 
 La biblia está en `docs/historia.md`. El capítulo 1, *La plaza parada*, se cuenta casi sin
-palabras (`assets/story/capitulo1.txt`, formato en `src/story.h` y `src/cinema.cpp`):
+palabras (`assets/story/capitulo1.txt`, formato en `src/game/story.h` y `src/game/cinema.cpp`):
 
 - **Planos de cámara** (`!plano`) con bandas negras, encadenados con `!pausa`.
 - **Ecos**: siluetas de luz que repiten un recuerdo (una mujer arreglando una farola mientras
@@ -25,7 +25,7 @@ Para escribir escenas: `./build/game --escena eco_alba` salta la intro y la repr
 
 ## Música y sonido
 
-Todo está sintetizado por código (`src/synth.cpp`), sin ficheros de audio en el
+Todo está sintetizado por código (`src/audio/synth.cpp`), sin ficheros de audio en el
 repositorio. Hay una pista por escenario y otra de jefe (cada una con su tonalidad, modo, tempo e
 instrumentos, y melodías generadas por frases a partir de la armonía); cada pista son cuatro capas
 sincronizadas cuyo volumen decide el juego: el **colchón** siempre, la **melodía** cuando

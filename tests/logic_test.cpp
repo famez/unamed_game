@@ -2,9 +2,9 @@
 // simulan pasos fijos de 1/60 s (determinista) y se comprueba el estado interno.
 // Se compila con AddressSanitizer + UBSan. Ejecutar: ctest --test-dir build  (o build/logic_test)
 #define private public  // solo para el test: acceso al estado interno
-#include "game.h"
+#include "game/game.h"
 #undef private
-#include "synth.h"
+#include "audio/synth.h"
 #include <cstdio>
 
 const float dt = 1.0f / 60;

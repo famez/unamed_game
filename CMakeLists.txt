@@ -19,39 +19,40 @@ find_package(Threads REQUIRED)  # el audio mezcla en su propio hilo
 
 # Lógica pura (sin GL ni X11): la comparten el juego y los tests.
 set(LOGIC_SOURCES
-    src/skeleton.cpp
-    src/character.cpp
-    src/physics.cpp
-    src/items.cpp
-    src/enemy.cpp
-    src/game.cpp
-    src/game_story.cpp
-    src/levels.cpp
-    src/light.cpp
-    src/test_mode.cpp
-    src/shadow.cpp
-    src/cinema.cpp
-    src/brain.cpp
-    src/allies.cpp
-    src/story.cpp
-    src/synth.cpp
+    src/actors/skeleton.cpp
+    src/actors/character.cpp
+    src/actors/physics.cpp
+    src/game/items.cpp
+    src/actors/enemy.cpp
+    src/game/game.cpp
+    src/game/game_story.cpp
+    src/game/levels.cpp
+    src/game/light.cpp
+    src/game/test_mode.cpp
+    src/game/shadow.cpp
+    src/game/cinema.cpp
+    src/actors/brain.cpp
+    src/game/allies.cpp
+    src/game/story.cpp
+    src/audio/synth.cpp
 )
 
 add_executable(game
     ${LOGIC_SOURCES}
     src/main.cpp
-    src/platform_x11.cpp
-    src/debug_draw.cpp
-    src/game_draw.cpp
-    src/text.cpp
-    src/menu.cpp
-    src/inventory_menu.cpp
-    src/models.cpp
-    src/audio.cpp
-    src/renderer.cpp
+    src/core/platform_x11.cpp
+    src/render/debug_draw.cpp
+    src/game/game_draw.cpp
+    src/render/text.cpp
+    src/ui/menu.cpp
+    src/ui/inventory_menu.cpp
+    src/render/models.cpp
+    src/audio/audio.cpp
+    src/render/renderer.cpp
 )
 
 # ${CMAKE_DL_LIBS}: dlopen de PulseAudio en tiempo de ejecución (sin cabeceras al compilar).
+target_include_directories(game PRIVATE src)
 target_link_libraries(game PRIVATE OpenGL::OpenGL OpenGL::GLX X11::X11 X11::Xi Threads::Threads ${CMAKE_DL_LIBS})
 
 target_compile_options(game PRIVATE
