@@ -229,16 +229,17 @@ bool init(const WindowDesc& desc) {
         return false;
     }
 
-    if (desc.vsync) {
+    {  // sin vsync se pide intervalo 0 explícitamente (el driver puede tener 1 por defecto)
         const char* exts = glXQueryExtensionsString(g.dpy, screen);
+        int interval = desc.vsync ? 1 : 0;
         if (hasExtension(exts, "GLX_EXT_swap_control")) {
             auto fn = (PFNGLXSWAPINTERVALEXTPROC)glXGetProcAddressARB(
                 (const GLubyte*)"glXSwapIntervalEXT");
-            if (fn) { fn(g.dpy, g.win, 1); g.vsync = true; }
+            if (fn) { fn(g.dpy, g.win, interval); g.vsync = desc.vsync; }
         } else if (hasExtension(exts, "GLX_MESA_swap_control")) {
             auto fn = (PFNGLXSWAPINTERVALMESAPROC)glXGetProcAddressARB(
                 (const GLubyte*)"glXSwapIntervalMESA");
-            if (fn && fn(1) == 0) g.vsync = true;
+            if (fn && fn(unsigned(interval)) == 0) g.vsync = desc.vsync;
         }
     }
 

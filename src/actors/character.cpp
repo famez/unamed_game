@@ -241,6 +241,15 @@ float stepSpeed(const MoveDef& d, float u, float duration) {
 
 void Character::reset() { *this = Character{}; }
 
+void Character::teleport(Vec3 pos, float newYaw) {
+    body.pos = prevPos_ = pos;
+    body.vel = {};
+    knock_ = dashVel_ = moveVel_ = {};
+    yaw = prevYaw_ = newYaw;
+    speed = 0;
+    secondaryInit_ = false;
+}
+
 bool Character::guarding() const {
     return guardHeld_ && body.grounded && move_ == Move::None && !rolling() && !hurt() && downTimer < 0;
 }

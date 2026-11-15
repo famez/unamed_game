@@ -71,6 +71,8 @@ public:
     bool sprinting() const { return sprintHeld_ && body.grounded && speed > kRunSpeed + 0.5f; }
     float charge() const { return chargeTime_ > 0.15f ? clampf((chargeTime_ - 0.15f) / kChargeTime, 0, 1) : 0.0f; }
     void reset();
+    // Lo pone en otro sitio de golpe (sin interpolar desde donde estaba).
+    void teleport(Vec3 pos, float newYaw);
 
     // Siguiente golpe del combo hacia `faceYaw`. `dash` (m) acerca al personaje al objetivo
     // al empezar el golpe. Si llega durante otro golpe queda en cola y se encadena.

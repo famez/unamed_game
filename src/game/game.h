@@ -407,6 +407,13 @@ public:
     bool sandbox() const { return testMode_ != TestMode::None || freePlay_; }
     TestMode testMode() const { return testMode_; }
     void setTestCheats(bool hp, bool power);
+    // Para los guiones de grabación (--vitrina): colocar al protagonista, quitar o poner Grises
+    // y parar los que aparecen solos en el patio.
+    void devPlace(Vec3 pos, float yaw);
+    void devClearEnemies();
+    void devSpawn(EnemyKind kind, Vec3 pos);
+    void devNoSpawns(bool on) { devNoSpawns_ = on; }
+    bool devFreeSpot(Vec3& p, float radius) const;  // busca suelo libre cerca de p
     bool infiniteHp() const { return infHp_; }
     bool infinitePower() const { return infPower_; }
     uint32_t testSeed() const { return testSeed_; }
@@ -467,6 +474,7 @@ public:
     float shadowAt(Vec3 p) const;
     bool diving() const { return diving_; }
     void addPortal(Vec3 pos) { portals_.push_back({pos}); }
+    const std::vector<Portal>& portals() const { return portals_; }
     Vec3 hostLight() const { return hostPos_; }
     int lightTarget() const { return lightTarget_; }
     Vec3 lightTargetPos() const { return lightTarget_ >= 0 ? lightPoints_[size_t(lightTarget_)].pos : Vec3{}; }
@@ -782,6 +790,7 @@ private:
     uint32_t testSeed_ = 0;
     float testArena_ = 20;       // medio lado del escenario de combate
     float testSpawnTimer_ = 0;
+    bool devNoSpawns_ = false;
     int testBossAt_ = 30;        // bajas con las que aparece el siguiente Gris mayor
     // Trucos sin historia (F1, F2 o el menú de pausa): por defecto solo la vida es infinita,
     // para poder probar la gestión del Poder.

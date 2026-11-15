@@ -3,6 +3,7 @@
 #include "game/game.h"
 #include "core/gl.h"
 #include "ui/inventory_menu.h"
+#include "dev/showcase.h"
 #include "ui/level_select.h"
 #include "ui/menu.h"
 #include "render/models.h"
@@ -103,6 +104,8 @@ const char kHelp[] =
     "  --demo                        el bot enseña técnicas, formas y armas de luz y de sombra\n"
     "  --retrato | --cuerpo          cámara frente a la cara o al cuerpo del protagonista\n"
     "  --camyaw RADIANES             orientación inicial de la cámara\n"
+    "  --vitrina                     guion que enseña ataques, técnicas, formas y mecánicas (en el patio)\n"
+    "  --video FICHERO.mp4 [SEG]     graba a velocidad real (30 fps, con ffmpeg); sale a los SEG segundos\n"
     "  --screenshot FICHERO SEG [N]  guarda N fotogramas (.ppm) desde SEG segundos y sale\n"
     "  -h, --help                    esta ayuda\n";
 
@@ -125,6 +128,8 @@ int main(int argc, char** argv) {
             quality = std::strcmp(argv[i + 1], "baja") == 0   ? Quality::Low
                       : std::strcmp(argv[i + 1], "alta") == 0 ? Quality::High
                                                               : Quality::Medium;
+    for (int i = 1; i < argc; ++i)  // grabando no se espera al monitor (con la pantalla apagada se para)
+        if (std::strcmp(argv[i], "--video") == 0) desc.vsync = false;
 #ifdef GAME_DEBUG_GL
     desc.debugContext = true;
 #endif
@@ -181,6 +186,12 @@ int main(int argc, char** argv) {
             if (i + 1 < argc && std::strcmp(argv[i + 1], "combate") == 0) ++i;  // (nombre antiguo)
             if (i + 1 < argc && argv[i + 1][0] != '-') testSeed = uint32_t(std::strtoul(argv[++i], nullptr, 10));
         }
+    bool showcase = false;  // --vitrina: el guion de grabación (en el patio de combate)
+    for (int i = 1; i < argc; ++i)
+        if (std::strcmp(argv[i], "--vitrina") == 0) {
+            showcase = true;
+            if (testMode == TestMode::None) testMode = TestMode::Combat, testSeed = 7;
+        }
     // Nivel: el del selector, o el que se pida al arrancar (--nivel, --prueba, --historia).
     bool story = false, levelGiven = testMode != TestMode::None;
     LevelId freeLevel = LevelId::Plaza;
@@ -236,6 +247,14 @@ int main(int argc, char** argv) {
     const char* shotPath = nullptr;
     double shotTime = 0;
     int shotCount = 1, shotIndex = 0;
+    // --video: cada fotograma avanza 1/30 s de juego exacto y se manda a ffmpeg, así el vídeo
+    // va a velocidad real aunque grabar sea más lento que jugar.
+    const char* videoPath = nullptr;
+    double videoSeconds = 0;
+    FILE* video = nullptr;
+    int videoFrames = 0, videoW = 0, videoH = 0;
+    std::vector<unsigned char> videoPx;
+    Showcase vitrina;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--debug") == 0) debugView = true;
         if (std::strcmp(argv[i], "--autoplay") == 0) autoplay = true;
@@ -244,6 +263,11 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--giros") == 0) autoplay = turnsBot = true;
         if (std::strcmp(argv[i], "--cambios") == 0) autoplay = swapBot = true;
         if (std::strcmp(argv[i], "--demo") == 0) autoplay = demoBot = true;
+        if (std::strcmp(argv[i], "--vitrina") == 0) autoplay = true;
+        if (std::strcmp(argv[i], "--video") == 0 && i + 1 < argc) {
+            videoPath = argv[++i];
+            if (i + 1 < argc && argv[i + 1][0] != '-') videoSeconds = std::atof(argv[++i]);
+        }
         if (std::strcmp(argv[i], "--camyaw") == 0 && i + 1 < argc) camYaw0 = float(std::atof(argv[++i]));
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 2 < argc) {
             shotPath = argv[i + 1];
@@ -284,6 +308,7 @@ int main(int argc, char** argv) {
     while (!quit) {
         double frameStart = platform::timeSeconds();
         double frameDt = frameStart - prevTime;
+        if (videoPath) frameDt = 2 * kFixedDt + 1e-9;  // grabando: 30 fps de juego por fotograma
         prevTime = frameStart;
         int w = platform::width(), h = platform::height();
 
@@ -498,8 +523,12 @@ int main(int argc, char** argv) {
                         d.swapMode = t == 260;
                         c = d;
                     }
+                    if (showcase) {
+                        c = vitrina.step(game, cam.yaw, c);
+                        if (vitrina.done()) quit = true;
+                    }
                     // En los modos de prueba también cambia a sombra y lanza agujeros negros.
-                    if (turnsBot || swapBot || demoBot) {
+                    if (turnsBot || swapBot || demoBot || showcase) {
                     } else if (game.testMode() != TestMode::None) {
                         c.swapMode = botStep == 30;
                         if (botStep % 240 == 120) c.command = 4;  // la técnica grande de cada mitad
@@ -520,6 +549,11 @@ int main(int argc, char** argv) {
         // se adelanta un poco hacia donde corre. Con un objetivo fijado gira sola para
         // encuadrar a los dos.
         Vec3 heroPos = game.heroRenderPos(alpha);
+        if (vitrina.takeCut()) {  // el guion ha cambiado de sitio al protagonista: corte de plano
+            cam.target = heroPos + Vec3{0, 1.1f, 0};
+            camVel = {};
+            camDist = cam.distance;
+        }
         Vec3 heroVel = game.hero().body.vel;
         Vec3 desired = heroPos + Vec3{0, 1.1f, 0} + flat(heroVel) * 0.12f;
         Vec3 lockPos;
@@ -617,6 +651,19 @@ int main(int argc, char** argv) {
         if (menu.open) menu.draw(overlay, uw, uh);
         if (selector.open) selector.draw(overlay, uw, uh);
         if (inventory.open) inventory.draw(overlay, game, uw, uh);
+        if (showcase && vitrina.captionAlpha() > 0) {  // rótulo del acto
+            float a = vitrina.captionAlpha();
+            TextStyle st;
+            st.align = Align::Center;
+            st.glow = 0.5f;
+            float y = float(uh) * 0.16f;
+            overlay.shapes.quad({0, y - 14, 0}, {float(uw), y - 14, 0}, {float(uw), y + 86, 0}, {0, y + 86, 0},
+                                rgba(0, 0, 0, uint8_t(150 * a)));
+            TextStyle tt = st;
+            tt.face = FontFace::Title;
+            drawText(overlay, float(uw) * 0.5f, y, 40, vitrina.title(), rgba(240, 236, 226, uint8_t(255 * a)), tt);
+            drawText(overlay, float(uw) * 0.5f, y + 50, 20, vitrina.subtitle(), rgba(200, 196, 190, uint8_t(255 * a)), st);
+        }
         size_t verts = dd.vertexCount() + glow.vertexCount() + hud.vertexCount() + overlay.vertexCount();
         size_t instances = renderer.instanceCount();
         double cpuTime = platform::timeSeconds() - frameStart;
@@ -660,8 +707,27 @@ int main(int argc, char** argv) {
             }
             quit = ++shotIndex >= shotCount;
         }
+        if (videoPath) {
+            if (!video) {
+                videoW = w & ~1, videoH = h & ~1;
+                char cmd[1024];
+                std::snprintf(cmd, sizeof(cmd),
+                              "ffmpeg -loglevel error -y -f rawvideo -pix_fmt rgb24 -s %dx%d -r 30 -i - -vf vflip "
+                              "-c:v libx264 -pix_fmt yuv420p -crf 22 -preset fast '%s'",
+                              videoW, videoH, videoPath);
+                video = popen(cmd, "w");
+                videoPx.resize(size_t(videoW) * size_t(videoH) * 3);
+            }
+            if (video) {
+                glPixelStorei(GL_PACK_ALIGNMENT, 1);
+                glReadPixels(0, 0, videoW, videoH, GL_RGB, GL_UNSIGNED_BYTE, videoPx.data());
+                std::fwrite(videoPx.data(), 1, videoPx.size(), video);
+                if (videoSeconds > 0 && ++videoFrames >= int(videoSeconds * 30)) quit = true;
+            }
+        }
         platform::swapBuffers();
-        if (!platform::vsyncEnabled())  // sin vsync, limitamos a ~60 fps para no quemar CPU/GPU
+        if (videoPath) {
+        } else if (!platform::vsyncEnabled())  // sin vsync, limitamos a ~60 fps para no quemar CPU/GPU
             platform::sleepSeconds(kFixedDt - (platform::timeSeconds() - frameStart));
 
         // Sonido: los efectos que ha emitido el juego, con panorámica y distancia desde la
@@ -721,6 +787,7 @@ int main(int argc, char** argv) {
     }
 
     game.saveBrains();
+    if (video) pclose(video);  // ffmpeg termina de escribir el vídeo
     audio.shutdown();
     unloadFonts();
     overlay.shutdown();

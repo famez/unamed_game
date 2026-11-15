@@ -198,9 +198,51 @@ void Game::updateTestMode(float dt) {
     for (const Enemy& e : enemies_) alive += e.alive();
     int want = std::min(9, 3 + kills_ / 8);
     testSpawnTimer_ -= dt;
-    if (alive < want && testSpawnTimer_ <= 0 && hero_.downTimer < 0 && spawnTestEnemy()) testSpawnTimer_ = 0.8f;
+    if (!devNoSpawns_ && alive < want && testSpawnTimer_ <= 0 && hero_.downTimer < 0 && spawnTestEnemy()) testSpawnTimer_ = 0.8f;
     if (!parts_.empty()) {
         auto mark = [](bool on) { return on ? "infinita" : "no"; };
         parts_[0].objective = "Grises: " + std::to_string(kills_) + " · F1 vida " + mark(infHp_) + " · F2 Poder " + mark(infPower_);
     }
+}
+
+// --- Ayudas para los guiones de grabación -----------------------------------------------------
+
+void Game::devPlace(Vec3 pos, float yaw) {
+    hero_.teleport(pos, yaw);
+    lock_ = -1;
+}
+
+void Game::devClearEnemies() {
+    enemies_.clear();
+    projectiles_.clear();
+    lock_ = -1;
+}
+
+void Game::devSpawn(EnemyKind kind, Vec3 pos) {
+    Vec3 p = pos;
+    if (devFreeSpot(p, 0.8f)) spawnEnemy({kind, p});
+}
+
+bool Game::devFreeSpot(Vec3& p, float radius) const {
+    auto free = [&](Vec3 q) {
+        if (testMode_ != TestMode::None && (std::fabs(q.x) > testArena_ - 1.5f || std::fabs(q.z) > testArena_ - 1.5f))
+            return false;
+        for (const AABB& s : world_.solids)
+            if (q.x > s.min.x - radius && q.x < s.max.x + radius && q.z > s.min.z - radius && q.z < s.max.z + radius &&
+                s.max.y > 0.3f)
+                return false;
+        return true;
+    };
+    for (int ring = 0; ring < 30; ++ring)
+        for (int k = 0; k < 12; ++k) {
+            float a = float(k) / 12.0f * 2.0f * kPi, d = 0.5f * float(ring);
+            Vec3 q = p + Vec3{std::cos(a) * d, 0, std::sin(a) * d};
+            q.y = 0;
+            if (free(q)) {
+                p = q;
+                return true;
+            }
+            if (ring == 0) break;
+        }
+    return false;
 }
