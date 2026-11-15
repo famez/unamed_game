@@ -219,7 +219,9 @@ void InventoryMenu::draw(UiLayer& ui, const Game& game, int width, int height) c
         }
         drawText(ui, r.x0 + 44, r.y0 + 3, 20, def.name, tc);
         if (def.kind == ItemKind::Weapon) {
-            if (inv.weapon == id) drawText(ui, r.x1 - 14, r.y0 + 6, 16, "equipado", rgba(60, 200, 130), right);
+            if (inv.weapon == id || inv.shadowWeapon == id)
+                drawText(ui, r.x1 - 14, r.y0 + 6, 16, itemDef(id).weapon.shadow ? "equipado · sombra" : "equipado · luz",
+                         rgba(60, 200, 130), right);
         } else {
             std::snprintf(buf, sizeof(buf), "×%d", inv.count(id));
             drawText(ui, r.x1 - 14, r.y0 + 4, 19, buf, tc, right);
@@ -259,7 +261,8 @@ void InventoryMenu::draw(UiLayer& ui, const Game& game, int width, int height) c
             drawText(ui, dx + 20, y + 8, 16, "Enter · fabricar", amber);
         } else if (def.kind == ItemKind::Weapon) {
             const WeaponStats& w = def.weapon;
-            const WeaponStats& cur = inv.weaponStats();
+            // Se compara con el arma de la misma mitad (luz o sombra).
+            const WeaponStats& cur = itemDef(w.shadow ? inv.shadowWeapon : inv.weapon).weapon;
             auto stat = [&](const char* name, float v, float now) {
                 drawText(ui, dx + 20, y, 19, name, light);
                 std::snprintf(buf, sizeof(buf), "%.1f", double(v));
@@ -271,7 +274,7 @@ void InventoryMenu::draw(UiLayer& ui, const Game& game, int width, int height) c
             stat("Magia", w.magic, cur.magic);
             stat("Combo", float(w.comboHits + 1), float(cur.comboHits + 1));
             stat("Alcance", w.reach, cur.reach);
-            drawText(ui, dx + 20, y + 8, 16, "Enter · equipar", amber);
+            drawText(ui, dx + 20, y + 8, 16, w.shadow ? "Enter · equipar (modo sombra)" : "Enter · equipar (modo luz)", amber);
         } else if (def.kind == ItemKind::Consumable) {
             drawText(ui, dx + 20, y, 16, "Enter · usar     4 / 5 / 6 · poner en atajo", amber);
         }

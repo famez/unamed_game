@@ -41,6 +41,8 @@ void Game::init(const char* assetDir) {
         playScene("inicio");
     }
     inv_.add(ItemId::WoodenSword);
+    inv_.add(ItemId::ShadowHammer);
+    inv_.shadowWeapon = ItemId::ShadowHammer;
     inv_.add(ItemId::Potion, 3);
     inv_.add(ItemId::Ether, 1);
     applyWeapon();
@@ -55,9 +57,10 @@ void Game::applyWeapon() {
     hero_.speedScale = formSpeed();
     hero_.gravityScale = form_ == Form::Echo ? 0.35f : 1.0f;
     hero_.infiniteJumps = form_ == Form::Echo;
-    hero_.moveSet = w.style == WeaponStyle::Lance   ? MoveSet::Lance
-                    : w.style == WeaponStyle::Fists ? MoveSet::Fists
-                                                    : MoveSet::Blade;
+    hero_.moveSet = w.style == WeaponStyle::Lance                                 ? MoveSet::Lance
+                    : w.style == WeaponStyle::Fists || w.style == WeaponStyle::Claws ? MoveSet::Fists
+                    : w.style == WeaponStyle::Hammer                                ? MoveSet::Hammer
+                                                                                    : MoveSet::Blade;
 }
 
 // --- Bucle principal ---------------------------------------------------------------------

@@ -33,6 +33,9 @@ const HitParams kHits[int(Move::Count)] = {
     {0.6f,-0.4f,  0.3f,  1.5f, 0.3f, false},  // Punch
     {0.6f,-0.4f,  0.3f,  1.5f, 0.3f, false},  // PunchL
     {2.0f, 0.0f,  0.2f,  4.0f, 7.0f, true},   // Uppercut: gancho final
+    {1.4f, 0.2f,  0.3f,  5.0f, 1.0f, true},   // Smash: mazazo de arriba abajo
+    {1.1f, 0.4f, -0.3f,  7.0f, 1.5f, false},  // Sweep: barrido en media vuelta
+    {2.6f, 1.6f, -1.0f,  9.0f, 6.0f, true},   // Quake: salto y martillazo que agrieta el suelo
 };
 const SpellDef kSpells[int(Spell::Count)] = {
     {"Lanza de luz", 20, rgba(255, 230, 150)},
@@ -286,7 +289,8 @@ void Game::resolveImpact(Move m) {
         ++hits;
     }
     // Silbido del arma (según su forma) y golpe si ha alcanzado algo.
-    Sfx swing = m == Move::Finisher ? Sfx::Hammer : (m == Move::Slash3 || m == Move::AirFinisher) ? Sfx::Whip : Sfx::Slash;
+    bool heavyHead = m == Move::Finisher || m == Move::Smash || m == Move::Quake;
+    Sfx swing = heavyHead ? Sfx::Hammer : (m == Move::Slash3 || m == Move::AirFinisher) ? Sfx::Whip : Sfx::Slash;
     sound(swing, origin, 0.8f, 0.95f + 0.1f * random01());
     if (hits > 0) sound(isFinisher(m) ? Sfx::HitHeavy : Sfx::Hit, origin + fwd, 1.0f, 0.9f + 0.2f * random01());
     if (hits > 0) {
@@ -319,6 +323,26 @@ void Game::resolveImpact(Move m) {
         shake_ = std::max(shake_, 0.25f);
         spawnRing(origin + Vec3{0, 0.05f, 0}, range, 0.45f, w.trail);
         spawnSparks(origin + fwd * 1.2f, {0, 1, 0}, 16, w.trail, 5.0f);
+    }
+    if (m == Move::Smash) {  // el mazo toca el suelo: polvo oscuro y un anillo pequeño delante
+        Vec3 at = origin + fwd * 1.3f;
+        at.y = groundHeight(at + Vec3{0, 1, 0}) + 0.05f;
+        spawnRing(at, 1.4f, 0.3f, w.trail);
+        spawnSparks(at, {0, 1, 0}, 10, rgba(40, 24, 60), 3.0f, false);
+        shake_ = std::max(shake_, 0.18f);
+    }
+    if (m == Move::Quake) {  // grietas de sombra alrededor y todos por los aires
+        shake_ = std::max(shake_, 0.55f);
+        hitStop_ = std::max(hitStop_, 0.08f);
+        Vec3 at{origin.x, groundHeight(origin + Vec3{0, 1, 0}) + 0.05f, origin.z};
+        spawnRing(at, range, 0.55f, w.trail);
+        spawnRing(at, range * 0.6f, 0.4f, rgba(30, 16, 48));
+        for (int i = 0; i < 8; ++i) {
+            float a = float(i) * kPi * 0.25f + random01() * 0.3f;
+            Vec3 d{std::cos(a), 0, std::sin(a)};
+            spawnSparks(at + d * randRange(0.8f, range), {0, 1, 0}, 4, i % 2 ? w.trail : rgba(30, 16, 48), 5.0f, false);
+        }
+        sound(Sfx::FireBoom, at, 0.8f, 0.6f);
     }
 }
 

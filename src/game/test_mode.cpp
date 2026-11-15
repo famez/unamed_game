@@ -29,7 +29,9 @@ void Game::initTest(TestMode mode, uint32_t seed) {
     rng_ = seed * 2654435761u + 0x9E3779B9u;
     loadLevel(LevelId::Prueba);
     // Todo a mano para probar: armas, núcleos de las formas y el farolillo de Nora.
-    for (ItemId w : {ItemId::StarStaff, ItemId::AuroraBlade, ItemId::LightLance, ItemId::LightFists}) inv_.add(w);
+    for (ItemId w : {ItemId::StarStaff, ItemId::AuroraBlade, ItemId::LightLance, ItemId::LightFists, ItemId::ShadowClaws,
+                     ItemId::EclipseScythe})
+        inv_.add(w);
     for (ItemId c : {ItemId::CoreAurora, ItemId::CoreColossus, ItemId::CoreEcho}) inv_.add(c, 99);
     inv_.add(ItemId::NoraLantern);
     inv_.add(ItemId::Potion, 9);

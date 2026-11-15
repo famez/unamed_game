@@ -31,6 +31,11 @@ WeaponStats sword(float power, int combo, float reach, float speed, float length
     return w;
 }
 
+WeaponStats shadowWeapon(WeaponStats w) {
+    w.shadow = true;
+    return w;
+}
+
 // clang-format off
 const ItemDef kItems[int(ItemId::Count)] = {
     {"Célula vital",     "Recupera 40 PV.",                          ItemKind::Consumable, rgb(90, 230, 120), 40, 0, {}},
@@ -41,8 +46,8 @@ const ItemDef kItems[int(ItemId::Count)] = {
     {"Esquirla de domo", "Pesa más de lo que parece. Está fría.",    ItemKind::Material,   rgb(255, 200, 60), 0, 0, {}},
     {"Polvo de eco",     "Al tocarlo se oye un susurro lejano.",     ItemKind::Material,   rgb(200, 160, 255), 0, 0, {}},
     {"Prisma ígneo",     "Una gema tibia. Late como un corazón.",    ItemKind::Material,   rgb(255, 110, 60), 0, 0, {}},
-    {"Hoja gastada",     "De alguien que ya no la necesita. Combo de 4 golpes.", ItemKind::Weapon, rgb(160, 150, 136), 0, 0,
-        weapon(10, 4, 3, 1.9f, 1.0f, 0.80f, rgb(118, 120, 126), rgb(70, 60, 52), rgb(255, 214, 160), WeaponStyle::Sword)},
+    {"Espada de luz",    "Luz. Una hoja de luz sólida. Combo de 4 golpes.", ItemKind::Weapon, rgb(255, 226, 160), 0, 0,
+        weapon(10, 4, 3, 1.9f, 1.0f, 0.82f, rgb(236, 232, 220), rgb(170, 130, 60), rgb(255, 214, 140), WeaponStyle::Sword)},
     {"Prisma estelar",   "Magia fuerte. Combo rápido de 5.",         ItemKind::Weapon,     rgb(170, 120, 255), 0, 0,
         weapon(7, 12, 4, 1.8f, 1.2f, 0.95f, rgb(236, 230, 252), rgb(255, 225, 90), rgb(170, 120, 255), WeaponStyle::Staff)},
     {"Prisma aurora",    "Golpes muy fuertes y de largo alcance.",   ItemKind::Weapon,     rgb(255, 150, 200), 0, 0,
@@ -57,10 +62,18 @@ const ItemDef kItems[int(ItemId::Count)] = {
         sword(17, 4, 2.1f, 1.15f, 0.95f, 0.036f, 0.14f, rgb(206, 196, 200), rgb(70, 40, 52), rgb(255, 120, 90))},
     {"Espada del vigía", "Larga y pesada: barre a los que rodean.", ItemKind::Weapon, rgb(170, 190, 220), 0, 0,
         sword(22, 3, 2.5f, 0.88f, 1.18f, 0.05f, 0.0f, rgb(178, 186, 200), rgb(40, 44, 58), rgb(170, 210, 255))},
-    {"Colmillo de sombra", "Corta y negra. Cinco tajos seguidos sin respirar.", ItemKind::Weapon, rgb(150, 90, 230), 0, 0,
-        sword(18, 5, 1.8f, 1.4f, 0.7f, 0.034f, 0.1f, rgb(46, 40, 60), rgb(30, 26, 36), rgb(160, 90, 255))},
+    {"Colmillo de sombra", "Sombra. Corta y negra: cinco tajos seguidos sin respirar.", ItemKind::Weapon, rgb(150, 90, 230), 0, 0,
+        shadowWeapon(sword(18, 5, 1.8f, 1.4f, 0.7f, 0.034f, 0.1f, rgb(46, 40, 60), rgb(30, 26, 36), rgb(160, 90, 255)))},
     {"La hora quieta",   "Mitad luz, mitad sombra. Pesa lo que pesa un instante.", ItemKind::Weapon, rgb(255, 240, 200), 0, 0,
         sword(28, 4, 2.4f, 1.1f, 1.08f, 0.046f, 0.06f, rgb(236, 232, 222), rgb(24, 22, 30), rgb(255, 246, 220))},
+    {"Mazo de sombra",   "Sombra. Lento y brutal: mazazo, barrido y un salto que agrieta el suelo.", ItemKind::Weapon, rgb(130, 70, 220), 0, 0,
+        shadowWeapon(weapon(15, 4, 2, 2.2f, 0.85f, 0.62f, rgb(40, 34, 52), rgb(70, 52, 40), rgb(150, 80, 255), WeaponStyle::Hammer))},
+    {"Garras del vacío", "Sombra. Tres cuchillas en cada mano. Combo de 6, muy rápido.", ItemKind::Weapon, rgb(170, 100, 255), 0, 0,
+        shadowWeapon(weapon(8, 5, 5, 1.6f, 1.6f, 0.2f, rgb(30, 26, 40), rgb(24, 20, 30), rgb(180, 110, 255), WeaponStyle::Claws))},
+    {"Guadaña del eclipse", "Sombra. Largo alcance; los barridos alcanzan a los que rodean.", ItemKind::Weapon, rgb(120, 60, 200), 0, 0,
+        shadowWeapon(weapon(16, 7, 3, 2.7f, 0.95f, 1.3f, rgb(54, 46, 66), rgb(40, 30, 30), rgb(140, 70, 255), WeaponStyle::Scythe))},
+    {"Martillo del abismo", "Sombra. Una cabeza de piedra negra que pesa como una noche entera.", ItemKind::Weapon, rgb(90, 40, 170), 0, 0,
+        shadowWeapon(weapon(26, 6, 2, 2.4f, 0.75f, 0.72f, rgb(24, 20, 30), rgb(60, 40, 30), rgb(120, 50, 255), WeaponStyle::Hammer))},
     {"Afilador de luz",  "Fuerza +2 permanente para cualquier prisma (máximo +6).", ItemKind::Upgrade, rgb(255, 255, 255), 0, 0, {}},
     {"Núcleo Aurora",    "G: Forma Aurora 25 s. Todo más rápido y más fuerte.", ItemKind::Core, rgb(255, 210, 90), 0, 0, {}},
     {"Núcleo Coloso",    "G: Forma Coloso 25 s. Golpes enormes con onda; nada te frena.", ItemKind::Core, rgb(255, 140, 60), 0, 0, {}},
@@ -85,6 +98,10 @@ const Recipe kRecipes[] = {
     {ItemId::DuskBlade, 1, 6, {P{ItemId::ShinyShard, 4}, P{ItemId::WingDust, 3}}, 2},
     {ItemId::WatchSword, 1, 9, {P{ItemId::GoldSpore, 5}, P{ItemId::WingDust, 2}, P{ItemId::ShinyShard, 2}}, 3},
     {ItemId::ShadowFang, 1, 12, {P{ItemId::WingDust, 6}, P{ItemId::GoldSpore, 2}}, 2},
+    // Armas de la sombra.
+    {ItemId::ShadowClaws, 1, 3, {P{ItemId::WingDust, 3}, P{ItemId::ShinyShard, 1}}, 2},
+    {ItemId::EclipseScythe, 1, 6, {P{ItemId::WingDust, 4}, P{ItemId::GoldSpore, 3}}, 2},
+    {ItemId::AbyssHammer, 1, 10, {P{ItemId::GoldSpore, 6}, P{ItemId::WingDust, 4}}, 2},
     {ItemId::StillHour, 1, 16, {P{ItemId::BlazeGem, 1}, P{ItemId::ShinyShard, 6}, P{ItemId::WingDust, 6}, P{ItemId::GoldSpore, 4}}, 4},
 };
 // clang-format on

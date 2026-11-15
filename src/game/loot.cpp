@@ -178,7 +178,8 @@ bool Game::useItem(ItemId id) {
 
 bool Game::equip(ItemId id) {
     if (itemDef(id).kind != ItemKind::Weapon || inv_.count(id) <= 0) return false;
-    inv_.weapon = id;
+    // Cada arma va a su mitad: la de la sombra solo se usa en modo sombra.
+    (itemDef(id).weapon.shadow ? inv_.shadowWeapon : inv_.weapon) = id;
     applyWeapon();
     return true;
 }

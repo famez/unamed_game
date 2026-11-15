@@ -9,19 +9,23 @@
 // Especiales: embestida (atacar corriendo), contraataque (justo tras esquivar), corte
 // cargado (mantener el clic), lanzador (atacar con la guardia: sube al enemigo y al
 // personaje) y picado (en el aire con la guardia: cae en picado). Cast: técnica.
+// Martillo (sombra): mazazo de arriba abajo, barrido en media vuelta y, de remate, un salto
+// que cae con el martillo y agrieta el suelo (Quake).
 enum class Move {
     None, Slash1, Slash2, Slash3, Finisher, Air1, Air2, AirFinisher, Cast,
     Rush, Counter, Charged, Launcher, Plunge, Thrust, Punch, PunchL, Uppercut,
+    Smash, Sweep, Quake,
     Count
 };
 
 // Juego de movimientos del arma equipada.
-enum class MoveSet { Blade, Lance, Fists };
+enum class MoveSet { Blade, Lance, Fists, Hammer };
 
 inline bool isAttack(Move m) { return m != Move::None && m != Move::Cast; }
 inline bool isAirAttack(Move m) { return m == Move::Air1 || m == Move::Air2 || m == Move::AirFinisher; }
 inline bool isFinisher(Move m) {
-    return m == Move::Finisher || m == Move::AirFinisher || m == Move::Uppercut || m == Move::Charged || m == Move::Plunge;
+    return m == Move::Finisher || m == Move::AirFinisher || m == Move::Uppercut || m == Move::Charged || m == Move::Plunge ||
+           m == Move::Quake;
 }
 
 // Protagonista. Se mueve hacia donde se le dirige y su animación es procedural: ciclo de

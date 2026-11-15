@@ -14,6 +14,8 @@ enum class ItemId : int {
     WoodenSword, StarStaff, AuroraBlade, LightLance, LightFists,
     // Espadas que se forjan en el taller según se sube de nivel
     LampEdge, DuskBlade, WatchSword, ShadowFang, StillHour,
+    // Armas de la sombra (se llevan en modo sombra; las demás, en modo luz)
+    ShadowHammer, ShadowClaws, EclipseScythe, AbyssHammer,
     // Mejoras (se fabrican en el taller)
     Sharpener,
     // Núcleos de transformación (taller) y objetos clave
@@ -24,7 +26,7 @@ enum class ItemId : int {
 enum class ItemKind { Consumable, Material, Weapon, Upgrade, Core, Key };
 
 // Forma del arma al dibujarla.
-enum class WeaponStyle { Sword, Staff, Saber, Lance, Fists };
+enum class WeaponStyle { Sword, Staff, Saber, Lance, Fists, Hammer, Scythe, Claws };
 
 struct WeaponStats {
     float power = 0;      // daño base de cada golpe
@@ -37,6 +39,7 @@ struct WeaponStats {
     float curve = 0;      // curvatura (sable): cuánto se arquea hacia el lomo en la punta (m)
     uint32_t blade = 0, hilt = 0, trail = 0;
     WeaponStyle style = WeaponStyle::Sword;
+    bool shadow = false;  // arma de la sombra (si no, de la luz)
 };
 
 struct ItemDef {

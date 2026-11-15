@@ -153,6 +153,13 @@ const ArmKey kUppercutKeys[] = { // gancho final
     {1.00f, FIST, Smooth},
 };
 #undef FIST
+const ArmKey kSweepKeys[] = {    // martillo: brazo abierto y bajo, el cuerpo da media vuelta
+    {0.00f, GUARD, Smooth},
+    {0.30f, -0.70f, -0.90f, -0.60f, -0.20f, 1.2f, -0.80f, Windup},
+    {0.50f, -0.90f,  0.40f, -1.20f, -0.10f, 1.3f,  0.20f, Strike},
+    {0.70f, -0.90f,  0.80f, -1.10f, -0.15f, 1.3f,  0.40f, Overshoot},
+    {1.00f, GUARD, Smooth},
+};
 #undef GUARD
 
 #define N(a) int(sizeof(a) / sizeof((a)[0]))
@@ -176,6 +183,9 @@ const MoveDef kMoves[int(Move::Count)] = {
     {0.24f, 0.38f, 0.05f, 0.30f, kPunchKeys,    N(kPunchKeys),  0,         0,        0.00f, 1.00f, 0.0f, 0.15f, 0.2f, 0.2f, 0.5f},  // Punch
     {0.24f, 0.38f, 0.05f, 0.30f, kPunchKeys,    N(kPunchKeys),  0,         0,        0.00f, 1.00f, 0.0f, 0.15f, 0.2f, 0.2f, 0.5f, true}, // PunchL
     {0.50f, 0.45f, 0.05f, 0.25f, kUppercutKeys, N(kUppercutKeys), 0,       0,        0.00f, 1.00f, 3.5f, 0.10f, 0.2f, 0.2f, 0.45f}, // Uppercut
+    {0.66f, 0.70f, 0.05f, 0.25f, kOverheadKeys, N(kOverheadKeys), 0,       0,        0.00f, 1.00f, 0.0f, 0.35f, 0.4f, 0.55f, 0.75f}, // Smash
+    {0.62f, 0.50f, 0.05f, 0.25f, kSweepKeys,    N(kSweepKeys),  kPi,       0,        0.25f, 0.65f, 0.0f, 0.15f, 0.3f, 0.3f, 0.6f},  // Sweep
+    {0.95f, 0.72f, 0.05f, 0.25f, kOverheadKeys, N(kOverheadKeys), 0,       0,        0.00f, 1.00f, 6.5f, 0.40f, 0.6f, 0.2f, 0.6f},  // Quake
 };
 #undef N
 // clang-format on
@@ -283,8 +293,10 @@ Move Character::nextAttack() const {
         if (airComboSpent_) return Move::None;
         return airStep_ == 0 ? Move::Air1 : airStep_ == 1 ? Move::Air2 : Move::AirFinisher;
     }
-    if (comboStep_ >= comboHits) return moveSet == MoveSet::Fists ? Move::Uppercut : Move::Finisher;
+    if (comboStep_ >= comboHits)
+        return moveSet == MoveSet::Fists ? Move::Uppercut : moveSet == MoveSet::Hammer ? Move::Quake : Move::Finisher;
     switch (moveSet) {
+        case MoveSet::Hammer: return comboStep_ % 2 ? Move::Sweep : Move::Smash;
         case MoveSet::Lance: {
             const Move seq[3] = {Move::Thrust, Move::Slash2, Move::Thrust};
             return seq[comboStep_ % 3];
@@ -309,10 +321,10 @@ void Character::startMove(Move m, float faceYaw, float dash) {
         ++airStep_;
         if (m == Move::AirFinisher) airComboSpent_ = true;
         body.vel.y = std::max(body.vel.y, 2.0f);  // un pequeño impulso: el combo aéreo "flota"
-    } else if (m == Move::Finisher || m == Move::Uppercut) {
+    } else if (m == Move::Finisher || m == Move::Uppercut || m == Move::Quake) {
         comboStep_ = 0;
     } else if (m == Move::Slash1 || m == Move::Slash2 || m == Move::Slash3 || m == Move::Thrust || m == Move::Punch ||
-               m == Move::PunchL) {
+               m == Move::PunchL || m == Move::Smash || m == Move::Sweep) {
         ++comboStep_;
     }
     if (d.hop > 0 && body.grounded) body.vel.y = d.hop;

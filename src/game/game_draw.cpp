@@ -182,6 +182,43 @@ void drawWeapon(Renderer& r, const Mat4& w, const WeaponStats& ws, Move m, float
         r.ellipsoid(w, {0, 0.01f, 0}, {0.06f, 0.025f, 0.06f}, ws.trail, Material::Glow);  // puño
         return;
     }
+    if (ws.style == WeaponStyle::Claws) {  // garras: guante negro y tres cuchillas de sombra
+        r.ellipsoid(w, {0, -0.06f, 0.008f}, {0.06f, 0.086f, 0.07f}, ws.blade, Material::Metal);
+        for (int k = -1; k <= 1; ++k) {
+            Mat4 cl = w * translate({0.028f * float(k), -0.1f, 0.06f}) * rotateY(0.12f * float(k)) * rotateX(0.35f);
+            r.box(cl, {0, 0, 0.09f}, {0.007f, 0.004f, 0.1f}, ws.trail, Material::Glow);
+            r.box(cl, {0, 0.004f, 0.08f}, {0.009f, 0.003f, 0.09f}, ws.blade, Material::Metal);
+        }
+        return;
+    }
+    Vec3 shaftBase = kBladeBase, shaftTip = kBladeBase + Vec3{0, 0, len};
+    if (ws.style == WeaponStyle::Hammer) {  // mazo: mango con vendas y cabeza enorme con vetas de sombra
+        r.box(w, (shaftBase + shaftTip) * 0.5f - Vec3{0, 0, 0.1f}, {0.022f, 0.022f, len * 0.5f + 0.1f}, grip, Material::Cloth);
+        for (int k = 0; k < 3; ++k)
+            r.box(w, shaftBase + Vec3{0, 0, len * (0.15f + 0.25f * float(k))}, {0.026f, 0.026f, 0.012f}, ws.blade, Material::Metal);
+        Vec3 head = shaftTip + Vec3{0, 0, 0.06f};
+        r.box(w, head, {0.19f, 0.11f, 0.11f}, ws.blade, Material::Stone);
+        r.box(w, head + Vec3{0.2f, 0, 0}, {0.012f, 0.09f, 0.09f}, ws.trail, Material::Glow);  // caras que golpean
+        r.box(w, head - Vec3{0.2f, 0, 0}, {0.012f, 0.09f, 0.09f}, ws.trail, Material::Glow);
+        r.box(w, head, {0.195f, 0.02f, 0.115f}, ws.trail, Material::Glow);  // veta
+        return;
+    }
+    if (ws.style == WeaponStyle::Scythe) {  // guadaña: asta larga y una hoja curva que sale hacia el filo
+        r.box(w, (shaftBase + shaftTip) * 0.5f - Vec3{0, 0, 0.15f}, {0.017f, 0.017f, len * 0.5f + 0.15f}, grip, Material::Metal);
+        const int n = 7;
+        Vec3 p = shaftTip;
+        for (int i = 0; i < n; ++i) {
+            float t = float(i + 1) / float(n);
+            Vec3 q = shaftTip + Vec3{0.62f * t, 0, -0.32f * t * t};
+            Vec3 dir = normalize(q - p);
+            Mat4 sm = w * translate((p + q) * 0.5f) * rotateY(std::atan2(dir.x, dir.z));
+            float wi = lerpf(0.06f, 0.012f, t);
+            r.box(sm, {wi * 0.5f, 0, 0}, {wi, 0.009f, length(q - p) * 0.55f}, ws.blade, Material::Metal);
+            r.box(sm, {-wi * 0.4f, 0, 0}, {0.005f, 0.011f, length(q - p) * 0.52f}, ws.trail, Material::Glow);
+            p = q;
+        }
+        return;
+    }
     r.box(w, kGripLocal, {0.02f, 0.02f, 0.075f}, grip, Material::Metal);
     r.box(w, kGripLocal + Vec3{0, 0, 0.09f}, {0.07f, 0.014f, 0.016f}, ws.blade, Material::Metal);  // guarda
     r.ellipsoid(w, kGripLocal - Vec3{0, 0, 0.08f}, {0.025f, 0.025f, 0.025f}, ws.blade, Material::Metal);  // pomo
@@ -228,7 +265,10 @@ void drawWeapon(Renderer& r, const Mat4& w, const WeaponStats& ws, Move m, float
         r.ellipsoid(w, tip, {bw * 0.75f, 0.011f, 0.06f}, ws.blade, Material::Metal);
     } else {
         r.box(w, mid, {bw, 0.011f, len * 0.5f}, ws.blade, Material::Metal);
-        r.box(w, mid, {0.004f, 0.013f, len * 0.46f}, ws.trail, Material::Glow);  // veta de luz por el filo
+        if (ws.shadow)
+            r.box(w, mid, {0.004f, 0.013f, len * 0.46f}, ws.trail, Material::Glow);  // veta de sombra por el filo
+        else  // las de la luz: el núcleo de luz ocupa casi toda la hoja
+            r.box(w, mid, {bw * 0.6f, 0.0125f, len * 0.47f}, ws.trail, Material::Glow);
         r.ellipsoid(w, tip, {bw, 0.011f, 0.08f}, ws.blade, Material::Metal);
     }
     if (bw >= 0.05f)  // espadas anchas: acanaladura oscura a lo largo
@@ -604,7 +644,7 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
     solid->box(j[Chest] * translate({0.04f, 0.115f, 0.124f}) * rotateZ(0.78f), {}, {0.018f, 0.014f, 0.004f}, rgba(120, 112, 100),
                Material::Metal, flash);  // hebilla
     if (powers_.attack) {  // hasta que la recoge, no lleva arma
-        if (ws.style == WeaponStyle::Fists) {  // los guanteletes van siempre puestos
+        if (ws.style == WeaponStyle::Fists || ws.style == WeaponStyle::Claws) {  // los guanteletes van siempre puestos
             drawWeapon(*solid, j[WristR], ws, hero_.move(), hero_.moveU(), time_);
             drawWeapon(*solid, j[WristL], ws, hero_.move(), hero_.moveU(), time_);
         } else if (hero_.weaponInHand()) {
