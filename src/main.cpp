@@ -106,6 +106,7 @@ const char kHelp[] =
     "  --demo                        el bot enseña técnicas, formas y armas de luz y de sombra\n"
     "  --retrato | --cuerpo          cámara frente a la cara o al cuerpo del protagonista\n"
     "  --camyaw RADIANES             orientación inicial de la cámara\n"
+    "  --exportar-modelos [CARPETA]  escribe los enemigos, Ilse y el lobo de sombra en .glb y sale\n"
     "  --sombra                      empezar en modo sombra\n"
     "  --vitrina                     guion que enseña ataques, técnicas, formas y mecánicas (en el patio)\n"
     "  --video FICHERO.mp4 [SEG]     graba a velocidad real (30 fps, con ffmpeg); sale a los SEG segundos\n"
@@ -119,6 +120,11 @@ int main(int argc, char** argv) {
             return 0;
         }
     for (int sig : {SIGSEGV, SIGABRT, SIGFPE, SIGBUS, SIGILL}) std::signal(sig, crashHandler);
+    for (int i = 1; i < argc; ++i)  // --exportar-modelos [carpeta]: los personajes generados a .glb (sin ventana)
+        if (std::strcmp(argv[i], "--exportar-modelos") == 0) {
+            std::string dir = i + 1 < argc && argv[i + 1][0] != '-' ? argv[i + 1] : std::string(GAME_ASSET_DIR) + "/models";
+            return exportCharacterGlbs(dir) > 0 ? 0 : 1;
+        }
     WindowDesc desc;
     desc.title = "unamed_game";
     desc.msaaSamples = 0;  // el antialiasing lo hace el buffer de la escena (según la calidad)
@@ -175,6 +181,7 @@ int main(int argc, char** argv) {
     double modelStart = platform::timeSeconds();
     buildModels(renderer);
     loadHeroModels(renderer, assetDir);  // Vela y Hollín (.glb); sin ellos, el modelo de siempre
+    loadCharacterGlbs(renderer, std::string(assetDir) + "/models");  // enemigos, Ilse y el lobo
     std::printf("modelos generados en %.0f ms\n", 1000.0 * (platform::timeSeconds() - modelStart));
 
     glEnable(GL_PROGRAM_POINT_SIZE);

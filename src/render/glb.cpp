@@ -200,10 +200,16 @@ bool GlbFile::load(const std::string& path, std::string& error) {
         for (size_t i = 0; i < count; ++i)
             for (int c = 0; c < comps; ++c) {
                 const unsigned char* q = bin + base + i * stride + size_t(c) * csize;
-                if (floats) {
+                if (floats && ctype == 5126) {
                     float x;
                     std::memcpy(&x, q, 4);
                     floats->push_back(x);
+                } else if (floats) {  // enteros normalizados (colores, pesos: siempre van normalizados)
+                    uint16_t x = 0;
+                    if (ctype == 5123) std::memcpy(&x, q, 2);
+                    else x = *q;
+                    float scale = ctype == 5123 ? 65535.0f : 255.0f;
+                    floats->push_back(float(x) / scale);
                 } else if (ctype == 5125) {
                     uint32_t x;
                     std::memcpy(&x, q, 4);
@@ -246,6 +252,19 @@ bool GlbFile::load(const std::string& path, std::string& error) {
                     if (attrs->get("NORMAL")) readAccessor(attrs->integer("NORMAL", -1), 3, &nor, nullptr);
                     for (size_t i = 0; i + 2 < pos.size(); i += 3) gp.positions.push_back({pos[i], pos[i + 1], pos[i + 2]});
                     for (size_t i = 0; i + 2 < nor.size(); i += 3) gp.normals.push_back({nor[i], nor[i + 1], nor[i + 2]});
+                    if (attrs->get("COLOR_0")) {  // VEC3 o VEC4: siempre se guarda con alfa
+                        int ca = attrs->integer("COLOR_0", -1);
+                        bool vec3 = accessors && size_t(ca) < accessors->items.size() &&
+                                    accessors->items[size_t(ca)].get("type") &&
+                                    accessors->items[size_t(ca)].get("type")->text == "VEC3";
+                        std::vector<float> col;
+                        readAccessor(ca, vec3 ? 3 : 4, &col, nullptr);
+                        for (size_t i = 0; i + (vec3 ? 2 : 3) < col.size(); i += vec3 ? 3 : 4) {
+                            gp.colors.insert(gp.colors.end(), {col[i], col[i + 1], col[i + 2], vec3 ? 1.0f : col[i + 3]});
+                        }
+                    }
+                    if (attrs->get("JOINTS_0")) readAccessor(attrs->integer("JOINTS_0", -1), 4, nullptr, &gp.joints);
+                    if (attrs->get("WEIGHTS_0")) readAccessor(attrs->integer("WEIGHTS_0", -1), 4, &gp.weights, nullptr);
                     if (p.get("indices")) {
                         readAccessor(p.integer("indices", -1), 1, nullptr, &gp.indices);
                     } else {
@@ -262,6 +281,7 @@ bool GlbFile::load(const std::string& path, std::string& error) {
             GlbNode& g = nodes[i];
             if (const Json* nm = n.get("name")) g.name = nm->text;
             g.mesh = n.integer("mesh", -1);
+            g.skin = n.integer("skin", -1);
             if (const Json* mtx = n.get("matrix"))
                 for (int k = 0; k < 16; ++k) g.local.m[k] = float(mtx->items[size_t(k)].number);
             else
@@ -273,6 +293,21 @@ bool GlbFile::load(const std::string& path, std::string& error) {
             for (int c : nodes[i].children)
                 if (c >= 0 && size_t(c) < nodes.size()) nodes[size_t(c)].parent = int(i);
     }
+    if (const Json* skinsJ = root.get("skins"))
+        for (const Json& s : skinsJ->items) {
+            GlbSkin sk;
+            if (const Json* js = s.get("joints"))
+                for (const Json& j : js->items) sk.joints.push_back(int(j.number));
+            std::vector<float> m;
+            if (s.get("inverseBindMatrices")) readAccessor(s.integer("inverseBindMatrices", -1), 16, &m, nullptr);
+            for (size_t i = 0; i + 15 < m.size(); i += 16) {
+                Mat4 x;
+                for (int k = 0; k < 16; ++k) x.m[k] = m[i + size_t(k)];
+                sk.inverseBind.push_back(x);
+            }
+            while (sk.inverseBind.size() < sk.joints.size()) sk.inverseBind.push_back(Mat4::identity());
+            skins.push_back(std::move(sk));
+        }
     const Json* scenes = root.get("scenes");
     if (scenes && !scenes->items.empty()) {
         if (const Json* sn = scenes->items[size_t(root.integer("scene", 0))].get("nodes"))

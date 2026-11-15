@@ -20,13 +20,23 @@ struct GlbMaterial {
 struct GlbPrimitive {
     std::vector<Vec3> positions, normals;
     std::vector<uint32_t> indices;
+    std::vector<float> colors;     // COLOR_0 (lineal), 4 por vértice; vacío si no hay
+    std::vector<uint32_t> joints;  // JOINTS_0, 4 por vértice (índices en la piel)
+    std::vector<float> weights;    // WEIGHTS_0, 4 por vértice
     int material = -1;
+};
+
+// Piel: los nodos que hacen de huesos y la inversa de su pose de reposo.
+struct GlbSkin {
+    std::vector<int> joints;
+    std::vector<Mat4> inverseBind;
 };
 
 struct GlbNode {
     std::string name;
     int parent = -1;
     int mesh = -1;
+    int skin = -1;
     std::vector<int> children;
     Mat4 local = Mat4::identity();
     Mat4 world = Mat4::identity();  // con los padres aplicados
@@ -36,6 +46,7 @@ struct GlbFile {
     std::vector<GlbNode> nodes;
     std::vector<std::vector<GlbPrimitive>> meshes;
     std::vector<GlbMaterial> materials;
+    std::vector<GlbSkin> skins;
     std::vector<int> roots;  // nodos de la escena
 
     // Carga el fichero; en caso de error devuelve false y lo explica en `error`.

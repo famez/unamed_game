@@ -66,6 +66,7 @@ add_executable(game
     src/ui/level_select.cpp
     src/dev/showcase.cpp
     src/render/glb.cpp
+    src/render/glb_write.cpp
     src/render/hero_model.cpp
     src/render/models.cpp
     src/audio/audio.cpp

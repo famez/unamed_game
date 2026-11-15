@@ -1165,6 +1165,32 @@ int main() {
         CHECK(sfxVariants(Sfx::HollinLaugh, dir).empty(), "la risa, sin grabar, se calla (no suena sintética)");
         CHECK(sfxVariants(Sfx::VelaAttack1, "/no/existe").size() == 1, "sin grabaciones, la voz sintetizada");
     }
+    {  // Personajes con esqueleto en .glb (enemigos y lobo): armadura con los huesos del juego y pesos
+        struct Char {
+            const char* file;
+            EnemyKind kind;
+        };
+        for (Char ch : {Char{"deslumbrado", EnemyKind::Dazzled}, Char{"coloso", EnemyKind::Brute}, Char{"vigia", EnemyKind::Watcher},
+                        Char{"sabueso", EnemyKind::Hound}, Char{"lobo_de_sombra", EnemyKind::Hound}}) {
+            GlbFile f;
+            std::string err;
+            bool ok = f.load(std::string(GAME_ASSET_DIR) + "/models/" + ch.file + ".glb", err);
+            const EnemyDef& d = enemyDef(ch.kind);
+            bool bones = ok && f.skins.size() == 1 && int(f.skins[0].joints.size()) == d.jointCount;
+            for (int k = 0; bones && k < d.jointCount; ++k) bones = f.find(d.rig[k].name) >= 0;
+            float worst = 0;
+            size_t verts = 0;
+            for (const auto& mesh : f.meshes)
+                for (const GlbPrimitive& p : mesh) {
+                    verts += p.positions.size();
+                    for (size_t i = 0; i + 3 < p.weights.size(); i += 4)
+                        worst = std::max(worst, std::fabs(p.weights[i] + p.weights[i + 1] + p.weights[i + 2] + p.weights[i + 3] - 1.0f));
+                    bones = bones && p.colors.size() == p.positions.size() * 4;
+                }
+            CHECK(bones && verts > 1000 && worst < 0.02f, "%s.glb: %zu vértices, armadura de %d huesos, colores y pesos (error %.3f) %s",
+                  ch.file, verts, d.jointCount, worst, err.c_str());
+        }
+    }
     {  // Modelos de la protagonista (.glb): se leen y tienen la jerarquía de la ficha
         for (const char* name : {"vela", "hollin"}) {
             GlbFile f;

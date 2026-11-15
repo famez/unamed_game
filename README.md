@@ -62,7 +62,7 @@ Dependencias del sistema: `libOpenGL`/`libGLX` (glvnd + Mesa), `libX11` y `libXi
 (`sudo apt install libxi-dev`). Incluidas en el repositorio: `stb_truetype.h` y las
 fuentes Orbitron y Exo 2.
 
-Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena id` (reproduce una escena del guion), `--autoplay` (un bot combate solo, sin capturar el ratón), `--sombra` (empezar en modo sombra), `--vitrina` (guion que enseña ataques, técnicas, formas y mecánicas), `--video fichero.mp4 [seg]` (graba a velocidad real con ffmpeg),
+Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena id` (reproduce una escena del guion), `--autoplay` (un bot combate solo, sin capturar el ratón), `--sombra` (empezar en modo sombra), `--exportar-modelos [carpeta]` (escribe los personajes a .glb), `--vitrina` (guion que enseña ataques, técnicas, formas y mecánicas), `--video fichero.mp4 [seg]` (graba a velocidad real con ffmpeg),
 `--screenshot fichero.ppm segundos [frames]` (guarda frames y sale) y `--camyaw radianes`.
 
 ## Controles
@@ -183,6 +183,15 @@ sector del último golpe, botín como cruces) y encima de cada enemigo su estado
   +Y). Los materiales emisivos brillan, `Hair*` lleva el brillo del pelo e `Iron`/`Gold*`
   son metal. El farol brilla según la vida, y el retrato del HUD es el mismo modelo en vivo.
   Sin los `.glb`, se usa el modelo de primitivas de siempre.
+- **Los demás personajes también están en `.glb`** (`assets/models/`): `deslumbrado`,
+  `coloso`, `vigia`, `sabueso`, `ilse` y `lobo_de_sombra` (la transformación de la sombra; la
+  Forma Solar es Vela con efectos). Estos son `.glb` estándar con **armadura** (los huesos del
+  juego con sus nombres, en pose de reposo), malla con pesos de piel, color por vértice y los
+  ojos y brillos como material emisivo: se abren tal cual en Blender. Para rehacer uno, basta
+  con mantener los nombres de los huesos de la armadura y exportar a `.glb` con piel; los
+  materiales se leen por el nombre (`Glow…` o con emisión brilla, `Metal`, `Hair…`, `Stone`,
+  el resto tela). Si se borra un `.glb`, vuelve el modelo generado, y
+  `./build/game --exportar-modelos` los vuelve a escribir desde las primitivas.
 - **Cuerpos continuos**: cada personaje se define con elipsoides y cápsulas pegados al
   esqueleto; al arrancar se funden (unión suave de funciones de distancia), se convierten en
   malla (*surface nets*) con pesos de hueso y la GPU la deforma (skinning). Contorno por
@@ -235,7 +244,8 @@ src/
     gl_util.h                    Ayudas internas del render
     shaders/                     GLSL (.vert/.frag/.glsl), metidos en el binario por CMake
     models.h/.cpp                Cuerpos continuos: primitivas → malla con skinning
-    glb.h/.cpp                   Lector de glTF binario (.glb): nodos, mallas y materiales
+    glb.h/.cpp                   Lector de glTF binario (.glb): nodos, mallas, pieles y materiales
+    glb_write.h/.cpp             Escritura de personajes con esqueleto a .glb
     hero_model.h/.cpp            La protagonista desde .glb: huesos, piezas con inercia, arma
     debug_draw.h/.cpp            Lote de líneas/triángulos/puntos + shader mínimo; colores
     text.h/.cpp                  Fuentes SDF (Orbitron, Exo 2) con stb_truetype

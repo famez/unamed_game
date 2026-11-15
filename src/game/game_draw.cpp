@@ -648,11 +648,12 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
         const EnemyDef& wd = wolf_.def();
         Mat4 wj[kMaxJoints];
         for (int k = 0; k < wd.jointCount; ++k) wj[k] = lerpMat(wolf_.prevJoints[k], wolf_.joints[k], alpha);
-        const BuiltModel& wm = model(enemyModel(int(EnemyKind::Hound)));
+        const BuiltModel* own = wolfModel();  // lobo_de_sombra.glb (con sus ojos y brillos dentro)
+        const BuiltModel& wm = own ? *own : model(enemyModel(int(EnemyKind::Hound)));
         Mat4 wskin[kMaxJoints];
         skinMatrices(wm, wj, wskin);
         solid->skinned(wm.mesh, wskin, wm.jointCount, flash, formColor(form_));
-        for (int s = 0; s < wd.shapeCount; ++s) {
+        for (int s = 0; s < wd.shapeCount && !own; ++s) {
             const EnemyShape& sh = wd.shapes[s];
             if (!enemyShapeIsRigid(sh)) continue;
             solid->ellipsoid(wj[sh.joint], sh.center, sh.radii, sh.glow ? rgba(190, 120, 255) : rgba(16, 12, 22),
@@ -858,7 +859,7 @@ void Game::drawEnemies(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Dr
         skinMatrices(body, joints, skin);
         // Congelado: algo de destello blanco azulado; el resto lo ponen las estrellas de escarcha.
         solid->skinned(body.mesh, skin, body.jointCount, std::max(flash, e.freeze > 0 ? 0.25f : 0.0f), rgba(20, 20, 30));
-        for (int s = 0; s < d.shapeCount; ++s) {
+        for (int s = 0; s < d.shapeCount && !modelFromGlb(enemyModel(int(e.kind))); ++s) {  // del .glb: ya van dentro
             const EnemyShape& sh = d.shapes[s];
             if (!enemyShapeIsRigid(sh)) continue;
             solid->ellipsoid(joints[sh.joint], sh.center, sh.radii, sh.color, sh.glow ? Material::Glow : Material::Cloth, flash);

@@ -14,6 +14,7 @@
 #include "core/vmath.h"
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 struct BodyPrim {
@@ -75,6 +76,19 @@ Vec3 headSurface(float x, float y);
 // Genera y sube todos los modelos (al arrancar).
 void buildModels(Renderer& r);
 const BuiltModel& model(ModelId id);
+
+// Personajes en .glb (assets/models): los enemigos, Ilse y el lobo de sombra (la forma de la
+// sombra). `exportCharacterGlbs` los escribe desde sus primitivas (--exportar-modelos);
+// `loadCharacterGlbs` los lee al arrancar y, si están, sustituyen al modelo generado (con sus
+// piezas brillantes dentro de la malla). Devuelve cuántos ha escrito o cargado.
+int exportCharacterGlbs(const std::string& dir);
+int loadCharacterGlbs(Renderer& r, const std::string& dir);
+bool modelFromGlb(ModelId id);        // el modelo viene de un .glb (ya lleva ojos y brillos)
+const BuiltModel* wolfModel();        // el lobo de sombra (.glb), o nullptr
+// Lee un personaje con esqueleto (malla con skinning) de un .glb y lo sube. Los huesos se
+// emparejan por nombre con los de `rig`.
+bool loadCharacterGlb(Renderer& r, const std::string& path, const JointDef* rig, int jointCount, BuiltModel& out,
+                      std::string& error);
 
 // Aspecto del protagonista según su mitad: el de siempre (historia, antes de la sombra), el de
 // la luz (abrigo marfil y oro, pelo rubio platino) o el de la sombra (negro y violeta, pelo

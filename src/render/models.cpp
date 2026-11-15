@@ -1,10 +1,14 @@
 #include "render/models.h"
 
 #include "render/debug_draw.h"
+#include "render/glb.h"
+#include "render/glb_write.h"
 #include "actors/enemy.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
+#include <string>
 
 namespace {
 
@@ -552,3 +556,251 @@ void buildModels(Renderer& r) {
 void skinMatrices(const BuiltModel& m, const Mat4* joints, Mat4* out) {
     for (int j = 0; j < m.jointCount; ++j) out[j] = joints[j] * m.inverseBind[j];
 }
+
+// --- Personajes en .glb ----------------------------------------------------------------------
+
+namespace {
+
+struct GlbCharacter {
+    const char* file;
+    ModelId id;
+    bool wolf;  // el Sabueso recoloreado como lobo de sombra
+};
+const GlbCharacter kGlbCharacters[] = {
+    {"deslumbrado", ModelId::Dazzled, false}, {"coloso", ModelId::Brute, false}, {"vigia", ModelId::Watcher, false},
+    {"sabueso", ModelId::Hound, false},       {"ilse", ModelId::Ilse, false},    {"lobo_de_sombra", ModelId::Hound, true},
+};
+bool gFromGlb[int(ModelId::Count)] = {};
+BuiltModel gWolf;
+bool gWolfLoaded = false;
+
+uint8_t linearToSrgb(float lin) {
+    lin = std::clamp(lin, 0.0f, 1.0f);
+    float s = lin <= 0.0031308f ? lin * 12.92f : 1.055f * std::pow(lin, 1.0f / 2.4f) - 0.055f;
+    return uint8_t(std::lround(s * 255.0f));
+}
+
+// Elipsoide (pieza rígida) como malla pegada a un hueso.
+void addEllipsoid(std::vector<SkinVertex>& v, std::vector<uint32_t>& idx, const Mat4& bone, int joint, Vec3 c, Vec3 r,
+                  uint32_t color, float material) {
+    const int rings = 8, segs = 14;
+    uint32_t base = uint32_t(v.size());
+    for (int i = 0; i <= rings; ++i) {
+        float th = kPi * float(i) / float(rings);
+        for (int k = 0; k <= segs; ++k) {
+            float ph = 2.0f * kPi * float(k) / float(segs);
+            Vec3 d{std::sin(th) * std::cos(ph), std::cos(th), std::sin(th) * std::sin(ph)};
+            Vec3 p = transformPoint(bone, c + Vec3{d.x * r.x, d.y * r.y, d.z * r.z});
+            Vec3 nl = normalize(Vec3{d.x / r.x, d.y / r.y, d.z / r.z});
+            Vec3 n = normalize(transformPoint(bone, nl) - transformPoint(bone, {}));
+            SkinVertex sv{};
+            sv.pos[0] = p.x, sv.pos[1] = p.y, sv.pos[2] = p.z;
+            sv.normal[0] = n.x, sv.normal[1] = n.y, sv.normal[2] = n.z;
+            sv.color = color;
+            sv.joints[0] = uint8_t(joint);
+            sv.weights[0] = 255;
+            sv.material = material;
+            v.push_back(sv);
+        }
+    }
+    for (int i = 0; i < rings; ++i)
+        for (int k = 0; k < segs; ++k) {
+            uint32_t a = base + uint32_t(i * (segs + 1) + k), b = a + uint32_t(segs + 1);
+            idx.insert(idx.end(), {a, b, a + 1, a + 1, b, b + 1});
+        }
+}
+
+std::string materialName(const SkinVertex& v) {
+    int m = int(v.material + 0.5f);
+    if (m == int(Material::Glow)) {
+        char b[16];
+        std::snprintf(b, sizeof(b), "Glow_%02X%02X%02X", v.color & 0xFF, (v.color >> 8) & 0xFF, (v.color >> 16) & 0xFF);
+        return b;
+    }
+    return m == int(Material::Metal) ? "Metal" : m == 7 ? "Hair" : m == int(Material::Stone) ? "Stone" : "Cloth";
+}
+
+}  // namespace
+
+int exportCharacterGlbs(const std::string& dir) {
+    defineEnemyModels();
+    int written = 0;
+    for (const GlbCharacter& ch : kGlbCharacters) {
+        const ModelDef& def = kModels[int(ch.id)];
+        std::vector<SkinVertex> verts;
+        std::vector<uint32_t> idx;
+        buildSkinnedMesh(def, verts, idx);
+        Mat4 bind[kMaxJoints];
+        bindMatrices(def, bind);
+        // Las piezas rígidas de los enemigos (ojos, puntas que brillan) entran en la malla.
+        int kind = int(ch.id) - 1;
+        if (kind >= 0 && kind < int(EnemyKind::Count)) {
+            const EnemyDef& d = enemyDef(EnemyKind(kind));
+            for (int s = 0; s < d.shapeCount; ++s) {
+                const EnemyShape& sh = d.shapes[s];
+                if (!enemyShapeIsRigid(sh)) continue;
+                uint32_t col = sh.color;
+                if (ch.wolf) col = sh.glow ? rgba(190, 120, 255) : rgba(16, 12, 22);
+                addEllipsoid(verts, idx, bind[sh.joint], sh.joint, sh.center, sh.radii, col,
+                             float(int(sh.glow ? Material::Glow : Material::Cloth)));
+            }
+        }
+        if (ch.wolf)  // el lobo: negro con reflejos violeta (se conserva el claroscuro pintado)
+            for (SkinVertex& v : verts)
+                if (int(v.material + 0.5f) != int(Material::Glow)) {
+                    float l = (0.3f * float(v.color & 0xFF) + 0.59f * float((v.color >> 8) & 0xFF) +
+                               0.11f * float((v.color >> 16) & 0xFF)) / 255.0f;
+                    v.color = mixRgb(rgba(14, 10, 22), rgba(70, 40, 110), std::clamp(l * 1.3f, 0.0f, 1.0f));
+                }
+        // Una primitiva por material (los vértices se reparten sin duplicar dentro de cada una).
+        std::vector<GlbOutMaterial> mats;
+        std::vector<GlbOutPrimitive> prims;
+        std::vector<std::vector<int>> remap;
+        for (size_t t = 0; t + 2 < idx.size(); t += 3) {
+            std::string mn = materialName(verts[idx[t]]);
+            size_t mi = 0;
+            while (mi < mats.size() && mats[mi].name != mn) ++mi;
+            if (mi == mats.size()) {
+                GlbOutMaterial m;
+                m.name = mn;
+                if (mn.rfind("Glow", 0) == 0) {
+                    uint32_t c = verts[idx[t]].color;
+                    for (int k = 0; k < 3; ++k) {
+                        float s = float((c >> (8 * k)) & 0xFF) / 255.0f;
+                        m.emissive[k] = s <= 0.04045f ? s / 12.92f : std::pow((s + 0.055f) / 1.055f, 2.4f);
+                    }
+                }
+                mats.push_back(m);
+                GlbOutPrimitive p;
+                p.material = int(mi);
+                prims.push_back(p);
+                remap.emplace_back(verts.size(), -1);
+            }
+            for (int k = 0; k < 3; ++k) {
+                uint32_t vi = idx[t + size_t(k)];
+                int& to = remap[mi][vi];
+                if (to < 0) to = int(prims[mi].verts.size()), prims[mi].verts.push_back(verts[vi]);
+                prims[mi].indices.push_back(uint32_t(to));
+            }
+        }
+        std::vector<GlbOutJoint> joints;
+        for (int j = 0; j < def.jointCount; ++j) {
+            int parent = def.rig[j].parent;
+            joints.push_back({def.rig[j].name, parent, parent < 0 ? bind[j] : rigidInverse(bind[parent]) * bind[j]});
+        }
+        std::string path = dir + "/" + ch.file + ".glb";
+        if (writeSkinnedGlb(path, ch.file, joints, prims, mats)) {
+            std::printf("%s: %zu triangulos, %d huesos, %zu materiales\n", path.c_str(), idx.size() / 3, def.jointCount, mats.size());
+            ++written;
+        } else {
+            std::fprintf(stderr, "No se pudo escribir %s\n", path.c_str());
+        }
+    }
+    return written;
+}
+
+bool loadCharacterGlb(Renderer& r, const std::string& path, const JointDef* rig, int jointCount, BuiltModel& out,
+                      std::string& error) {
+    GlbFile g;
+    if (!g.load(path, error)) return false;
+    int meshNode = -1;
+    for (size_t i = 0; i < g.nodes.size() && meshNode < 0; ++i)
+        if (g.nodes[i].mesh >= 0 && g.nodes[i].skin >= 0) meshNode = int(i);
+    if (meshNode < 0) return error = path + ": no hay ninguna malla con esqueleto", false;
+    const GlbNode& mn = g.nodes[size_t(meshNode)];
+    const GlbSkin& skin = g.skins[size_t(mn.skin)];
+    // Hueso de la piel → hueso del juego (por nombre).
+    std::vector<int> toRig(skin.joints.size(), -1);
+    Mat4 inverseBind[kMaxJoints];
+    bool have[kMaxJoints] = {};
+    for (size_t i = 0; i < skin.joints.size(); ++i) {
+        const std::string& name = g.nodes[size_t(skin.joints[i])].name;
+        for (int k = 0; k < jointCount; ++k)
+            if (name == rig[k].name) {
+                toRig[i] = k;
+                inverseBind[k] = skin.inverseBind[i];
+                have[k] = true;
+            }
+    }
+    for (int k = 0; k < jointCount; ++k)
+        if (!have[k]) return error = path + ": falta el hueso " + rig[k].name, false;
+    std::vector<SkinVertex> verts;
+    std::vector<uint32_t> indices;
+    for (const GlbPrimitive& p : g.meshes[size_t(mn.mesh)]) {
+        GlbMaterial mat;
+        if (p.material >= 0 && size_t(p.material) < g.materials.size()) mat = g.materials[size_t(p.material)];
+        bool glow = mat.name.rfind("Glow", 0) == 0 || mat.emissive[0] + mat.emissive[1] + mat.emissive[2] > 0.05f;
+        float m = glow ? float(int(Material::Glow))
+                  : mat.name == "Metal" ? float(int(Material::Metal))
+                  : mat.name.rfind("Hair", 0) == 0 ? 7.0f
+                  : mat.name == "Stone" ? float(int(Material::Stone))
+                                        : float(int(Material::Cloth));
+        uint32_t base = uint32_t(verts.size());
+        for (size_t i = 0; i < p.positions.size(); ++i) {
+            SkinVertex v{};
+            v.pos[0] = p.positions[i].x, v.pos[1] = p.positions[i].y, v.pos[2] = p.positions[i].z;
+            Vec3 n = i < p.normals.size() ? p.normals[i] : Vec3{0, 1, 0};
+            v.normal[0] = n.x, v.normal[1] = n.y, v.normal[2] = n.z;
+            float c[3];
+            for (int k = 0; k < 3; ++k)
+                c[k] = (p.colors.size() >= (i + 1) * 4 ? p.colors[i * 4 + size_t(k)] : 1.0f) * mat.base[k];
+            v.color = rgba(linearToSrgb(c[0]), linearToSrgb(c[1]), linearToSrgb(c[2]));
+            v.material = m;
+            // Los cuatro pesos, reescalados a 255.
+            float w[4] = {1, 0, 0, 0}, sum = 0;
+            for (int k = 0; k < 4; ++k) {
+                size_t at = i * 4 + size_t(k);
+                uint32_t sj = at < p.joints.size() ? p.joints[at] : 0;
+                w[k] = at < p.weights.size() ? p.weights[at] : (k == 0 ? 1.0f : 0.0f);
+                int rj = sj < toRig.size() ? toRig[sj] : -1;
+                if (rj < 0) w[k] = 0, rj = 0;
+                v.joints[k] = uint8_t(rj);
+                sum += w[k];
+            }
+            int total = 0, heaviest = 0;
+            for (int k = 0; k < 4; ++k) {
+                v.weights[k] = uint8_t(std::lround(sum > 0 ? w[k] / sum * 255.0f : (k == 0 ? 255.0f : 0.0f)));
+                total += v.weights[k];
+                if (v.weights[k] > v.weights[heaviest]) heaviest = k;
+            }
+            v.weights[heaviest] = uint8_t(std::clamp(int(v.weights[heaviest]) + 255 - total, 0, 255));
+            verts.push_back(v);
+        }
+        for (uint32_t ix : p.indices) indices.push_back(base + ix);
+    }
+    if (verts.empty()) return error = path + ": la malla está vacía", false;
+    out = BuiltModel{};
+    out.mesh = r.createSkinnedMesh(verts, indices);
+    out.jointCount = jointCount;
+    out.triangles = indices.size() / 3;
+    for (int k = 0; k < jointCount; ++k) out.inverseBind[k] = inverseBind[k];
+    return true;
+}
+
+int loadCharacterGlbs(Renderer& r, const std::string& dir) {
+    int loaded = 0;
+    for (const GlbCharacter& ch : kGlbCharacters) {
+        std::string path = dir + "/" + ch.file + ".glb", error;
+        FILE* f = std::fopen(path.c_str(), "rb");
+        if (!f) continue;  // no hay: se queda el generado
+        std::fclose(f);
+        const ModelDef& def = kModels[int(ch.id)];
+        BuiltModel m;
+        if (!loadCharacterGlb(r, path, def.rig, def.jointCount, m, error)) {
+            std::fprintf(stderr, "%s\n", error.c_str());
+            continue;
+        }
+        if (ch.wolf) {
+            gWolf = m;
+            gWolfLoaded = true;
+        } else {
+            gModels[int(ch.id)] = m;
+            gFromGlb[int(ch.id)] = true;
+        }
+        ++loaded;
+    }
+    return loaded;
+}
+
+bool modelFromGlb(ModelId id) { return gFromGlb[int(id)]; }
+const BuiltModel* wolfModel() { return gWolfLoaded ? &gWolf : nullptr; }
