@@ -175,6 +175,7 @@ void Game::placeLampSwitches() {
 
 void Game::swapMode() {
     if (!shadowUnlocked_ || swapCooldown_ > 0 || inLight_ || travel_ || diving_) return;
+    if (form_ != Form::None) endForm();  // cada forma es de una mitad
     shadowMode_ = !shadowMode_;
     swapCooldown_ = kSwapCooldown;
     modeFlash_ = kModeSwapTime;

@@ -274,9 +274,9 @@ void Game::castImpact(Spell s) {
                 }
                 Vec3 c = e.center();
                 for (int k = 0; k < 10 && particles_.size() < kMaxParticles; ++k) {  // eslabones del suelo al Gris
-                    float t = float(k) / 10.0f;
+                    float u = float(k) / 10.0f;
                     Vec3 floor{c.x + std::cos(float(k)) * 0.8f, groundHeight(c), c.z + std::sin(float(k)) * 0.8f};
-                    particles_.push_back({floor + (c - floor) * t, {0, 0, 0}, 1.2f, 1.2f, 0.07f, k % 2 ? spellDef(s).color : rgba(30, 16, 48),
+                    particles_.push_back({floor + (c - floor) * u, {0, 0, 0}, 1.2f, 1.2f, 0.07f, k % 2 ? spellDef(s).color : rgba(30, 16, 48),
                                           0, true});
                 }
                 ++caught;
@@ -342,7 +342,7 @@ void Game::resolveImpact(Move m) {
     }
     const WeaponStats& w = inv_.weaponStats();
     const HitParams& hp = kHits[int(m)];
-    float range = w.reach + hp.extraRange;
+    float range = (form_ == Form::Wolf ? 2.3f : w.reach) + hp.extraRange;
     Vec3 origin = hero_.body.pos, fwd = hero_.forward();
     float chestY = origin.y + 1.0f;
     lastHitOrigin_ = origin;
@@ -364,8 +364,8 @@ void Game::resolveImpact(Move m) {
         if (std::fabs(e.center().y - chestY) > 1.5f || !inArc(to, e.body.radius)) continue;
         Vec3 dir = normalize(flat(to));
         if (length(dir) < 0.5f) dir = fwd;
-        hitEnemy(e, dir, (w.power + inv_.powerBonus + levelPower()) * hp.damage * formDamage(), hp.knock * (form_ == Form::Colossus ? 1.4f : 1.0f),
-                 hp.lift, hp.heavy || form_ == Form::Colossus);
+        hitEnemy(e, dir, (w.power + inv_.powerBonus + levelPower()) * hp.damage * formDamage(), hp.knock * (form_ != Form::None ? 1.3f : 1.0f),
+                 hp.lift, hp.heavy || form_ == Form::Wolf);
         ++hits;
     }
     for (Crate& c : crates_) {
@@ -406,21 +406,14 @@ void Game::resolveImpact(Move m) {
         hitStop_ = isFinisher(m) ? 0.09f : 0.05f;
         shake_ = std::max(shake_, isFinisher(m) ? 0.35f : 0.12f);
     }
-    // Formas: el Coloso suelta una onda de choque con cada golpe y el Eco un orbe de luz.
-    if (form_ == Form::Colossus) {
-        Vec3 at = origin + fwd * 1.2f;
-        spawnRing(Vec3{at.x, groundHeight(at + Vec3{0, 1, 0}) + 0.05f, at.z}, 2.6f, 0.35f, formColor(form_));
-        for (Enemy& e : enemies_)
-            if (e.targetable() && length(flat(e.body.pos - at)) < 2.6f + e.body.radius)
-                hitEnemy(e, normalize(flat(e.body.pos - at)), (w.power + inv_.powerBonus + levelPower()) * 0.5f, 4.0f, 2.0f, true);
-        shake_ = std::max(shake_, 0.15f);
-    } else if (form_ == Form::Echo) {
-        int t = lock_ >= 0 ? lock_ : pickTarget(fwd, 15.0f);
-        Vec3 from = bladeTip();
-        Vec3 aim = t >= 0 ? normalize(enemies_[size_t(t)].center() - from) : fwd;
-        Projectile p{ProjectileKind::EnemyOrb, from, aim * 15.0f, 2.0f, t};
-        p.reflected = true;
+    // Formas: la Solar remata con ondas de luz; el lobo recupera vida con cada mordisco.
+    if (form_ == Form::Solar && isFinisher(m)) {
+        Projectile p{ProjectileKind::Wave, origin + Vec3{0, 1.0f, 0} + fwd * 0.8f, fwd * 18.0f, 0.8f};
         projectiles_.push_back(p);
+        spawnRing(origin + Vec3{0, 0.05f, 0}, 3.0f, 0.4f, formColor(form_));
+    } else if (form_ == Form::Wolf && hits > 0) {
+        heal(2.0f * float(hits), 0);
+        spawnSparks(origin + fwd * 1.0f + Vec3{0, 0.8f, 0}, fwd, 6, rgba(40, 20, 60), 3.0f, false);
     }
     if (m == Move::Charged) {  // corte cargado: lanza una onda de luz que lo atraviesa todo
         Projectile p{ProjectileKind::Wave, origin + Vec3{0, 1.0f, 0} + fwd * 0.8f, fwd * 16.0f, 0.7f};
@@ -574,9 +567,9 @@ void Game::hurtHero(Vec3 dir, float damage, float knock, Enemy* source) {
         if (source) source->rlReward -= perfectGuard_ ? 1.0f : 0.5f;  // bloqueado: mala táctica
         return;
     }
-    if (form_ == Form::Colossus) {  // el Coloso no se inmuta: menos daño, sin tambaleo
-        damage *= 0.6f;
-        knock *= 0.2f;
+    if (form_ == Form::Wolf) {  // el lobo apenas se inmuta: menos daño y no se tambalea
+        damage *= 0.7f;
+        knock *= 0.3f;
     }
     hp_ = std::max(0.0f, hp_ - damage);
     if (sandbox() && infHp_) hp_ = maxHp_;  // modo prueba: vida infinita
@@ -585,8 +578,8 @@ void Game::hurtHero(Vec3 dir, float damage, float knock, Enemy* source) {
     heroInvuln_ = kInvulnAfterHit;
     heroFlash_ = 0.25f;
     shake_ = std::max(shake_, 0.25f);
-    if (form_ != Form::Colossus) hero_.flinch(0.35f);
-    hero_.push(dir * knock + Vec3{0, form_ == Form::Colossus ? 0.0f : 2.0f, 0});
+    if (form_ != Form::Wolf) hero_.flinch(0.35f);
+    hero_.push(dir * knock + Vec3{0, form_ == Form::Wolf ? 0.0f : 2.0f, 0});
     spawnSparks(chest, dir, 10, rgba(255, 90, 90), 3.0f);
     if (hp_ <= 0) defeatHero();
 }

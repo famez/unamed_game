@@ -452,17 +452,34 @@ int main() {
         Game g = fresh();
         place(g, {0, 0, -10});
         float speed0 = g.hero_.attackSpeed;
+        g.mp_ = 30;
         g.update(dt, press(&Controls::transform));
-        CHECK(g.form() == Form::None, "sin nucleo no hay transformacion");
-        g.inventory().add(ItemId::CoreAurora);
+        CHECK(g.form() == Form::None, "sin 50 de Poder no hay transformacion");
+        g.mp_ = 100;
         g.update(dt, press(&Controls::transform));
-        CHECK(g.form() == Form::Aurora && g.hero_.attackSpeed > speed0 * 1.4f && g.inventory().count(ItemId::CoreAurora) == 0,
-              "Forma Aurora: gasta el nucleo y golpea mas rapido");
-        run(g, 26.0f);
-        CHECK(g.form() == Form::None && std::fabs(g.hero_.attackSpeed - speed0) < 1e-4f, "la forma dura 25 s");
-        g.inventory().add(ItemId::CoreEcho);
+        CHECK(g.form() == Form::Solar && g.hero_.attackSpeed > speed0 * 1.3f && g.mp_ == 50,
+              "en la luz, Forma Solar: gasta 50 de Poder y golpea mas rapido");
+        run(g, 21.0f);
+        CHECK(g.form() == Form::None && std::fabs(g.hero_.attackSpeed - speed0) < 1e-4f, "la forma dura 20 s");
+        g.unlockShadow();
+        g.shadowMode_ = true;
+        g.inv_.shadowSide = true;
+        g.applyWeapon();
+        g.mp_ = 100;
         g.update(dt, press(&Controls::transform));
-        CHECK(g.form() == Form::Echo && g.hero_.gravityScale < 0.5f && g.hero_.infiniteJumps, "Forma Eco: poca gravedad y saltos sin limite");
+        CHECK(g.form() == Form::Wolf && g.hero_.moveSet == MoveSet::Fists && g.hero_.speedScale > 1.4f,
+              "en la sombra, Lobo de sombra: muerde rapido y corre mucho");
+        Vec3 w0 = g.wolf_.body.pos;
+        Controls fwd;
+        fwd.move = {1, 0, 0};
+        run(g, 0.5f, fwd);
+        CHECK(length(g.wolf_.body.pos - g.hero_.body.pos) < 0.01f && length(g.wolf_.body.pos - w0) > 1.0f, "el lobo va con el protagonista");
+        g.shadowMode_ = false;  // (directo, sin pasar por swapMode)
+        g.unlockShadow();
+        g.swapCooldown_ = 0;
+        g.shadowMode_ = true;
+        g.swapMode();
+        CHECK(g.form() == Form::None, "cambiar de mitad deshace la forma");
 
         Game h = fresh();
         place(h, {0, 0, -10});
@@ -778,7 +795,7 @@ int main() {
         int alive = 0;
         for (const Enemy& e : g.enemies_) alive += e.alive();
         CHECK(g.kills_ >= 9 && alive >= 3, "al disiparlos vuelven más (bajas %d, vivos %d)", g.kills_, alive);
-        CHECK(g.inv_.count(ItemId::CoreAurora) > 0 && g.inv_.count(ItemId::LightLance) > 0, "con armas y núcleos para probar");
+        CHECK(g.inv_.count(ItemId::LightLance) > 0 && g.inv_.count(ItemId::EclipseScythe) > 0, "con armas de las dos mitades para probar");
     }
     {  // Enemigos nuevos: turnos de ataque, oportunistas por la espalda, botín de su familia
         Game g = fresh();

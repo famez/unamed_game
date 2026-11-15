@@ -57,7 +57,7 @@ struct Controls {
     Vec3 aimOrigin, aimDir{0, 0, 1};  // rayo de la cámara (para apuntar a fuentes de luz)
     bool sprint = false;       // mantener: correr
     bool light = false;        // Q: entrar en la fuente de luz de al lado / saltar a otra / fundirse en la sombra
-    bool transform = false;    // G: transformarse (con un núcleo)
+    bool transform = false;    // G: transformarse (la forma de la mitad activa, 50 de Poder)
     bool summon = false;       // T: invocar un compañero
     bool swapMode = false;     // Z: cambiar entre luz y sombra
     bool attackHeld = false;   // ataque mantenido (corte cargado)
@@ -168,8 +168,11 @@ struct TrailSample {  // estela del arma: base y punta de la hoja en un instante
     float age;
 };
 
-// Formas prismáticas (transformaciones) y compañeros invocables (allies.cpp).
-enum class Form { None, Aurora, Colossus, Echo };
+// Transformaciones (G, 50 de Poder, 20 s) y compañeros invocables (allies.cpp). Cada mitad
+// tiene la suya: la luz, la Forma Solar (pelo de fuego dorado, aura y rayos; todo más rápido
+// y más fuerte, los remates lanzan ondas); la sombra, el Lobo de sombra (una bestia enorme
+// que corre y muerde, y cada mordisco le devuelve vida).
+enum class Form { None, Solar, Wolf };
 const char* formName(Form f);
 uint32_t formColor(Form f);
 
@@ -463,6 +466,7 @@ public:
     Vec3 lightTargetPos() const { return lightTarget_ >= 0 ? lightPoints_[size_t(lightTarget_)].pos : Vec3{}; }
     bool travelingByLight() const { return travel_; }
     Form form() const { return form_; }
+    static constexpr float kFormDuration = 20.0f, kFormCost = 50.0f;
     float formTime() const { return formTime_; }
     // Escenario y objetivo actuales.
     LevelId level() const { return level_; }
@@ -560,6 +564,7 @@ private:
     void endForm();
     bool summon(int kind);
     void updateAllies(float dt, const Controls& c);
+    void updateWolf(float dt);
     float formDamage() const;
     float formSpeed() const;
     void updateLight(float dt, const Controls& c);
@@ -730,6 +735,7 @@ private:
     Brain bossBrain_;
     Form form_ = Form::None;
     float formTime_ = 0;
+    Enemy wolf_;  // el cuerpo del Lobo de sombra: un Sabueso grande que sigue al protagonista
     std::vector<Companion> companions_;
     float noraCooldown_ = 0;
     std::string brainDir_;

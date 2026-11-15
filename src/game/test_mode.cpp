@@ -32,7 +32,6 @@ void Game::initTest(TestMode mode, uint32_t seed) {
     for (ItemId w : {ItemId::StarStaff, ItemId::AuroraBlade, ItemId::LightLance, ItemId::LightFists, ItemId::ShadowClaws,
                      ItemId::EclipseScythe})
         inv_.add(w);
-    for (ItemId c : {ItemId::CoreAurora, ItemId::CoreColossus, ItemId::CoreEcho}) inv_.add(c, 99);
     inv_.add(ItemId::NoraLantern);
     inv_.add(ItemId::Potion, 9);
     // Y materiales de sobra para forjar espadas en el taller (el nivel sí hay que subirlo).

@@ -69,7 +69,7 @@ Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena i
 | C / Ctrl | Voltereta de esquiva (invulnerable); un golpe justo después es un **contraataque** |
 | Q | **Luz**: junto a una farola, **entrar en ella**; dentro, saltar a otra fuente. **Sombra**: en la oscuridad, **fundirse** con el suelo |
 | Portal / Z | Cambiar entre **luz y sombra** cruzando un portal (Z en los niveles sin historia) |
-| G | **Transformarse** (con un núcleo) |
+| G | **Transformarse** (50 de Poder, 20 s): Forma Solar en la luz, Lobo de sombra en la sombra |
 | T | **Invocar compañero** (chispa aliada o el eco de Nora) |
 | R | Fijar objetivo / **soltarlo** (dentro de una fuente: elegir a qué fuente saltar) · clic central: siguiente objetivo · X: soltar |
 | 1-5 · 6 7 8 · Rueda + E | Técnicas de la mitad activa · atajos de objetos · menú de comandos |

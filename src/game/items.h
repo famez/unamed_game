@@ -18,8 +18,8 @@ enum class ItemId : int {
     ShadowHammer, ShadowClaws, EclipseScythe, AbyssHammer,
     // Mejoras (se fabrican en el taller)
     Sharpener,
-    // Núcleos de transformación (taller) y objetos clave
-    CoreAurora, CoreColossus, CoreEcho, NoraLantern,
+    // Objetos clave
+    NoraLantern,
     Count
 };
 

@@ -1,58 +1,80 @@
-// Transformaciones (formas prismáticas) y compañeros invocables.
+// Transformaciones y compañeros invocables.
 //
-// Formas (G): consumen un núcleo fabricado en el taller con los restos de cada especie de
-// Gris y duran 25 s.
-//   - Aurora (Rastreros): todo más rápido y golpes un 30 % más fuertes.
-//   - Coloso (Domos): golpes enormes con onda de choque; los golpes recibidos no le frenan.
-//   - Eco (Ecos): casi sin gravedad, saltos sin límite y cada golpe lanza un orbe de luz.
-// Compañeros (T): una chispa aliada (cuesta Luz) o, con su farolillo, el eco de Nora.
+// Formas (G, 50 de Poder, 20 s), una por mitad:
+//   - Forma Solar (luz): el pelo se le enciende en púas de fuego dorado, un aura de llamas y
+//     rayos le rodea; todo más rápido (golpes un 40 %), un 50 % más fuerte y cada remate lanza
+//     una onda de luz.
+//   - Lobo de sombra (sombra): se convierte en un lobo enorme de sombra; corre mucho, muerde
+//     rápido (cada mordisco le devuelve vida) y apenas se inmuta cuando le golpean.
+// Cambiar de mitad (Z o un portal) deshace la forma.
+// Compañeros (T): una chispa aliada (cuesta Poder) o, con su farolillo, el eco de Nora.
 
 #include "game/game.h"
 
 #include <algorithm>
 
 namespace {
-constexpr float kFormDuration = 25.0f;
 constexpr float kSparkCost = 40.0f, kNoraCost = 30.0f, kNoraCooldown = 60.0f;
 }  // namespace
 
 const char* formName(Form f) {
     switch (f) {
-        case Form::Aurora: return "FORMA AURORA";
-        case Form::Colossus: return "FORMA COLOSO";
-        case Form::Echo: return "FORMA ECO";
+        case Form::Solar: return "FORMA SOLAR";
+        case Form::Wolf: return "LOBO DE SOMBRA";
         default: return "";
     }
 }
 
 uint32_t formColor(Form f) {
     switch (f) {
-        case Form::Aurora: return rgba(255, 210, 90);
-        case Form::Colossus: return rgba(255, 140, 60);
-        case Form::Echo: return rgba(120, 230, 255);
+        case Form::Solar: return rgba(255, 200, 60);
+        case Form::Wolf: return rgba(150, 70, 255);
         default: return rgba(255, 255, 255);
     }
 }
 
-float Game::formDamage() const { return form_ == Form::Aurora ? 1.3f : form_ == Form::Colossus ? 1.8f : 1.0f; }
+float Game::formDamage() const { return form_ == Form::Solar ? 1.5f : form_ == Form::Wolf ? 1.6f : 1.0f; }
 
 bool Game::startForm(Form f) {
-    if (form_ != Form::None || hero_.downTimer >= 0) return false;
-    ItemId core = f == Form::Aurora ? ItemId::CoreAurora : f == Form::Colossus ? ItemId::CoreColossus : ItemId::CoreEcho;
-    if (!inv_.remove(core)) return false;
+    if (form_ != Form::None || hero_.downTimer >= 0 || inLight_ || travel_ || diving_) return false;
+    if (mp_ < kFormCost) {
+        notify("Transformarse cuesta 50 de Poder", rgba(200, 200, 215));
+        return false;
+    }
+    mp_ -= kFormCost;
     form_ = f;
     formTime_ = kFormDuration;
     applyWeapon();
     uint32_t col = formColor(f);
-    spawnRing(hero_.body.pos + Vec3{0, 0.05f, 0}, 3.0f, 0.7f, col);
-    spawnSparks(hero_.body.pos + Vec3{0, 1, 0}, {0, 1, 0}, 40, col, 6.0f);
-    shake_ = std::max(shake_, 0.3f);
-    notify(std::string(formName(f)) + " · 25 s", col);
-    uiSound(Sfx::Echo, 1.0f, 1.2f);
+    Vec3 base = hero_.body.pos;
+    if (f == Form::Solar) {  // estallido dorado: columna de luz, anillos y chispas hacia arriba
+        spawnRing(base + Vec3{0, 0.05f, 0}, 4.5f, 0.8f, col);
+        spawnRing(base + Vec3{0, 0.06f, 0}, 2.5f, 0.6f, rgba(255, 250, 220));
+        spawnSparks(base + Vec3{0, 1, 0}, {0, 1, 0}, 60, col, 9.0f);
+        novaFlash_ = 0.4f;
+        sound(Sfx::FireBoom, base, 1.0f, 1.3f);
+    } else {  // estallido de humo negro del que sale el lobo
+        wolf_ = makeEnemy(EnemyKind::Hound, base, hero_.yaw, 0.5f);
+        wolf_.state = AiState::Idle;
+        wolf_.size = 1.6f;
+        for (int k = 0; k < 40 && particles_.size() < kMaxParticles; ++k) {
+            float a = random01() * 2.0f * kPi;
+            Vec3 v{std::cos(a) * randRange(1.0f, 4.0f), randRange(0.5f, 3.0f), std::sin(a) * randRange(1.0f, 4.0f)};
+            particles_.push_back({base + Vec3{0, 0.6f, 0}, v, 1.0f, 1.0f, 0.25f, k % 4 ? rgba(20, 12, 30) : col, -0.5f, false});
+        }
+        spawnRing(base + Vec3{0, 0.05f, 0}, 3.5f, 0.6f, col);
+        sound(Sfx::HitHeavy, base, 1.0f, 0.5f);
+    }
+    shake_ = std::max(shake_, 0.45f);
+    hitStop_ = 0.1f;
+    notify(std::string(formName(f)) + " · 20 s", col);
+    uiSound(Sfx::Echo, 1.0f, f == Form::Solar ? 1.3f : 0.5f);
     return true;
 }
 
 void Game::endForm() {
+    if (form_ == Form::Wolf)
+        spawnSparks(hero_.body.pos + Vec3{0, 0.8f, 0}, {0, 1, 0}, 20, rgba(20, 12, 30), 3.0f, false);
     form_ = Form::None;
     formTime_ = 0;
     applyWeapon();
@@ -83,20 +105,24 @@ bool Game::summon(int kind) {
 
 void Game::updateAllies(float dt, const Controls& c) {
     noraCooldown_ = std::max(0.0f, noraCooldown_ - dt);
-    // Transformarse: el primer núcleo que se tenga (Aurora, Coloso, Eco).
+    // Transformarse: la forma de la mitad activa (G otra vez la deshace).
     if (c.transform) {
-        if (form_ != Form::None) {
-            notify("Ya estás transformado", rgba(200, 200, 215));
-        } else if (!startForm(Form::Aurora) && !startForm(Form::Colossus) && !startForm(Form::Echo)) {
-            notify("Necesitas un núcleo (se fabrica en el taller)", rgba(200, 200, 215));
-        }
+        if (form_ != Form::None) endForm();
+        else startForm(shadowMode_ ? Form::Wolf : Form::Solar);
     }
     if (form_ != Form::None) {
         formTime_ -= dt;
-        if (random01() < dt * 30.0f && particles_.size() < 900) {  // aura
-            float a = random01() * 2.0f * kPi;
-            Vec3 p = hero_.body.pos + Vec3{std::cos(a) * 0.5f, randRange(0.1f, 1.8f), std::sin(a) * 0.5f};
-            particles_.push_back({p, {0, randRange(0.8f, 1.8f), 0}, 0.5f, 0.5f, 0.06f, formColor(form_), 0, true});
+        Vec3 base = hero_.body.pos;
+        if (form_ == Form::Solar) {
+            // Aura de fuego dorado que sube y, de vez en cuando, un rayo que chisporrotea.
+            for (int k = 0; k < 2 && random01() < dt * 45.0f && particles_.size() < kMaxParticles; ++k) {
+                float a = random01() * 2.0f * kPi, r = randRange(0.3f, 0.6f);
+                Vec3 p = base + Vec3{std::cos(a) * r, randRange(0.0f, 1.2f), std::sin(a) * r};
+                particles_.push_back({p, {0, randRange(2.0f, 3.5f), 0}, 0.45f, 0.45f, randRange(0.06f, 0.12f),
+                                      random01() < 0.7f ? formColor(form_) : rgba(255, 250, 220), -2.0f, false});
+            }
+            if (random01() < dt * 6.0f) spawnSparks(base + Vec3{randRange(-0.4f, 0.4f), randRange(0.6f, 1.8f), 0}, {0, 1, 0}, 3,
+                                                   rgba(200, 240, 255), 5.0f);
         }
         if (formTime_ <= 0) endForm();
     }
@@ -154,4 +180,24 @@ void Game::updateAllies(float dt, const Controls& c) {
     }
     companions_.erase(std::remove_if(companions_.begin(), companions_.end(), [](const Companion& m) { return m.life <= 0; }),
                       companions_.end());
+}
+
+// El lobo: un Sabueso grande que hace lo que hace el protagonista (después de moverle).
+void Game::updateWolf(float dt) {
+    if (form_ != Form::Wolf) return;
+    Vec3 base = hero_.body.pos;
+    wolf_.prevPos = wolf_.body.pos;
+    for (int k = 0; k < kMaxJoints; ++k) wolf_.prevJoints[k] = wolf_.joints[k];
+    wolf_.body.pos = base;
+    wolf_.yaw = hero_.yaw;
+    AiState want = isAttack(hero_.move()) ? AiState::Attack : hero_.speed > 0.5f ? AiState::Chase : AiState::Idle;
+    if (want != wolf_.state) wolf_.stateTime = 0;
+    wolf_.state = want;
+    wolf_.stateTime = want == AiState::Attack ? hero_.moveU() * wolf_.def().attackTime : wolf_.stateTime + dt;
+    wolf_.phase += hero_.speed * dt * 1.6f;
+    animateEnemy(wolf_, time_, dt);
+    if (random01() < dt * 25.0f && particles_.size() < kMaxParticles)  // humo de sombra que se le despega
+        particles_.push_back({base + Vec3{randRange(-0.5f, 0.5f), randRange(0.3f, 1.2f), randRange(-0.5f, 0.5f)},
+                              {0, 0.8f, 0}, 0.8f, 0.8f, 0.14f, random01() < 0.8f ? rgba(20, 12, 30) : formColor(form_), 0,
+                              false});
 }

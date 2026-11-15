@@ -144,8 +144,6 @@ bool Game::craft(const Recipe& r) {
 
 bool Game::useItem(ItemId id) {
     const ItemDef& d = itemDef(id);
-    if (d.kind == ItemKind::Core && inv_.count(id) > 0)  // núcleo: transformarse
-        return startForm(id == ItemId::CoreAurora ? Form::Aurora : id == ItemId::CoreColossus ? Form::Colossus : Form::Echo);
     if (d.kind == ItemKind::Key && id == ItemId::NoraLantern) return summon(1);
     if (d.kind == ItemKind::Upgrade && inv_.count(id) > 0) {  // afilador: fuerza permanente
         if (inv_.powerBonus >= Inventory::kMaxPowerBonus) {

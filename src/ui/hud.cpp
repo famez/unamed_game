@@ -257,7 +257,7 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
             uint32_t fc = formColor(form_);
             std::snprintf(buf, sizeof(buf), "%s  %.0f s", formName(form_), double(formTime_));
             uiText(ui, right, cy - 98, 16, buf, fc, FontFace::Title, Align::Right, 0.6f);
-            segBar(d, right, cy - 78, 200, 6, formTime_ / 25.0f, formTime_ / 25.0f, fc, 0, 25);
+            segBar(d, right, cy - 78, 200, 6, formTime_ / kFormDuration, formTime_ / kFormDuration, fc, 0, 20);
         }
         // Lúmenes.
         diamond(d, w - 196, cy + 46, 9, kUiAmber);

@@ -48,19 +48,24 @@ void Game::init(const char* assetDir) {
     applyWeapon();
 }
 
-float Game::formSpeed() const { return form_ == Form::Aurora ? 1.3f : form_ == Form::Colossus ? 0.9f : 1.0f; }
+float Game::formSpeed() const { return form_ == Form::Solar ? 1.3f : form_ == Form::Wolf ? 1.5f : 1.0f; }
 
 void Game::applyWeapon() {
     const WeaponStats& w = inv_.weaponStats();
     hero_.comboHits = w.comboHits;
-    hero_.attackSpeed = w.speed * (form_ == Form::Aurora ? 1.5f : form_ == Form::Colossus ? 0.85f : 1.0f);
+    hero_.attackSpeed = w.speed * (form_ == Form::Solar ? 1.4f : 1.0f);
     hero_.speedScale = formSpeed();
-    hero_.gravityScale = form_ == Form::Echo ? 0.35f : 1.0f;
-    hero_.infiniteJumps = form_ == Form::Echo;
+    hero_.gravityScale = 1.0f;
+    hero_.infiniteJumps = false;
     hero_.moveSet = w.style == WeaponStyle::Lance                                 ? MoveSet::Lance
                     : w.style == WeaponStyle::Fists || w.style == WeaponStyle::Claws ? MoveSet::Fists
                     : w.style == WeaponStyle::Hammer                                ? MoveSet::Hammer
                                                                                     : MoveSet::Blade;
+    if (form_ == Form::Wolf) {  // el lobo muerde: golpes cortos y rápidos, y un zarpazo de remate
+        hero_.moveSet = MoveSet::Fists;
+        hero_.comboHits = 4;
+        hero_.attackSpeed = 1.5f;
+    }
 }
 
 // --- Bucle principal ---------------------------------------------------------------------
@@ -173,6 +178,7 @@ void Game::update(float dt, const Controls& input) {
     // Fundido con la sombra: dentro de un charco, en modo sombra, corre más.
     hero_.speedScale = formSpeed() * (diving_ ? 1.7f : 1.0f) * (powers_.strong ? 1.0f : 0.4f);  // sin fuerzas, apenas camina
     hero_.update(dt, down || light ? Vec3{} : c.move, !down && !light && !diving_ && c.jump, world_, std::atan2(c.camForward.x, c.camForward.z));
+    updateWolf(dt);
     if (c.jump && wasGrounded && hero_.body.vel.y > 1.0f) sound(Sfx::Jump, hero_.body.pos, 0.7f);
     updateTravel(dt);
     constrainDive();

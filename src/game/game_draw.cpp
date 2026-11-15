@@ -597,6 +597,30 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
         return;
     }
     float flash = heroFlash_ > 0 ? 0.7f : 0;
+    if (form_ == Form::Wolf) {  // Lobo de sombra: un Sabueso enorme, negro, con ojos y lomo violetas
+        const EnemyDef& wd = wolf_.def();
+        Mat4 wj[kMaxJoints];
+        for (int k = 0; k < wd.jointCount; ++k) wj[k] = lerpMat(wolf_.prevJoints[k], wolf_.joints[k], alpha);
+        const BuiltModel& wm = model(enemyModel(int(EnemyKind::Hound)));
+        Mat4 wskin[kMaxJoints];
+        skinMatrices(wm, wj, wskin);
+        solid->skinned(wm.mesh, wskin, wm.jointCount, flash, formColor(form_));
+        for (int s = 0; s < wd.shapeCount; ++s) {
+            const EnemyShape& sh = wd.shapes[s];
+            if (!enemyShapeIsRigid(sh)) continue;
+            solid->ellipsoid(wj[sh.joint], sh.center, sh.radii, sh.glow ? rgba(190, 120, 255) : rgba(16, 12, 22),
+                             sh.glow ? Material::Glow : Material::Cloth, flash);
+        }
+        // Crin de llamas violetas a lo largo del lomo.
+        for (int k = 0; k < 6; ++k) {
+            float t = float(k) / 5.0f, fl = 0.75f + 0.25f * std::sin(time_ * 14.0f + float(k) * 1.7f);
+            Mat4 at = lerpMat(wj[1], wj[0], t);  // del pecho a la cadera
+            solid->ellipsoid(at * translate({0, 0.16f, 0}) * rotateX(-0.5f), {0, 0.08f * fl, 0}, Vec3{0.035f, 0.12f * fl, 0.03f},
+                             formColor(form_), Material::Glow);
+        }
+        solid->light(hero_.interpolatedPos(alpha) + Vec3{0, 1.0f, 0}, Vec3{0.6f, 0.3f, 1.0f} * 1.5f, 3.5f);
+        return;
+    }
     // Aspecto según el modo. Al cambiar, el cuerpo se enciende de blanco y cambia de ropa en
     // el momento más brillante.
     HeroLook look = !shadowUnlocked_ ? HeroLook::Base : shadowMode_ ? HeroLook::Shadow : HeroLook::Light;
@@ -615,27 +639,29 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
     // Sin contorno: en los huecos tallados (ojos, boca) el casco invertido asomaría por delante.
     const BuiltModel& head = heroModel(look, true);
     solid->skinned(head.mesh, skin, head.jointCount, flash, 0);
-    // Formas prismáticas: piezas de luz propias de cada una.
-    if (form_ == Form::Aurora) {  // halo que gira sobre la cabeza
-        Mat4 halo = j[Head] * translate({0, 0.42f, -0.02f}) * rotateY(time_ * 2.5f);
-        for (int k = 0; k < 10; ++k)
-            solid->ellipsoid(halo * rotateY(float(k) * kPi * 0.2f), {0.2f, 0, 0}, {0.03f, 0.03f, 0.05f}, formColor(form_), Material::Glow);
-    } else if (form_ == Form::Colossus) {  // cristales en los hombros y nudillos ardientes
-        for (Joint sh : {ShoulderL, ShoulderR}) {
-            float sx = sh == ShoulderL ? 1.0f : -1.0f;
-            for (int k = 0; k < 3; ++k)
-                solid->box(j[sh] * translate({sx * (0.06f + 0.03f * float(k)), 0.06f + 0.04f * float(k), -0.02f}) *
-                               rotateZ(sx * (0.4f + 0.3f * float(k))),
-                           {}, {0.025f, 0.09f, 0.025f}, formColor(form_), Material::Glow);
+    // Forma Solar: el pelo se levanta en púas de fuego dorado que tiemblan, con lenguas de
+    // llama alrededor del cuerpo y una luz cálida fuerte.
+    if (form_ == Form::Solar) {
+        const uint32_t gold = formColor(form_), hot = rgba(255, 246, 200);
+        // Púas: (ángulo alrededor, inclinación hacia atrás, largo)
+        const float spikes[][3] = {{0.0f, 0.35f, 0.30f},  {0.7f, 0.55f, 0.26f},  {-0.7f, 0.55f, 0.26f}, {1.4f, 0.9f, 0.22f},
+                                   {-1.4f, 0.9f, 0.22f}, {2.3f, 1.25f, 0.24f}, {-2.3f, 1.25f, 0.24f}, {3.14f, 1.4f, 0.28f},
+                                   {0.35f, 0.15f, 0.2f},  {-0.35f, 0.2f, 0.2f}};
+        int k = 0;
+        for (const auto& sp : spikes) {
+            float fl = 1.0f + 0.12f * std::sin(time_ * 22.0f + float(k++) * 2.3f);
+            Mat4 m = j[Head] * translate({0, 0.2f, -0.03f}) * rotateY(sp[0]) * rotateX(-sp[1]);
+            solid->ellipsoid(m, {0, sp[2] * 0.5f * fl, 0}, Vec3{0.045f, sp[2] * 0.55f * fl, 0.03f}, gold, Material::Glow);
+            solid->ellipsoid(m, {0, sp[2] * 0.3f * fl, 0.01f}, Vec3{0.02f, sp[2] * 0.3f * fl, 0.015f}, hot, Material::Glow);
         }
-        for (Joint wr : {WristL, WristR}) solid->ellipsoid(j[wr], {0, -0.1f, 0.02f}, {0.07f, 0.05f, 0.07f}, formColor(form_), Material::Glow);
-    } else if (form_ == Form::Echo) {  // alas de luz que aletean
-        float flap = 0.35f + 0.3f * std::sin(time_ * 6.0f);
-        for (float sx : {-1.0f, 1.0f}) {
-            Mat4 wing = j[Chest] * translate({sx * 0.1f, 0.16f, -0.16f}) * rotateY(sx * -0.5f) * rotateZ(sx * flap);
-            solid->ellipsoid(wing, {sx * 0.42f, 0.1f, 0}, {0.42f, 0.22f, 0.015f}, formColor(form_), Material::Glow);
-            solid->ellipsoid(wing, {sx * 0.3f, -0.15f, 0}, {0.28f, 0.14f, 0.015f}, rgba(255, 255, 255), Material::Glow);
+        Vec3 c = hero_.interpolatedPos(alpha);
+        for (int tongue = 0; tongue < 8; ++tongue) {  // lenguas de fuego alrededor
+            float a = float(tongue) * kPi * 0.25f + time_ * 1.5f;
+            float h = 0.5f + 0.35f * (0.5f + 0.5f * std::sin(time_ * 13.0f + float(tongue) * 1.9f));
+            Vec3 p = c + Vec3{std::cos(a) * 0.42f, h * 0.9f, std::sin(a) * 0.42f};
+            solid->ellipsoid(translate(p), {}, Vec3{0.05f, h * 0.45f, 0.05f}, tongue % 2 ? gold : hot, Material::Glow);
         }
+        solid->light(c + Vec3{0, 1.2f, 0}, Vec3{1.0f, 0.8f, 0.4f} * 3.0f, 6.0f);
     }
     for (const Shape& s : kHeroShapes) solid->ellipsoid(j[s.joint], s.center, s.radii, heroLookColor(look, s.color), s.material, flash);
     // Las vetas: apagadas sin Luz; encendidas, del color de la luz (o de la sombra).

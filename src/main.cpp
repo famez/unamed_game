@@ -99,6 +99,7 @@ const char kHelp[] =
     "  --autoplay                    un bot juega solo\n"
     "  --giros                       el bot solo corre haciendo curvas (para ver el giro)\n"
     "  --cambios                     el bot cambia de luz a sombra y vuelta (para ver el cambio)\n"
+    "  --demo                        el bot enseña técnicas, formas y armas de luz y de sombra\n"
     "  --retrato | --cuerpo          cámara frente a la cara o al cuerpo del protagonista\n"
     "  --camyaw RADIANES             orientación inicial de la cámara\n"
     "  --screenshot FICHERO SEG [N]  guarda N fotogramas (.ppm) desde SEG segundos y sale\n"
@@ -224,6 +225,7 @@ int main(int argc, char** argv) {
     bool bodyShot = false;  // --cuerpo: lo mismo, con el cuerpo entero
     bool turnsBot = false;  // --giros: el bot solo corre haciendo curvas y medias vueltas
     bool swapBot = false;   // --cambios: el bot se queda quieto y cambia de luz a sombra y vuelta
+    bool demoBot = false;   // --demo: el bot enseña técnicas, formas y armas de las dos mitades
     float camYaw0 = 0;  // --camyaw: orientación inicial de la cámara (radianes)
     const char* shotPath = nullptr;
     double shotTime = 0;
@@ -235,6 +237,7 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--cuerpo") == 0) portrait = bodyShot = true;
         if (std::strcmp(argv[i], "--giros") == 0) autoplay = turnsBot = true;
         if (std::strcmp(argv[i], "--cambios") == 0) autoplay = swapBot = true;
+        if (std::strcmp(argv[i], "--demo") == 0) autoplay = demoBot = true;
         if (std::strcmp(argv[i], "--camyaw") == 0 && i + 1 < argc) camYaw0 = float(std::atof(argv[++i]));
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 2 < argc) {
             shotPath = argv[i + 1];
@@ -469,8 +472,25 @@ int main(int argc, char** argv) {
                         c.swapMode = t == 20;
                         c.attack = t == 80 || t == 92 || t == 104;
                     }
+                    if (demoBot) {  // guion: luz (estallido, Forma Solar), sombra (mazo, técnicas, lobo)
+                        if (botStep == 1) game.setTestCheats(true, true);
+                        Controls d;
+                        d.camForward = cam.forwardFlat();
+                        Vec3 foe;
+                        bool has = game.lockTarget(foe);
+                        if (!has) d.lockOn = botStep % 15 == 0;
+                        Vec3 to = has ? flat(foe - game.hero().body.pos) : Vec3{};
+                        int t = botStep;
+                        bool fight = (t > 110 && t < 230) || (t > 290 && t < 390) || (t > 650 && t < 800);
+                        if (has && fight && length(to) > 2.0f) d.move = normalize(to);
+                        if (fight && t % 11 == 0 && has && length(to) < 4.0f) d.attack = true;
+                        d.command = t == 40 ? 3 : t == 420 ? 0 : t == 490 ? 1 : t == 560 ? 3 : -1;
+                        d.transform = t == 90 || t == 240 || t == 630;
+                        d.swapMode = t == 260;
+                        c = d;
+                    }
                     // En los modos de prueba también cambia a sombra y lanza agujeros negros.
-                    if (turnsBot || swapBot) {
+                    if (turnsBot || swapBot || demoBot) {
                     } else if (game.testMode() != TestMode::None) {
                         c.swapMode = botStep == 30;
                         if (botStep % 240 == 120) c.command = 4;  // la técnica grande de cada mitad

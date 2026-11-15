@@ -75,9 +75,6 @@ const ItemDef kItems[int(ItemId::Count)] = {
     {"Martillo del abismo", "Sombra. Una cabeza de piedra negra que pesa como una noche entera.", ItemKind::Weapon, rgb(90, 40, 170), 0, 0,
         shadowWeapon(weapon(26, 6, 2, 2.4f, 0.75f, 0.72f, rgb(24, 20, 30), rgb(60, 40, 30), rgb(120, 50, 255), WeaponStyle::Hammer))},
     {"Afilador de luz",  "Fuerza +2 permanente para cualquier prisma (máximo +6).", ItemKind::Upgrade, rgb(255, 255, 255), 0, 0, {}},
-    {"Núcleo Aurora",    "G: Forma Aurora 25 s. Todo más rápido y más fuerte.", ItemKind::Core, rgb(255, 210, 90), 0, 0, {}},
-    {"Núcleo Coloso",    "G: Forma Coloso 25 s. Golpes enormes con onda; nada te frena.", ItemKind::Core, rgb(255, 140, 60), 0, 0, {}},
-    {"Núcleo Eco",       "G: Forma Eco 25 s. Casi sin gravedad; cada golpe lanza un orbe.", ItemKind::Core, rgb(120, 230, 255), 0, 0, {}},
     {"Farolillo de Nora", "T: llama al eco de Nora. Su luz cura y aturde a los Grises.", ItemKind::Key, rgb(255, 190, 110), 0, 0, {}},
 };
 
@@ -90,9 +87,6 @@ const Recipe kRecipes[] = {
     {ItemId::LightLance, 1, 1, {P{ItemId::ShinyShard, 3}, P{ItemId::GoldSpore, 2}}, 2},
     {ItemId::LightFists, 1, 1, {P{ItemId::WingDust, 3}, P{ItemId::ShinyShard, 2}}, 2},
     {ItemId::AuroraBlade, 1, 1, {P{ItemId::StarStaff, 1}, P{ItemId::BlazeGem, 1}, P{ItemId::GoldSpore, 3}}, 3},
-    {ItemId::CoreAurora, 1, 1, {P{ItemId::ShinyShard, 3}, P{ItemId::WingDust, 1}}, 2},
-    {ItemId::CoreColossus, 1, 1, {P{ItemId::GoldSpore, 3}}, 1},
-    {ItemId::CoreEcho, 1, 1, {P{ItemId::WingDust, 3}}, 1},
     // Espadas: cada una pide un nivel y piezas de los enemigos de la zona.
     {ItemId::LampEdge, 1, 3, {P{ItemId::ShinyShard, 3}, P{ItemId::GoldSpore, 1}}, 2},
     {ItemId::DuskBlade, 1, 6, {P{ItemId::ShinyShard, 4}, P{ItemId::WingDust, 3}}, 2},
