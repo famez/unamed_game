@@ -36,3 +36,12 @@ StereoBuffer renderSfx(Sfx id);
 
 bool saveWav(const std::string& path, const StereoBuffer& buf);
 bool loadWav(const std::string& path, StereoBuffer& buf);
+// Cualquier WAV (PCM de 16, 24 o 32 bits, o coma flotante; mono o estéreo; cualquier
+// frecuencia), convertido a estéreo a kSampleRate.
+bool loadAnyWav(const std::string& path, StereoBuffer& buf);
+
+// Las tomas de un efecto. Las voces de la protagonista se buscan grabadas en `voiceDir`
+// (vela_golpe_1.wav, vela_golpe_2.wav, hollin_dolor_1.wav...; ver assets/audio/voces/LEEME.md):
+// si un personaje tiene grabaciones, todas sus voces salen de ellas (lo que falte se cubre con
+// la más parecida o se calla); si no tiene ninguna, se sintetizan. El resto, sintetizado.
+std::vector<StereoBuffer> sfxVariants(Sfx id, const std::string& voiceDir);

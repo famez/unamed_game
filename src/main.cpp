@@ -170,7 +170,7 @@ int main(int argc, char** argv) {
             if (std::strcmp(argv[i], "--silencio") == 0) silent = true;
             if (std::strcmp(argv[i], "--volumen") == 0 && i + 1 < argc) masterVolume = clampf(float(std::atof(argv[i + 1])), 0, 1);
         }
-        if (!silent) audio.init(cache + "/unamed_game");
+        if (!silent) audio.init(cache + "/unamed_game", std::string(assetDir) + "/audio/voces");
     }
     double modelStart = platform::timeSeconds();
     buildModels(renderer);
@@ -821,10 +821,14 @@ int main(int argc, char** argv) {
         // vídeo. La música no va (es aleatoria por capas).
         size_t frames = size_t(double(videoFrames) / 30.0 * kSampleRate) + kSampleRate;
         std::vector<float> mix(frames * 2, 0.0f);
-        std::vector<StereoBuffer> cache(size_t(Sfx::Count));
+        std::vector<std::vector<StereoBuffer>> cache(size_t(Sfx::Count));
+        std::vector<bool> loaded(size_t(Sfx::Count), false);
+        size_t pick = 0;
         for (const VideoSound& s : videoSounds) {
-            StereoBuffer& b = cache[size_t(s.id)];
-            if (b.data.empty()) b = renderSfx(s.id);
+            std::vector<StereoBuffer>& takes = cache[size_t(s.id)];
+            if (!loaded[size_t(s.id)]) takes = sfxVariants(s.id, std::string(assetDir) + "/audio/voces"), loaded[size_t(s.id)] = true;
+            if (takes.empty()) continue;
+            const StereoBuffer& b = takes[pick++ % takes.size()];
             float a = (s.pan + 1.0f) * 0.25f * 3.14159f, gl = std::cos(a) * 1.41f, gr = std::sin(a) * 1.41f;
             size_t start = size_t(s.time * kSampleRate), n = b.frames();
             for (size_t i = 0; start + i < frames; ++i) {

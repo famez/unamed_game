@@ -19,8 +19,9 @@
 class Audio {
 public:
     // Genera los efectos, carga la música de la caché o la sintetiza (en segundo plano) y
-    // arranca la salida. `cacheDir`: dónde guardar los WAV de la música.
-    bool init(const std::string& cacheDir);
+    // arranca la salida. `cacheDir`: dónde guardar los WAV de la música; `voiceDir`: las voces
+    // grabadas de la protagonista (si las hay).
+    bool init(const std::string& cacheDir, const std::string& voiceDir = "");
     void shutdown();
     bool enabled() const { return running_; }
 
@@ -49,7 +50,9 @@ private:
     std::atomic<bool> running_{false};
     std::mutex mutex_;
     std::condition_variable loaderCv_;
-    std::vector<StereoBuffer> sfx_;
+    std::vector<std::vector<StereoBuffer>> sfx_;  // tomas de cada efecto
+    std::vector<int> lastTake_;                   // para no repetir la misma toma seguida
+    uint32_t rng_ = 12345u;
     std::string cacheDir_;
     std::map<int, std::unique_ptr<Music>> tracks_;  // pistas ya preparadas
     int wanted_ = -1, current_ = -1, previous_ = -1;

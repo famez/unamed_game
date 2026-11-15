@@ -834,3 +834,115 @@ bool loadWav(const std::string& path, StereoBuffer& buf) {
     std::fclose(f);
     return ok;
 }
+
+bool loadAnyWav(const std::string& path, StereoBuffer& buf) {
+    FILE* f = std::fopen(path.c_str(), "rb");
+    if (!f) return false;
+    std::vector<unsigned char> d;
+    unsigned char chunk[65536];
+    size_t got;
+    while ((got = std::fread(chunk, 1, sizeof(chunk), f)) > 0) d.insert(d.end(), chunk, chunk + got);
+    std::fclose(f);
+    auto u16 = [&](size_t at) { return uint32_t(d[at]) | uint32_t(d[at + 1]) << 8; };
+    auto u32 = [&](size_t at) { return u16(at) | u16(at + 2) << 16; };
+    if (d.size() < 12 || std::memcmp(d.data(), "RIFF", 4) != 0 || std::memcmp(d.data() + 8, "WAVE", 4) != 0) return false;
+    uint32_t format = 0, channels = 0, rate = 0, bits = 0;
+    size_t dataAt = 0, dataLen = 0;
+    for (size_t at = 12; at + 8 <= d.size();) {
+        uint32_t len = u32(at + 4);
+        if (!std::memcmp(d.data() + at, "fmt ", 4) && at + 24 <= d.size()) {
+            format = u16(at + 8), channels = u16(at + 10), rate = u32(at + 12), bits = u16(at + 22);
+            if (format == 0xFFFE && len >= 26 && at + 34 <= d.size()) format = u16(at + 32);  // extensible: el subformato
+        } else if (!std::memcmp(d.data() + at, "data", 4)) {
+            dataAt = at + 8;
+            dataLen = std::min<size_t>(len, d.size() - dataAt);
+        }
+        at += 8 + len + (len & 1);
+    }
+    if (!dataAt || !channels || !rate || !(format == 1 || format == 3)) return false;
+    size_t bytes = bits / 8, frames = dataLen / (bytes * channels);
+    auto sample = [&](size_t i, uint32_t ch) -> float {
+        size_t at = dataAt + (i * channels + ch) * bytes;
+        if (format == 3 && bits == 32) {
+            float v;
+            std::memcpy(&v, d.data() + at, 4);
+            return v;
+        }
+        if (bits == 16) return float(int16_t(u16(at))) / 32768.0f;
+        if (bits == 24) return float(int32_t(u32(at - 1) & 0xFFFFFF00u)) / 2147483648.0f;
+        if (bits == 32) return float(int32_t(u32(at))) / 2147483648.0f;
+        if (bits == 8) return (float(d[at]) - 128.0f) / 128.0f;
+        return 0.0f;
+    };
+    // A estéreo y a kSampleRate (interpolación lineal).
+    double step = double(rate) / kSampleRate;
+    size_t outFrames = size_t(double(frames) / step);
+    buf.data.assign(outFrames * 2, 0);
+    for (size_t o = 0; o < outFrames; ++o) {
+        double src = double(o) * step;
+        size_t k = size_t(src);
+        float t = float(src - double(k));
+        size_t k1 = std::min(k + 1, frames - 1);
+        for (uint32_t ch = 0; ch < 2; ++ch) {
+            uint32_t c = std::min(ch, channels - 1);
+            float v = sample(k, c) * (1 - t) + sample(k1, c) * t;
+            buf.data[o * 2 + ch] = int16_t(std::clamp(v, -1.0f, 1.0f) * 32000.0f);
+        }
+    }
+    return outFrames > 0;
+}
+
+namespace {
+
+// Voces: personaje (0 Vela, 1 Hollín) y qué dicen (nombre del fichero).
+bool voiceInfo(Sfx id, int& who, const char*& line) {
+    switch (id) {
+        case Sfx::VelaAttack1: case Sfx::VelaAttack2: who = 0, line = "golpe"; return true;
+        case Sfx::VelaFinisher: who = 0, line = "remate"; return true;
+        case Sfx::VelaJump: who = 0, line = "salto"; return true;
+        case Sfx::VelaHurt: who = 0, line = "dolor"; return true;
+        case Sfx::VelaDodge: who = 0, line = "esquiva"; return true;
+        case Sfx::HollinAttack1: case Sfx::HollinAttack2: who = 1, line = "golpe"; return true;
+        case Sfx::HollinFinisher: who = 1, line = "remate"; return true;
+        case Sfx::HollinJump: who = 1, line = "salto"; return true;
+        case Sfx::HollinHurt: who = 1, line = "dolor"; return true;
+        case Sfx::HollinDodge: who = 1, line = "esquiva"; return true;
+        case Sfx::HollinLaugh: who = 1, line = "risa"; return true;
+        default: return false;
+    }
+}
+
+std::vector<StereoBuffer> loadTakes(const std::string& dir, int who, const char* line) {
+    std::vector<StereoBuffer> takes;
+    std::string base = dir + "/" + (who ? "hollin_" : "vela_") + line;
+    StereoBuffer b;
+    if (loadAnyWav(base + ".wav", b)) takes.push_back(b);
+    for (int n = 1; n <= 12; ++n)
+        if (loadAnyWav(base + "_" + std::to_string(n) + ".wav", b)) takes.push_back(b);
+    for (StereoBuffer& t : takes) {  // todas al mismo pico (-3 dB), vengan como vengan grabadas
+        int peak = 1;
+        for (int16_t v : t.data) peak = std::max(peak, std::abs(int(v)));
+        float k = 0.7f * 32000.0f / float(peak);
+        for (int16_t& v : t.data) v = int16_t(std::clamp(float(v) * k, -32000.0f, 32000.0f));
+    }
+    return takes;
+}
+
+}  // namespace
+
+std::vector<StereoBuffer> sfxVariants(Sfx id, const std::string& voiceDir) {
+    int who;
+    const char* line;
+    if (voiceDir.empty() || !voiceInfo(id, who, line)) return {renderSfx(id)};
+    std::vector<StereoBuffer> takes = loadTakes(voiceDir, who, line);
+    if (!takes.empty()) return takes;
+    // ¿Tiene alguna grabación? Entonces lo que falta sale de la más parecida (o se calla):
+    // mezclar su voz con una sintética desentona.
+    const char* lines[] = {"golpe", "remate", "salto", "dolor", "esquiva", "risa"};
+    bool recorded = false;
+    for (const char* l : lines) recorded = recorded || !loadTakes(voiceDir, who, l).empty();
+    if (!recorded) return {renderSfx(id)};
+    const char* fallback = !std::strcmp(line, "remate") ? "golpe" : !std::strcmp(line, "esquiva") ? "salto" : nullptr;
+    if (fallback) return loadTakes(voiceDir, who, fallback);
+    return {};
+}

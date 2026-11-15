@@ -35,7 +35,7 @@ void makeDirs(const std::string& path) {
 
 }  // namespace
 
-bool Audio::init(const std::string& cacheDir) {
+bool Audio::init(const std::string& cacheDir, const std::string& voiceDir) {
     lib_ = dlopen("libpulse-simple.so.0", RTLD_NOW);
     if (!lib_) {
         std::fprintf(stderr, "Audio: no se encontró libpulse-simple; el juego irá sin sonido\n");
@@ -55,7 +55,8 @@ bool Audio::init(const std::string& cacheDir) {
         std::fprintf(stderr, "Audio: no se pudo abrir la salida (error %d)\n", err);
         return false;
     }
-    for (int i = 0; i < int(Sfx::Count); ++i) sfx_.push_back(renderSfx(Sfx(i)));
+    for (int i = 0; i < int(Sfx::Count); ++i) sfx_.push_back(sfxVariants(Sfx(i), voiceDir));
+    lastTake_.assign(sfx_.size(), -1);
     voices_.reserve(64);
     running_ = true;
     thread_ = std::thread(&Audio::run, this);
@@ -131,10 +132,17 @@ void Audio::shutdown() {
 }
 
 void Audio::play(Sfx id, float gain, float pan, float pitch) {
-    if (!running_ || int(id) >= int(sfx_.size()) || sfx_[size_t(id)].frames() < 2) return;
+    if (!running_ || int(id) >= int(sfx_.size()) || sfx_[size_t(id)].empty()) return;
     std::lock_guard<std::mutex> lock(mutex_);
+    // Una toma al azar, distinta de la última si hay más de una.
+    const std::vector<StereoBuffer>& takes = sfx_[size_t(id)];
+    rng_ = rng_ * 1664525u + 1013904223u;
+    int take = int((rng_ >> 8) % uint32_t(takes.size()));
+    if (takes.size() > 1 && take == lastTake_[size_t(id)]) take = (take + 1) % int(takes.size());
+    lastTake_[size_t(id)] = take;
+    if (takes[size_t(take)].frames() < 2) return;
     if (voices_.size() >= 48) voices_.erase(voices_.begin());  // se corta la más antigua
-    voices_.push_back({&sfx_[size_t(id)], 0.0, gain, clampf(pan, -1, 1), pitch});
+    voices_.push_back({&takes[size_t(take)], 0.0, gain, clampf(pan, -1, 1), pitch});
 }
 
 void Audio::setStemGains(const float gains[int(Stem::Count)]) {

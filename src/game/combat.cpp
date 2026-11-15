@@ -726,6 +726,8 @@ void Game::voice(VoiceLine line, float chance) {
             break;
         default: return;
     }
-    sound(id, hero_.body.pos, 0.9f, randRange(0.96f, 1.05f));
+    // El remate, algo más grave y más fuerte (con voces grabadas sale de las mismas tomas).
+    bool big = line == VoiceLine::Finisher;
+    sound(id, hero_.body.pos, big ? 1.0f : 0.85f, big ? randRange(0.92f, 0.96f) : randRange(0.97f, 1.04f));
     voiceCooldown_ = line == VoiceLine::Attack ? 0.22f : 0.35f;
 }

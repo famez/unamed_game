@@ -1153,6 +1153,18 @@ int main() {
         run(g, 1.0f);
         CHECK(g.shadowMode() && shout(g, Sfx::HollinFinisher), "en la sombra, con la de Hollín");
     }
+    {  // Voces grabadas (assets/audio/voces): tomas, huecos cubiertos y sin mezclar con las sintéticas
+        std::string dir = std::string(GAME_ASSET_DIR) + "/audio/voces";
+        StereoBuffer w;
+        CHECK(loadAnyWav(dir + "/vela_golpe_1.wav", w) && w.frames() > kSampleRate / 10, "se lee un WAV en coma flotante (%zu muestras)",
+              w.frames());
+        CHECK(sfxVariants(Sfx::VelaAttack1, dir).size() == 3 && sfxVariants(Sfx::HollinHurt, dir).size() == 3,
+              "tres tomas de golpe de Vela y de dolor de Hollín");
+        CHECK(sfxVariants(Sfx::VelaFinisher, dir).size() == 3 && sfxVariants(Sfx::HollinDodge, dir).size() == 3,
+              "el remate sale de los golpes y la esquiva de los saltos");
+        CHECK(sfxVariants(Sfx::HollinLaugh, dir).empty(), "la risa, sin grabar, se calla (no suena sintética)");
+        CHECK(sfxVariants(Sfx::VelaAttack1, "/no/existe").size() == 1, "sin grabaciones, la voz sintetizada");
+    }
     {  // Modelos de la protagonista (.glb): se leen y tienen la jerarquía de la ficha
         for (const char* name : {"vela", "hollin"}) {
             GlbFile f;

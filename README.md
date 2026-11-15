@@ -35,11 +35,12 @@ la ciudad ya brilla. Se genera la primera vez en segundo plano (~2 s) y se guard
 impacto, cuerpo grave, crujido y timbre metálico, con saturación), guardia, explosiones,
 enemigos que gruñen al preparar el ataque y se deshacen al morir, sin campanitas.
 
-**La voz de la protagonista** también es síntesis, por formantes (pulso glotal + aliento por
-resonadores en las vocales de una voz femenina): grita al golpear («¡ha!», «¡hya!»), en los
-remates y las transformaciones, al saltar, al esquivar y al recibir daño. **Vela** (luz) suena
-aguda, limpia e inocente; **Hollín** (sombra), grave, ronca y saturada, y se ríe («je, je, je»)
-al reventar una farola o rematar el súper contraataque.
+**La voz de la protagonista** son grabaciones de voz real (`assets/audio/voces/`, «Female RPG
+Voice Starter Pack» de Cici Fyre, CC0): grita al golpear, en los remates y las
+transformaciones, al saltar, al esquivar y al recibir daño, con varias tomas al azar. **Vela**
+(luz) tiene la voz dulce y aguda; **Hollín** (sombra), la madura y grave. Se pueden añadir o
+cambiar tomas sin tocar código (nombres en `assets/audio/voces/LEEME.md`). Si no hay
+grabaciones, hay una voz sintetizada por formantes de respaldo, con la risa de Hollín.
 
 La salida usa PulseAudio/PipeWire cargado con `dlopen` en tiempo de ejecución: no hace falta
 ninguna cabecera para compilar y, si no está, el juego va en silencio.
