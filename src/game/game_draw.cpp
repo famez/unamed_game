@@ -1,6 +1,7 @@
 #include "game/game.h"
 
 #include "render/renderer.h"
+#include "render/hero_model.h"
 #include "render/models.h"
 #include "render/text.h"
 
@@ -675,16 +676,52 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
         if (t > 0.5f) look = shadowMode_ ? HeroLook::Light : HeroLook::Shadow;
         flash = std::max(flash, 1.0f - std::fabs(t - 0.5f) * 2.0f);
     }
-    uint32_t outline = look == HeroLook::Light ? rgba(150, 108, 36) : look == HeroLook::Shadow ? rgba(70, 24, 130) : kOutline;
-    // Cuerpo continuo (malla con skinning) con contorno, y los detalles rígidos encima.
-    const BuiltModel& body = heroModel(look, false);
+    uint32_t outline = look == HeroLook::Light ? rgba(120, 84, 30) : look == HeroLook::Shadow ? rgba(34, 18, 56) : kOutline;
+    // Inercia del pelo y las telas: el punto con muelle que sigue a la cabeza, en su espacio.
+    Vec3 lagW = hero_.hairLag();
+    const float* hm = j[Head].m;
+    Vec3 lag{hm[0] * lagW.x + hm[1] * lagW.y + hm[2] * lagW.z, hm[4] * lagW.x + hm[5] * lagW.y + hm[6] * lagW.z,
+             hm[8] * lagW.x + hm[9] * lagW.y + hm[10] * lagW.z};
+    const HeroGlbModel* glb = heroGlb(look);
     Mat4 skin[kMaxJoints];
-    skinMatrices(body, j, skin);
-    solid->skinned(body.mesh, skin, body.jointCount, flash, form_ != Form::None ? formColor(form_) : outline);
-    // La cabeza va en su propia malla, más fina (misma postura de reposo: mismas matrices).
-    // Sin contorno: en los huecos tallados (ojos, boca) el casco invertido asomaría por delante.
-    const BuiltModel& head = heroModel(look, true);
-    solid->skinned(head.mesh, skin, head.jointCount, flash, 0);
+    if (glb) {  // Vela o Hollín (.glb): cuerpo con contorno, cara y brillos sin él, piezas con inercia
+        uint32_t line = form_ != Form::None ? formColor(form_) : outline;
+        skinMatrices(glb->body, j, skin);
+        solid->skinned(glb->body.mesh, skin, JointCount, flash, line);
+        if (glb->detail.mesh >= 0) solid->skinned(glb->detail.mesh, skin, JointCount, flash, 0);
+        float run = clampf(hero_.speed / Character::kSprintSpeed, 0, 1);
+        for (const HeroPart& part : glb->parts) {
+            float ax = -lag.z * 3.0f, az = lag.x * 3.0f;  // la punta se va hacia donde se queda atrás
+            switch (part.kind) {
+                case HeroPartKind::Hair: ax -= 0.25f * run; break;
+                case HeroPartKind::Ahoge: ax = 0.6f * ax + 0.1f * std::sin(time_ * 7.0f); az *= 0.6f; break;
+                case HeroPartKind::ScarfBack: ax = 1.3f * ax - 1.0f * run - 0.08f * run * std::sin(time_ * 11.0f); break;
+                case HeroPartKind::ScarfFront: ax = 0.5f * ax - 0.3f * run; az *= 0.5f; break;
+                case HeroPartKind::Lantern: ax = 1.4f * ax + 0.12f * run * std::sin(time_ * 9.0f); az *= 1.4f; break;
+            }
+            Mat4 swing = translate(part.pivot) * rotateX(clampf(ax, -1.2f, 0.7f)) * rotateZ(clampf(az, -0.7f, 0.7f)) *
+                         translate(-part.pivot);
+            Mat4 bones[kMaxJoints];
+            bones[part.joint] = j[part.joint] * swing * part.inverseBind;
+            solid->skinned(part.mesh, bones, part.joint + 1, flash, part.kind == HeroPartKind::Lantern ? 0 : line);
+            if (part.hasGlow) {  // el farol: su brillo es la vida que le queda
+                float life = clampf(hp_ / maxHp_, 0, 1);
+                if (life < 0.3f) life *= 0.6f + 0.4f * float(std::fmod(time_ * 7.3f, 1.0f) > 0.3f);  // titila
+                uint32_t c = glb->glowColor ? glb->glowColor : rgba(255, 210, 120);
+                Vec3 col{float(c & 0xFF) / 255.0f, float((c >> 8) & 0xFF) / 255.0f, float((c >> 16) & 0xFF) / 255.0f};
+                solid->light(transformPoint(j[part.joint] * swing, part.glow), col * (0.4f + 1.6f * life), 2.5f);
+            }
+        }
+    } else {
+        // Cuerpo continuo (malla con skinning) con contorno, y los detalles rígidos encima.
+        const BuiltModel& body = heroModel(look, false);
+        skinMatrices(body, j, skin);
+        solid->skinned(body.mesh, skin, body.jointCount, flash, form_ != Form::None ? formColor(form_) : outline);
+        // La cabeza va en su propia malla, más fina (misma postura de reposo: mismas matrices).
+        // Sin contorno: en los huecos tallados (ojos, boca) el casco invertido asomaría por delante.
+        const BuiltModel& head = heroModel(look, true);
+        solid->skinned(head.mesh, skin, head.jointCount, flash, 0);
+    }
     // Forma Solar: el pelo se levanta en púas de fuego dorado que tiemblan, con lenguas de
     // llama alrededor del cuerpo y una luz cálida fuerte.
     if (form_ == Form::Solar) {
@@ -709,17 +746,12 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
         }
         solid->light(c + Vec3{0, 1.2f, 0}, Vec3{1.0f, 0.8f, 0.4f} * 3.0f, 6.0f);
     }
+    if (!glb) {  // el modelo de siempre: piezas rígidas, vetas, cara, correa y cinta
     for (const Shape& s : kHeroShapes) solid->ellipsoid(j[s.joint], s.center, s.radii, heroLookColor(look, s.color), s.material, flash);
     // Las vetas: apagadas sin Luz; encendidas, del color de la luz (o de la sombra).
     float lit = clampf(mp_ / maxMp_, 0, 1);
     uint32_t vein = mixRgb(rgba(70, 68, 72), shadowMode_ ? rgba(170, 100, 255) : kVein, lit);
     for (const NeonLine& l : kNeonLines) solid->box(j[l.joint], l.center, l.half, vein, lit > 0.05f ? Material::Glow : Material::Cloth, flash);
-    // Mechones de pelo: se inclinan hacia donde se queda atrás el punto con muelle que
-    // sigue a la cabeza (inercia al correr, saltar y girar).
-    Vec3 lagW = hero_.hairLag();
-    const float* hm = j[Head].m;
-    Vec3 lag{hm[0] * lagW.x + hm[1] * lagW.y + hm[2] * lagW.z, hm[4] * lagW.x + hm[5] * lagW.y + hm[6] * lagW.z,
-             hm[8] * lagW.x + hm[9] * lagW.y + hm[10] * lagW.z};
     drawHeroFace(*solid, j, lag, flash, vein, lit > 0.05f, time_, look);
     // Correa de cuero cruzada sobre el pecho (de la vaina de la hoja), siguiendo el abrigo.
     for (int k = 0; k < 6; ++k) {
@@ -735,18 +767,6 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
     }
     solid->box(j[Chest] * translate({0.04f, 0.115f, 0.124f}) * rotateZ(0.78f), {}, {0.018f, 0.014f, 0.004f}, rgba(120, 112, 100),
                Material::Metal, flash);  // hebilla
-    if (powers_.attack) {  // hasta que la recoge, no lleva arma
-        if (ws.style == WeaponStyle::Fists || ws.style == WeaponStyle::Claws) {  // los guanteletes van siempre puestos
-            drawWeapon(*solid, j[WristR], ws, hero_.move(), hero_.moveU(), time_);
-            drawWeapon(*solid, j[WristL], ws, hero_.move(), hero_.moveU(), time_);
-        } else if (hero_.weaponInHand()) {
-            drawWeapon(*solid, j[WristR], ws, hero_.move(), hero_.moveU(), time_);
-        } else {  // envainada a la espalda, en diagonal: empuñadura sobre el hombro derecho
-            Mat4 back = j[Chest] * translate({-0.1f, 0.25f, -0.14f}) * basisY(normalize(Vec3{0.45f, -1.0f, -0.05f})) *
-                        rotateX(-kPi * 0.5f);
-            drawWeapon(*solid, back, ws, Move::None, 0, time_);
-        }
-    }
     // Cinta de la espalda: segmentos alargados entre los puntos de la cadena, que se
     // estrechan hacia la punta.
     Vec3 rib[Character::kRibbonPoints];
@@ -759,6 +779,29 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
         float wdt = lerpf(0.055f, 0.04f, t);  // la cola de la bufanda
         solid->ellipsoid(translate((a + b) * 0.5f) * basisY(d), {}, {wdt, len * 0.62f, 0.014f}, heroLookColor(look, kScarfC),
                          Material::Cloth, flash);
+    }
+    }
+    // El arma propia del modelo (la espada-farola de Vela, el martillo de Hollín) en lugar de la
+    // genérica, si es la de ese modo: agarre en la mano y la hoja hacia delante del puño.
+    ItemId held = inv_.equipped();
+    bool ownProp = glb && glb->prop >= 0 &&
+                   (look == HeroLook::Shadow ? held == ItemId::ShadowHammer : held == ItemId::WoodenSword);
+    auto weaponAt = [&](const Mat4& w, Move m, float u) {
+        if (!ownProp) return drawWeapon(*solid, w, ws, m, u, time_);
+        Mat4 bone = w * translate(kGripLocal) * rotateX(kPi * 0.5f);
+        solid->skinned(glb->prop, &bone, 1, flash, outline);
+    };
+    if (powers_.attack) {  // hasta que la recoge, no lleva arma
+        if (ws.style == WeaponStyle::Fists || ws.style == WeaponStyle::Claws) {  // los guanteletes van siempre puestos
+            drawWeapon(*solid, j[WristR], ws, hero_.move(), hero_.moveU(), time_);
+            drawWeapon(*solid, j[WristL], ws, hero_.move(), hero_.moveU(), time_);
+        } else if (hero_.weaponInHand()) {
+            weaponAt(j[WristR], hero_.move(), hero_.moveU());
+        } else {  // envainada a la espalda, en diagonal: empuñadura sobre el hombro derecho
+            Mat4 back = j[Chest] * translate({-0.1f, 0.25f, -0.14f}) * basisY(normalize(Vec3{0.45f, -1.0f, -0.05f})) *
+                        rotateX(-kPi * 0.5f);
+            weaponAt(back, Move::None, 0);
+        }
     }
     if (guardFlash_ > 0)
         solid->light(translationOf(j[WristR]) + hero_.forward() * 0.3f,

@@ -5,6 +5,7 @@
 #include "game/game.h"
 #undef private
 #include "audio/synth.h"
+#include "render/glb.h"
 #include <cstdio>
 
 const float dt = 1.0f / 60;
@@ -1132,6 +1133,24 @@ int main() {
         run(g, 3.2f);
         CHECK(g.hero_.downTimer < 0 && g.hp_ == 100 && length(g.hero_.body.pos - g.heroStart_) < 0.1f,
               "reaparece en el inicio con la vida llena");
+    }
+    {  // Modelos de la protagonista (.glb): se leen y tienen la jerarquía de la ficha
+        for (const char* name : {"vela", "hollin"}) {
+            GlbFile f;
+            std::string err;
+            bool ok = f.load(std::string(GAME_ASSET_DIR) + "/models/" + name + ".glb", err);
+            CHECK(ok && f.meshes.size() > 100, "%s.glb se lee: %zu mallas %s", name, f.meshes.size(), err.c_str());
+            bool bones = true;
+            for (const char* b : {"Hips", "Spine", "Neck", "Head", "UpperArm_L", "LowerArm_R", "Hand_R", "UpperLeg_L", "Foot_R"})
+                bones &= f.find(b) >= 0;
+            CHECK(bones && (f.find("Prop_Sword") >= 0 || f.find("Prop_Hammer") >= 0), "%s.glb: huesos de la ficha y su arma", name);
+            // El esqueleto del juego tiene las articulaciones donde las tiene el modelo.
+            Mat4 rest[JointCount];
+            computeWorldMatrices(Pose{}, Mat4::identity(), rest);
+            Vec3 knee = translationOf(f.nodes[size_t(f.find("LowerLeg_L"))].world), head = translationOf(f.nodes[size_t(f.find("Head"))].world);
+            CHECK(std::fabs(knee.y - translationOf(rest[KneeL]).y) < 0.01f && length(head - translationOf(rest[Head])) < 0.01f,
+                  "%s: rodilla y cabeza en su sitio del esqueleto", name);
+        }
     }
     std::printf("\n%s (%d fallos)\n", fails ? "HAY FALLOS" : "TODO OK", fails);
     return fails ? 1 : 0;

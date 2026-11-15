@@ -6,6 +6,7 @@
 #include "dev/showcase.h"
 #include "ui/level_select.h"
 #include "ui/menu.h"
+#include "render/hero_model.h"
 #include "render/models.h"
 #include "core/platform.h"
 #include "render/renderer.h"
@@ -104,6 +105,7 @@ const char kHelp[] =
     "  --demo                        el bot enseña técnicas, formas y armas de luz y de sombra\n"
     "  --retrato | --cuerpo          cámara frente a la cara o al cuerpo del protagonista\n"
     "  --camyaw RADIANES             orientación inicial de la cámara\n"
+    "  --sombra                      empezar en modo sombra\n"
     "  --vitrina                     guion que enseña ataques, técnicas, formas y mecánicas (en el patio)\n"
     "  --video FICHERO.mp4 [SEG]     graba a velocidad real (30 fps, con ffmpeg); sale a los SEG segundos\n"
     "  --screenshot FICHERO SEG [N]  guarda N fotogramas (.ppm) desde SEG segundos y sale\n"
@@ -171,6 +173,7 @@ int main(int argc, char** argv) {
     }
     double modelStart = platform::timeSeconds();
     buildModels(renderer);
+    loadHeroModels(renderer, assetDir);  // Vela y Hollín (.glb); sin ellos, el modelo de siempre
     std::printf("modelos generados en %.0f ms\n", 1000.0 * (platform::timeSeconds() - modelStart));
 
     glEnable(GL_PROGRAM_POINT_SIZE);
@@ -225,6 +228,12 @@ int main(int argc, char** argv) {
             if (std::strcmp(argv[i], "--escena") == 0) game.jumpToScene(argv[i + 1]);
     };
     startGame();
+    for (int i = 1; i < argc; ++i)  // --sombra: empezar en modo sombra (niveles sueltos y patio)
+        if (std::strcmp(argv[i], "--sombra") == 0) {
+            Controls z;
+            z.swapMode = true;
+            game.update(float(kFixedDt), z);
+        }
     OrbitCamera cam;
     cam.target = game.hero().body.pos + Vec3{0, 1.0f, 0};
     Vec3 camVel;  // velocidad del muelle de la cámara
