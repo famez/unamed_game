@@ -236,7 +236,8 @@ void Game::updateEnemy(Enemy& e, float dt) {
             }
             break;
         case AiState::Stagger:
-            if (e.stateTime > 0.45f) {
+            if (e.stateTime > std::max(0.45f, e.stun)) {
+                e.stun = 0;
                 e.state = AiState::Chase;
                 e.stateTime = 0;
                 e.cooldown = std::max(e.cooldown, 0.3f);

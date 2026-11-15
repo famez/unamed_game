@@ -145,6 +145,7 @@ void Game::update(float dt, const Controls& input) {
             dodgeBuffer_ = 0;
             attackBuffer_ = 0;
         }
+        updateRiposte(dt);
         if (attackBuffer_ > 0 && !hero_.armed()) {  // atacar con el arma envainada la saca de golpe
             hero_.setArmed(true, true);
             combatTimer_ = 5.0f;

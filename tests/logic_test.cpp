@@ -184,6 +184,46 @@ int main() {
         CHECK(b.hp_ == 100, "guardia de frente: sin dano (PV %.0f)", b.hp_);
         CHECK(b.enemies_[0].state == AiState::Stagger, "bloqueo perfecto: el duende se tambalea (%s)",
               aiStateName(b.enemies_[0].state));
+        CHECK(b.enemies_[0].stun > 1.5f && b.riposteWindow() > 0, "bloqueo perfecto: queda aturdido (%.1f s) y se abre el contraataque",
+              b.enemies_[0].stun);
+        run(b, 1.0f);
+        CHECK(b.enemies_[0].state == AiState::Stagger, "sigue aturdido un segundo después");
+        // Súper contraataque: atacar en la ventana encadena solo la ráfaga, con el doble de daño.
+        b.enemies_[0].health = 1000;
+        float h0 = b.enemies_[0].health;
+        run(b, 0.05f, press(&Controls::attack));
+        CHECK(b.riposting(), "atacar con el enemigo aturdido: empieza el súper contraataque");
+        int moves = 0;
+        Move last = Move::None;
+        for (int k = 0; k < 600 && b.riposting(); ++k) {
+            b.update(dt, {});
+            if (b.hero_.move() != last && b.hero_.move() != Move::None) ++moves;
+            last = b.hero_.move();
+        }
+        float dealt = h0 - b.enemies_[0].health;
+        CHECK(!b.riposting() && moves == 5 && b.hp_ == 100, "la ráfaga encadena %d golpes sola y termina sin recibir daño", moves);
+        CHECK(dealt > 60, "con el doble de daño (%.0f)", dealt);
+        // En sombra, con el mazo: 4 golpes, el último el salto que agrieta el suelo.
+        b.unlockShadow();
+        b.freePlay_ = true;
+        b.update(dt, press(&Controls::swapMode));
+        b.freePlay_ = false;
+        run(b, 1.0f);
+        b.enemies_[0].stun = 2.0f;
+        b.enemies_[0].state = AiState::Stagger;
+        b.enemies_[0].stateTime = 0;
+        b.riposteWindow_ = 1.0f;
+        b.riposteTarget_ = 0;
+        run(b, 0.05f, press(&Controls::attack));
+        moves = 0;
+        bool quake = false;
+        for (int k = 0; k < 600 && b.riposting(); ++k) {
+            b.update(dt, {});
+            if (b.hero_.move() != last && b.hero_.move() != Move::None) ++moves;
+            quake |= b.hero_.move() == Move::Quake;
+            last = b.hero_.move();
+        }
+        CHECK(b.shadowMode() && moves == 4 && quake, "en sombra, con el mazo: %d golpes y remate de salto", moves);
     }
     {  // Seta: la onda al caer se esquiva saltando
         Game g = fresh();

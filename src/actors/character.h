@@ -85,6 +85,12 @@ public:
     // al empezar el golpe. Si llega durante otro golpe queda en cola y se encadena.
     bool attack(float faceYaw, float dash);
     bool cast(float faceYaw);
+    // Empieza ya este golpe, corte lo que esté haciendo (súper contraataque).
+    void forceMove(Move m, float faceYaw, float dash) {
+        queued_ = false;
+        move_ = Move::None;
+        startMove(m, faceYaw, dash);
+    }
     // Arma en la mano (combate) o a la espalda (explorando). Cambiar hace el gesto de
     // llevarse la mano al hombro; a mitad del gesto el arma cambia de sitio.
     void setArmed(bool a, bool instant = false) {

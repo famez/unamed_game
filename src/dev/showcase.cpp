@@ -25,6 +25,8 @@ const Act kActs[] = {
     {"LOBO DE SOMBRA", "G · 50 de Poder: corre, muerde y roba vida", 560},
     {"FUNDIRSE CON LA SOMBRA", "Q en la oscuridad · la luz no deja pasar · clic: emboscada desde el suelo", 660},
     {"TREPAR COMO SOMBRA", "Fundido, empuja contra una pared oscura: sube por ella y pasa al tejado", 480},
+    {"BLOQUEO PERFECTO", "Guardia justo antes del golpe: aturdido · ataca: súper contraataque (luz)", 600},
+    {"BLOQUEO PERFECTO", "En sombra, con el mazo: súper contraataque y corona de púas", 600},
 };
 constexpr int kActCount = int(sizeof(kActs) / sizeof(kActs[0]));
 
@@ -198,6 +200,15 @@ Controls Showcase::step(Game& g, float& camYaw, const Controls& base) {
                 camYaw = clearestYaw(g, best, yaw, {0.0f, 0.6f, -0.6f, kPi});
                 break;
             }
+            case 14: case 15: {
+                bool shadowAct = act_ == 15;
+                if (g.shadowMode() != shadowAct) c.swapMode = true;
+                home_ = openSpot();
+                place(home_, 0);
+                g.devSpawn(EnemyKind::Dazzled, home_ + Vec3{0, 0, 2.2f});
+                g.devToughen(0, 8.0f);
+                break;
+            }
             case 13: {  // la cara oscura de un bloque alto, con sitio delante
                 if (!g.shadowMode()) c.swapMode = true;
                 const Vec3 normals[4] = {{-1, 0, 0}, {1, 0, 0}, {0, 0, -1}, {0, 0, 1}};
@@ -274,6 +285,20 @@ Controls Showcase::step(Game& g, float& camYaw, const Controls& base) {
             if (t == 400) spawnRing(g, g.hero().body.pos, g.hero().yaw, 2, 2.0f, true);
             if (t == 440) c.attack = true;  // emboscada
             if (t > 480) fight(g, c, t);
+            break;
+        }
+        case 14: case 15: {
+            // Guardia justo cuando el Gris termina de prepararse; con el contraataque abierto, ataca.
+            Vec3 foe;
+            if (!g.lockTarget(foe)) c.lockOn = t % 15 == 0;
+            // Cada 4 s: levanta la guardia y el Gris ataca justo entonces; con el contraataque
+            // abierto, ataca.
+            int k = t % 240;
+            if (k == 40 && !g.riposting()) guard_ = 30;
+            if (k == 43 && !g.riposting()) g.devAttackNow(0);
+            c.guard = guard_ > 0 && !g.riposting();
+            guard_ = std::max(0, guard_ - 1);
+            if (g.riposteWindow() > 0 && !g.riposting() && k > 75) c.attack = true;
             break;
         }
         case 13:

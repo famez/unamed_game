@@ -59,6 +59,7 @@ struct Enemy {
     float hitFlash = 0;   // destello blanco al recibir un golpe
     float cooldown = 0;   // hasta poder volver a atacar
     float freeze = 0;     // > 0: congelado (Hielo): todo a menos velocidad
+    float stun = 0;       // aturdido tras un bloqueo perfecto: segundos de tambaleo
     float burn = 0;       // > 0: ardiendo (Fuego): daño continuo
     float seed = 0;       // desfase de animación y de la deambulación
     float phase = 0;      // ciclo de pasos / aleteo

@@ -55,6 +55,10 @@ const Spell kShadowSpells[kSpellSlots] = {Spell::Spikes, Spell::Chains, Spell::D
 
 constexpr float kInvulnAfterHit = 0.8f;
 constexpr float kPerfectGuard = 0.35f;  // bloquear al poco de levantar la guardia rechaza al atacante
+constexpr float kParryStun = 2.2f;      // aturdido tras un bloqueo perfecto
+constexpr float kRiposteWindow = 1.4f;  // para empezar el súper contraataque
+constexpr float kRiposteDamage = 2.0f;
+const uint32_t kRiposteShadow = rgba(150, 80, 255);
 constexpr float kCromaPerKill = 0.015f;
 
 // Lo que suelta cada familia al liberarse: luz cálida o sombra violeta.
@@ -364,7 +368,9 @@ void Game::resolveImpact(Move m) {
         if (std::fabs(e.center().y - chestY) > 1.5f || !inArc(to, e.body.radius)) continue;
         Vec3 dir = normalize(flat(to));
         if (length(dir) < 0.5f) dir = fwd;
-        hitEnemy(e, dir, (w.power + inv_.powerBonus + levelPower()) * hp.damage * formDamage(), hp.knock * (form_ != Form::None ? 1.3f : 1.0f),
+        float riposte = riposteStep_ >= 0 ? kRiposteDamage : 1.0f;
+        hitEnemy(e, dir, (w.power + inv_.powerBonus + levelPower()) * hp.damage * formDamage() * riposte,
+                 hp.knock * (form_ != Form::None ? 1.3f : 1.0f) * (riposteStep_ >= 0 && riposteStep_ < riposteLength() ? 0.3f : 1.0f),
                  hp.lift, hp.heavy || form_ == Form::Wolf);
         ++hits;
     }
@@ -405,6 +411,29 @@ void Game::resolveImpact(Move m) {
     if (hits > 0) {
         hitStop_ = isFinisher(m) ? 0.09f : 0.05f;
         shake_ = std::max(shake_, isFinisher(m) ? 0.35f : 0.12f);
+    }
+    // Último golpe del súper contraataque: estallido de luz o corona de púas de sombra.
+    if (riposteStep_ >= riposteLength() && isFinisher(m)) {
+        hitStop_ = 0.22f;
+        shake_ = std::max(shake_, 0.6f);
+        if (!shadowMode_) {
+            for (int k = -1; k <= 1; ++k) {
+                Vec3 d = normalize(fwd + Vec3{-fwd.z, 0, fwd.x} * (0.35f * float(k)));
+                projectiles_.push_back({ProjectileKind::Wave, origin + Vec3{0, 1.0f, 0} + d * 0.8f, d * 18.0f, 0.8f});
+            }
+            spawnRing(origin + Vec3{0, 0.05f, 0}, 5.0f, 0.5f, rgba(255, 220, 120));
+            spawnSparks(origin + fwd + Vec3{0, 1, 0}, {0, 1, 0}, 40, rgba(255, 240, 190), 8.0f);
+            novaFlash_ = std::max(novaFlash_, 0.25f);
+        } else {
+            for (int k = 0; k < 10; ++k) {
+                float a = float(k) / 10.0f * 2.0f * kPi;
+                Vec3 d{std::cos(a), 0, std::sin(a)};
+                projectiles_.push_back({ProjectileKind::Spikes, origin + d * 0.6f + Vec3{0, 0.9f, 0}, d * 13.0f, 0.7f, -1});
+            }
+            spawnRing(origin + Vec3{0, 0.05f, 0}, 5.0f, 0.5f, kRiposteShadow);
+            spawnSparks(origin + Vec3{0, 0.5f, 0}, {0, 1, 0}, 40, rgba(30, 15, 45), 7.0f, false);
+        }
+        notify("¡SÚPER CONTRAATAQUE!", shadowMode_ ? rgba(190, 130, 255) : rgba(255, 220, 120));
     }
     // Formas: la Solar remata con ondas de luz; el lobo recupera vida con cada mordisco.
     if (form_ == Form::Solar && isFinisher(m)) {
@@ -560,9 +589,19 @@ void Game::hurtHero(Vec3 dir, float damage, float knock, Enemy* source) {
         if (source) {
             source->state = AiState::Stagger;
             source->stateTime = 0;
-            source->knock = -dir * (perfectGuard_ ? 7.0f : 3.0f);
+            source->knock = -dir * (perfectGuard_ ? 2.5f : 3.0f);
         }
-        if (perfectGuard_) hitStop_ = 0.08f;
+        if (perfectGuard_ && source) {  // aturdido: ventana para el súper contraataque
+            source->stun = source->boss ? kParryStun * 0.45f : kParryStun;
+            riposteWindow_ = kRiposteWindow;
+            riposteTarget_ = int(source - enemies_.data());
+            hitStop_ = 0.16f;
+            shake_ = std::max(shake_, 0.3f);
+            spawnRing(hero_.body.pos + Vec3{0, 0.05f, 0}, 3.0f, 0.35f, rgba(160, 230, 255));
+            notify("¡Bloqueo perfecto! · ataca: contraataque", rgba(160, 230, 255));
+        } else if (perfectGuard_) {
+            hitStop_ = 0.08f;
+        }
         sound(perfectGuard_ ? Sfx::PerfectGuard : Sfx::Guard, chest);
         if (source) source->rlReward -= perfectGuard_ ? 1.0f : 0.5f;  // bloqueado: mala táctica
         return;
@@ -603,4 +642,61 @@ void Game::respawnHero() {
     heroInvuln_ = 2.0f;
     playScene("caida");
     spawnRing(checkpoint_ + Vec3{0, 0.05f, 0}, 1.5f, 0.8f, rgba(255, 255, 200));
+}
+
+// --- Súper contraataque --------------------------------------------------------------------
+
+namespace {
+const Move kRiposteBlade[] = {Move::Counter, Move::Slash1, Move::Slash2, Move::Slash3, Move::Finisher};
+const Move kRiposteHammer[] = {Move::Sweep, Move::Smash, Move::Sweep, Move::Quake};
+const Move kRiposteFists[] = {Move::Punch, Move::PunchL, Move::Punch, Move::PunchL, Move::Uppercut};
+}  // namespace
+
+int Game::riposteLength() const { return hero_.moveSet == MoveSet::Hammer ? 4 : 5; }
+
+Move Game::riposteMove(int step) const {
+    if (hero_.moveSet == MoveSet::Hammer) return kRiposteHammer[step];
+    if (hero_.moveSet == MoveSet::Fists) return kRiposteFists[step];
+    return kRiposteBlade[step];
+}
+
+void Game::updateRiposte(float dt) {
+    riposteWindow_ = std::max(0.0f, riposteWindow_ - dt);
+    auto target = [&]() -> Enemy* {
+        if (riposteTarget_ < 0 || riposteTarget_ >= int(enemies_.size())) return nullptr;
+        Enemy& e = enemies_[size_t(riposteTarget_)];
+        return e.targetable() ? &e : nullptr;
+    };
+    Enemy* e = target();
+    if (riposteStep_ < 0) {  // ¿empieza? Atacar con el aturdido a tiro
+        if (riposteWindow_ <= 0 || attackBuffer_ <= 0 || !e || e->stun <= 0 || hero_.rolling() || hero_.hurt()) return;
+        if (length(flat(e->body.pos - hero_.body.pos)) > 7.0f) return;
+        riposteStep_ = 0;
+        riposteWindow_ = 0;
+        attackBuffer_ = 0;
+        lock_ = riposteTarget_;
+        hero_.setArmed(true, true);
+        spawnRing(hero_.body.pos + Vec3{0, 0.05f, 0}, 2.0f, 0.3f, shadowMode_ ? kRiposteShadow : rgba(255, 220, 120));
+        sound(Sfx::PerfectGuard, hero_.body.pos, 1.0f, 1.3f);
+    }
+    attackBuffer_ = 0;  // durante la ráfaga, el clic no cuenta
+    if (!e || hero_.downTimer >= 0) {
+        riposteStep_ = -1;
+        return;
+    }
+    heroInvuln_ = std::max(heroInvuln_, 0.15f);
+    e->stun = std::max(e->stun, e->stateTime + 0.6f);  // sigue aturdido mientras dura
+    bool ready = hero_.move() == Move::None || (hero_.moveU() > 0.72f && !isFinisher(hero_.move()));
+    if (!ready) return;
+    if (riposteStep_ >= riposteLength()) {
+        if (hero_.move() == Move::None) riposteStep_ = -1;  // terminado
+        return;
+    }
+    Vec3 to = flat(e->body.pos - hero_.body.pos);
+    float d = length(to), reach = inv_.weaponStats().reach;
+    float yaw = d > 1e-3f ? std::atan2(to.x, to.z) : hero_.yaw;
+    hero_.forceMove(riposteMove(riposteStep_), yaw, d > reach * 0.7f ? std::min(d - reach * 0.6f, 5.0f) : 0.0f);
+    ++riposteStep_;
+    // Estela de imágenes: chispas a lo largo del acercamiento.
+    spawnSparks(hero_.body.pos + Vec3{0, 1, 0}, normalize(to), 8, shadowMode_ ? kRiposteShadow : rgba(255, 230, 160), 3.0f);
 }

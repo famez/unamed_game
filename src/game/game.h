@@ -413,6 +413,12 @@ public:
     void devClearEnemies();
     void devSpawn(EnemyKind kind, Vec3 pos);
     void devNoSpawns(bool on) { devNoSpawns_ = on; }
+    void devAttackNow(size_t i) {  // el Gris i ataca ya (para el bloqueo perfecto)
+        if (i < enemies_.size() && enemies_[i].targetable()) enemyStartAttack(enemies_[i]);
+    }
+    void devToughen(size_t i, float k) {
+        if (i < enemies_.size()) enemies_[i].health *= k;
+    }
     bool devFreeSpot(Vec3& p, float radius) const;  // busca suelo libre cerca de p
     bool infiniteHp() const { return infHp_; }
     bool infinitePower() const { return infPower_; }
@@ -474,7 +480,10 @@ public:
     float shadowAt(Vec3 p) const;
     bool diving() const { return diving_; }
     bool onWall() const { return onWall_; }
+    bool riposting() const { return riposteStep_ >= 0; }
+    float riposteWindow() const { return riposteWindow_; }
     const World& world() const { return world_; }
+    const std::vector<Enemy>& enemies() const { return enemies_; }
     void addPortal(Vec3 pos) { portals_.push_back({pos}); }
     const std::vector<Portal>& portals() const { return portals_; }
     Vec3 hostLight() const { return hostPos_; }
@@ -572,6 +581,9 @@ private:
     void hitEnemy(Enemy& e, Vec3 dir, float damage, float knock, float lift, bool heavy);
     void killEnemy(Enemy& e);
     void hurtHero(Vec3 dir, float damage, float knock, Enemy* source);
+    void updateRiposte(float dt);
+    int riposteLength() const;
+    Move riposteMove(int step) const;
     void updateEnemy(Enemy& e, float dt);
     Brain& brainFor(const Enemy& e);
     int heroActionCode() const;
@@ -703,6 +715,10 @@ private:
     float heroFlash_ = 0;
     float guardFlash_ = 0;    // destello de bloqueo (perfecto = más fuerte)
     bool perfectGuard_ = false;
+    // Súper contraataque: tras un bloqueo perfecto el atacante queda aturdido y, si se ataca
+    // a tiempo, el protagonista encadena solo una ráfaga de golpes con el doble de daño.
+    float riposteWindow_ = 0;
+    int riposteTarget_ = -1, riposteStep_ = -1;
     Spell pendingSpell_ = Spell::Fire;  // la que sale al llegar el impacto del Cast
     float novaFlash_ = 0;
     std::vector<LightPoint> lightPoints_;

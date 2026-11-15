@@ -26,4 +26,5 @@ private:
     Vec3 home_;            // sitio despejado del acto
     Vec3 dir_;             // hacia dónde empujar
     int lampA_ = -1, lampB_ = -1, switch_ = -1;
+    int guard_ = 0;  // pasos que le quedan con la guardia levantada
 };

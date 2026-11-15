@@ -55,7 +55,7 @@ Dependencias del sistema: `libOpenGL`/`libGLX` (glvnd + Mesa), `libX11` y `libXi
 (`sudo apt install libxi-dev`). Incluidas en el repositorio: `stb_truetype.h` y las
 fuentes Orbitron y Exo 2.
 
-Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena id` (reproduce una escena del guion), `--autoplay` (un bot combate solo, sin capturar el ratón),
+Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena id` (reproduce una escena del guion), `--autoplay` (un bot combate solo, sin capturar el ratón), `--vitrina` (guion que enseña ataques, técnicas, formas y mecánicas), `--video fichero.mp4 [seg]` (graba a velocidad real con ffmpeg),
 `--screenshot fichero.ppm segundos [frames]` (guarda frames y sale) y `--camyaw radianes`.
 
 ## Controles
@@ -65,9 +65,9 @@ Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena i
 | W A S D | Correr (relativo a la cámara). **Shift**: correr más rápido |
 | Espacio | Saltar; en el aire, **doble salto** con voltereta |
 | Clic izquierdo | Atacar (combo según el arma). **Mantener**: corte cargado (lanza una onda) |
-| Clic derecho (mantener) | Guardia (se puede andar mirando a la cámara). Justo a tiempo: bloqueo perfecto |
+| Clic derecho (mantener) | Guardia (se puede andar mirando a la cámara). Justo antes del golpe: **bloqueo perfecto**, el enemigo queda aturdido y atacar lanza el **súper contraataque** |
 | C / Ctrl | Voltereta de esquiva (invulnerable); un golpe justo después es un **contraataque** |
-| Q | **Luz**: junto a una farola, **entrar en ella**; dentro, saltar a otra fuente. **Sombra**: en la oscuridad, **fundirse** con el suelo |
+| Q | **Luz**: junto a una farola, **entrar en ella**; dentro, saltar a otra fuente. **Sombra**: en la oscuridad, **fundirse** con el suelo (y, empujando contra una pared oscura, **trepar** por ella hasta el tejado) |
 | Portal / Z | Cambiar entre **luz y sombra** cruzando un portal (Z en los niveles sin historia) |
 | G | **Transformarse** (50 de Poder, 20 s): Forma Solar en la luz, Lobo de sombra en la sombra |
 | T | **Invocar compañero** (chispa aliada o el eco de Nora) |

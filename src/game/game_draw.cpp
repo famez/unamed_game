@@ -783,6 +783,14 @@ void Game::drawEnemies(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Dr
             if (int(i) == lock_) dd.circleXZ(e.body.pos + Vec3{0, 0.02f, 0}, e.body.radius + 0.3f, 24, rgba(255, 220, 60));
             continue;
         }
+        if (e.state == AiState::Stagger && e.stun > 0) {  // aturdido: estrellas que giran sobre la cabeza
+            Vec3 top = e.body.pos + Vec3{0, e.body.height + 0.25f, 0};
+            for (int k = 0; k < 3; ++k) {
+                float a = time_ * 6.0f + float(k) * 2.094f;
+                Vec3 p = top + Vec3{std::cos(a) * 0.4f * e.size, 0.06f * std::sin(a * 2.0f), std::sin(a) * 0.4f * e.size};
+                solid->ellipsoid(translate(p), {}, {0.07f, 0.07f, 0.07f}, rgba(255, 240, 150), Material::Glow);
+            }
+        }
         if (e.state == AiState::Spawning) {
             // Portal oscuro en el suelo del que sale.
             float k = 1.0f - smoothstep01((e.stateTime - 0.6f) / 0.3f);
