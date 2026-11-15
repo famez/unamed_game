@@ -87,7 +87,7 @@ const NeonLine kNeonLines[] = {
 // la luz; violeta, el de la sombra); parpadean y la mirada se escapa a veces. Cejas finas,
 // una boca pequeña con media sonrisa y, bajo el ojo izquierdo, una veta de luz como una
 // lágrima que brilla con la Luz (violeta en modo sombra).
-void drawHeroFace(Renderer& r, const Mat4* j, Vec3 /*lag*/, float flash, uint32_t vein, bool veinGlow, float time) {
+void drawHeroFace(Renderer& r, const Mat4* j, Vec3 /*lag*/, float flash, uint32_t vein, bool veinGlow, float time, HeroLook look) {
     const Mat4& h = j[Head];
     float bp = std::fmod(time + 1.3f * std::sin(time * 0.17f), 4.1f);
     float blink = bp < 0.14f ? std::sin(bp / 0.14f * kPi) : 0.0f;
@@ -102,7 +102,10 @@ void drawHeroFace(Renderer& r, const Mat4* j, Vec3 /*lag*/, float flash, uint32_
         int side = sx > 0 ? 0 : 1;
         Mat4 e = h * translate(eyeAt[side] - Vec3{0, 0, 0.0025f}) * rotateY(0.34f * sx) * rotateX(-0.08f);
         r.ellipsoid(e, {}, {0.0205f, 0.0245f, 0.0062f}, rgba(246, 242, 236), Material::Cloth, flash);
-        uint32_t iris = sx > 0 ? rgba(226, 164, 66) : rgba(150, 126, 206);
+        // Un ojo de cada color; en cada modo, los dos del suyo.
+        uint32_t iris = look == HeroLook::Light ? rgba(240, 176, 60) : look == HeroLook::Shadow ? rgba(168, 96, 255)
+                        : sx > 0                ? rgba(226, 164, 66)
+                                                : rgba(150, 126, 206);
         Vec3 io{glance - 0.002f * sx, -0.003f, 0.0012f};
         r.ellipsoid(e, io, {0.0135f, 0.0175f, 0.0062f}, iris, Material::Cloth, flash);
         r.ellipsoid(e, io + Vec3{0, 0.004f, 0.0006f}, {0.0128f, 0.0075f, 0.0062f}, mixRgb(iris, rgba(40, 30, 40), 0.35f),
@@ -119,7 +122,7 @@ void drawHeroFace(Renderer& r, const Mat4* j, Vec3 /*lag*/, float flash, uint32_
                     Material::Cloth, flash);
         // Ceja fina, algo arqueada.
         r.ellipsoid(h * translate(browAt[side] - Vec3{0, 0, 0.002f}) * rotateY(0.34f * sx) * rotateZ(0.12f * sx), {},
-                    {0.021f, 0.0034f, 0.0045f}, rgba(50, 44, 52), Material::Cloth, flash);
+                    {0.021f, 0.0034f, 0.0045f}, heroLookColor(look, rgba(50, 44, 52)), Material::Cloth, flash);
     }
     // Boca pequeña con media sonrisa.
     r.ellipsoid(h * translate(mouthAt + Vec3{-0.002f, 0, -0.0018f}), {}, {0.0105f, 0.0016f, 0.0035f}, rgba(150, 92, 92),
@@ -534,14 +537,23 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
         return;
     }
     float flash = heroFlash_ > 0 ? 0.7f : 0;
+    // Aspecto según el modo. Al cambiar, el cuerpo se enciende de blanco y cambia de ropa en
+    // el momento más brillante.
+    HeroLook look = !shadowUnlocked_ ? HeroLook::Base : shadowMode_ ? HeroLook::Shadow : HeroLook::Light;
+    if (modeFlash_ > 0 && shadowUnlocked_) {
+        float t = modeFlash_ / kModeSwapTime;  // 1 → 0
+        if (t > 0.5f) look = shadowMode_ ? HeroLook::Light : HeroLook::Shadow;
+        flash = std::max(flash, 1.0f - std::fabs(t - 0.5f) * 2.0f);
+    }
+    uint32_t outline = look == HeroLook::Light ? rgba(150, 108, 36) : look == HeroLook::Shadow ? rgba(70, 24, 130) : kOutline;
     // Cuerpo continuo (malla con skinning) con contorno, y los detalles rígidos encima.
-    const BuiltModel& body = model(ModelId::Hero);
+    const BuiltModel& body = heroModel(look, false);
     Mat4 skin[kMaxJoints];
     skinMatrices(body, j, skin);
-    solid->skinned(body.mesh, skin, body.jointCount, flash, form_ != Form::None ? formColor(form_) : kOutline);
+    solid->skinned(body.mesh, skin, body.jointCount, flash, form_ != Form::None ? formColor(form_) : outline);
     // La cabeza va en su propia malla, más fina (misma postura de reposo: mismas matrices).
     // Sin contorno: en los huecos tallados (ojos, boca) el casco invertido asomaría por delante.
-    const BuiltModel& head = model(ModelId::HeroHead);
+    const BuiltModel& head = heroModel(look, true);
     solid->skinned(head.mesh, skin, head.jointCount, flash, 0);
     // Formas prismáticas: piezas de luz propias de cada una.
     if (form_ == Form::Aurora) {  // halo que gira sobre la cabeza
@@ -565,7 +577,7 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
             solid->ellipsoid(wing, {sx * 0.3f, -0.15f, 0}, {0.28f, 0.14f, 0.015f}, rgba(255, 255, 255), Material::Glow);
         }
     }
-    for (const Shape& s : kHeroShapes) solid->ellipsoid(j[s.joint], s.center, s.radii, s.color, s.material, flash);
+    for (const Shape& s : kHeroShapes) solid->ellipsoid(j[s.joint], s.center, s.radii, heroLookColor(look, s.color), s.material, flash);
     // Las vetas: apagadas sin Luz; encendidas, del color de la luz (o de la sombra).
     float lit = clampf(shadowMode_ ? shadow_ / maxShadow_ : mp_ / maxMp_, 0, 1);
     uint32_t vein = mixRgb(rgba(70, 68, 72), shadowMode_ ? rgba(170, 100, 255) : kVein, lit);
@@ -576,7 +588,7 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
     const float* hm = j[Head].m;
     Vec3 lag{hm[0] * lagW.x + hm[1] * lagW.y + hm[2] * lagW.z, hm[4] * lagW.x + hm[5] * lagW.y + hm[6] * lagW.z,
              hm[8] * lagW.x + hm[9] * lagW.y + hm[10] * lagW.z};
-    drawHeroFace(*solid, j, lag, flash, vein, lit > 0.05f, time_);
+    drawHeroFace(*solid, j, lag, flash, vein, lit > 0.05f, time_, look);
     // Correa de cuero cruzada sobre el pecho (de la vaina de la hoja), siguiendo el abrigo.
     for (int k = 0; k < 6; ++k) {
         float t0 = float(k) / 6.0f, t1 = float(k + 1) / 6.0f;
@@ -613,7 +625,8 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
         if (len < 1e-4f) continue;
         float t = float(i) / float(Character::kRibbonPoints - 1);
         float wdt = lerpf(0.055f, 0.04f, t);  // la cola de la bufanda
-        solid->ellipsoid(translate((a + b) * 0.5f) * basisY(d), {}, {wdt, len * 0.62f, 0.014f}, kScarfC, Material::Cloth, flash);
+        solid->ellipsoid(translate((a + b) * 0.5f) * basisY(d), {}, {wdt, len * 0.62f, 0.014f}, heroLookColor(look, kScarfC),
+                         Material::Cloth, flash);
     }
     if (guardFlash_ > 0)
         solid->light(translationOf(j[WristR]) + hero_.forward() * 0.3f,

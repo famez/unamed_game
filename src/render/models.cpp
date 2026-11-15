@@ -437,6 +437,45 @@ void defineEnemyModels() {
 }
 
 BuiltModel gModels[int(ModelId::Count)];
+BuiltModel gHeroLooks[2][2];  // [luz, sombra][cuerpo, cabeza]
+
+// Paleta de cada aspecto: color de siempre → luz, sombra.
+struct LookSwap {
+    uint32_t base, light, shadow;
+};
+const LookSwap kLookSwaps[] = {
+    {kCoat, rgba(236, 230, 214), rgba(30, 24, 40)},
+    {kCoatDark, rgba(206, 164, 84), rgba(88, 44, 140)},
+    {kUnder, rgba(196, 190, 178), rgba(22, 20, 28)},
+    {kSkinC, kSkinC, rgba(220, 206, 214)},
+    {kHairC, rgba(246, 224, 160), rgba(222, 220, 236)},
+    {kHairDark, rgba(240, 212, 140), rgba(214, 212, 230)},
+    {kHairLight, rgba(255, 252, 236), rgba(170, 110, 255)},
+    {kBoot, rgba(176, 132, 80), rgba(34, 28, 44)},
+    {kScarf, rgba(238, 178, 64), rgba(128, 58, 232)},
+    {kGlove, rgba(226, 206, 164), rgba(18, 16, 24)},
+    {kShirt, rgba(255, 250, 240), rgba(64, 46, 92)},
+    {rgba(104, 58, 50), rgba(214, 150, 50), rgba(100, 44, 190)},  // la cola de la bufanda (pieza aparte)
+};
+
+int channel(uint32_t c, int i) { return int((c >> (8 * i)) & 0xFF); }
+
+// Busca el color de la paleta más parecido y aplica su cambio conservando la diferencia
+// (los vértices de los bordes entre prendas tienen colores mezclados).
+uint32_t swapColor(HeroLook look, uint32_t c) {
+    if (look == HeroLook::Base) return c;
+    const LookSwap* best = nullptr;
+    int bestD = 1 << 30;
+    for (const LookSwap& s : kLookSwaps) {
+        int d = 0;
+        for (int i = 0; i < 3; ++i) d += (channel(c, i) - channel(s.base, i)) * (channel(c, i) - channel(s.base, i));
+        if (d < bestD) bestD = d, best = &s;
+    }
+    uint32_t to = look == HeroLook::Light ? best->light : best->shadow;
+    int out[3];
+    for (int i = 0; i < 3; ++i) out[i] = std::clamp(channel(to, i) + channel(c, i) - channel(best->base, i), 0, 255);
+    return rgba(uint8_t(out[0]), uint8_t(out[1]), uint8_t(out[2]), uint8_t(channel(c, 3)));
+}
 
 }  // namespace
 
@@ -449,6 +488,13 @@ void bindMatrices(const ModelDef& def, Mat4* out) {
     computeWorldMatrices(def.rig, def.jointCount, def.bindPose ? *def.bindPose : Pose{}, Mat4::identity(), out);
 }
 const BuiltModel& model(ModelId id) { return gModels[int(id)]; }
+
+const BuiltModel& heroModel(HeroLook look, bool head) {
+    if (look == HeroLook::Base) return gModels[int(head ? ModelId::HeroHead : ModelId::Hero)];
+    return gHeroLooks[look == HeroLook::Light ? 0 : 1][head ? 1 : 0];
+}
+
+uint32_t heroLookColor(HeroLook look, uint32_t base) { return swapColor(look, base); }
 
 // Punto de la cara (espacio de la cabeza) delante de (x, y): se busca la superficie de la
 // malla de la cabeza avanzando desde delante. Para pegar ojos, cejas y boca a la piel.
@@ -491,6 +537,15 @@ void buildModels(Renderer& r) {
         bindMatrices(def, bind);
         for (int j = 0; j < def.jointCount; ++j) m.inverseBind[j] = rigidInverse(bind[j]);
         std::printf("modelo %d: %zu vertices, %zu triangulos\n", i, verts.size(), m.triangles);
+        if (i == int(ModelId::Hero) || i == int(ModelId::HeroHead)) {  // aspectos de luz y de sombra
+            for (int look = 0; look < 2; ++look) {
+                std::vector<SkinVertex> v = verts;
+                for (SkinVertex& sv : v) sv.color = swapColor(look == 0 ? HeroLook::Light : HeroLook::Shadow, sv.color);
+                BuiltModel& lm = gHeroLooks[look][i == int(ModelId::HeroHead) ? 1 : 0];
+                lm = m;
+                lm.mesh = r.createSkinnedMesh(v, indices);
+            }
+        }
     }
 }
 

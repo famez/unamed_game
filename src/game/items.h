@@ -84,9 +84,13 @@ public:
     // Fabricar pide las piezas y, para las espadas buenas, un nivel mínimo.
     bool canCraft(const Recipe& r, int level = 1) const;
     bool craft(const Recipe& r, int level = 1);
+    // Cada mitad lleva su arma: la de la luz y la de la sombra. `shadowSide` dice cuál se usa.
     ItemId weapon = ItemId::WoodenSword;
+    ItemId shadowWeapon = ItemId::WoodenSword;
+    bool shadowSide = false;
     ItemId quick[kQuickSlots];
-    const WeaponStats& weaponStats() const { return itemDef(weapon).weapon; }
+    ItemId equipped() const { return shadowSide ? shadowWeapon : weapon; }
+    const WeaponStats& weaponStats() const { return itemDef(equipped()).weapon; }
 
 private:
     int counts_[int(ItemId::Count)] = {};

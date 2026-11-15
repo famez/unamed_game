@@ -156,12 +156,27 @@ void Game::swapMode() {
     if (!shadowUnlocked_ || swapCooldown_ > 0 || inLight_ || travel_ || diving_) return;
     shadowMode_ = !shadowMode_;
     swapCooldown_ = kSwapCooldown;
-    modeFlash_ = 0.5f;
+    modeFlash_ = kModeSwapTime;
     lightLock_ = false;
+    inv_.shadowSide = shadowMode_;  // cada mitad lleva su arma
+    applyWeapon();
+    // Transformación: una espiral del color nuevo sube del suelo a la cabeza, un anillo
+    // abajo y otro arriba, y la sombra deja además humo oscuro (la luz, destellos).
     uint32_t col = shadowMode_ ? kShadowCol : rgba(255, 226, 160);
-    spawnRing(hero_.body.pos + Vec3{0, 0.05f, 0}, 2.2f, 0.45f, col);
-    spawnSparks(hero_.body.pos + Vec3{0, 1, 0}, {0, 1, 0}, 18, col, 3.0f);
-    sound(Sfx::Echo, hero_.body.pos, 0.6f, shadowMode_ ? 0.6f : 1.3f);
+    uint32_t col2 = shadowMode_ ? kShadowDark : rgba(255, 255, 240);
+    Vec3 base = hero_.body.pos;
+    spawnRing(base + Vec3{0, 0.05f, 0}, 2.6f, 0.5f, col);
+    spawnRing(base + Vec3{0, 1.9f, 0}, 1.2f, 0.4f, col2);
+    for (int i = 0; i < 48 && particles_.size() < kMaxParticles; ++i) {
+        float t = float(i) / 48.0f, a = t * 4.0f * kPi + (shadowMode_ ? kPi : 0);
+        Vec3 p = base + Vec3{std::cos(a) * 0.6f, 0.1f + t * 1.9f, std::sin(a) * 0.6f};
+        Vec3 v = Vec3{-std::sin(a), 0.4f, std::cos(a)} * 2.5f;
+        particles_.push_back({p, v, 0.55f, 0.55f, shadowMode_ ? 0.12f : 0.08f, i % 3 ? col : col2, shadowMode_ ? -1.0f : 0.0f,
+                              !shadowMode_});
+    }
+    spawnSparks(base + Vec3{0, 1, 0}, {0, 1, 0}, 24, col, 4.5f, !shadowMode_);
+    shake_ = std::max(shake_, 0.15f);
+    sound(Sfx::Echo, hero_.body.pos, 0.8f, shadowMode_ ? 0.55f : 1.4f);
 }
 
 // Portales: cruzarlos cambia de luz a sombra o al revés (una vez por cruce).

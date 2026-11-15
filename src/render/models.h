@@ -75,5 +75,13 @@ Vec3 headSurface(float x, float y);
 // Genera y sube todos los modelos (al arrancar).
 void buildModels(Renderer& r);
 const BuiltModel& model(ModelId id);
+
+// Aspecto del protagonista según su mitad: el de siempre (historia, antes de la sombra), el de
+// la luz (abrigo marfil y oro, pelo rubio platino) o el de la sombra (negro y violeta, pelo
+// plateado). Las variantes son la misma malla con los colores cambiados.
+enum class HeroLook { Base, Light, Shadow };
+const BuiltModel& heroModel(HeroLook look, bool head);
+// El color de una prenda o pieza del protagonista en ese aspecto (para las piezas rígidas).
+uint32_t heroLookColor(HeroLook look, uint32_t base);
 // Matrices de skinning (mundo × bind⁻¹) a partir de las matrices mundo de las articulaciones.
 void skinMatrices(const BuiltModel& m, const Mat4* joints, Mat4* out);

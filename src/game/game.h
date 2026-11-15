@@ -669,6 +669,7 @@ private:
     Vec3 hostPos_;            // la fuente en la que está
     bool lightLock_ = false;  // fuente elegida con R estando dentro
     bool shadowMode_ = false, shadowUnlocked_ = false;
+    static constexpr float kModeSwapTime = 0.6f;  // lo que dura la transformación al cambiar de modo
     float swapCooldown_ = 0, modeFlash_ = 0;
     bool diving_ = false;      // fundido con la sombra del suelo
     Vec3 diveFrom_, lastDark_;

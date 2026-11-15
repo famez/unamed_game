@@ -99,6 +99,7 @@ const char kHelp[] =
     "  --autoplay                    un bot juega solo\n"
     "  --giros                       el bot solo corre haciendo curvas (para ver el giro)\n"
     "  --focos                       el bot absorbe una farola y se funde en el foco de sombra\n"
+    "  --cambios                     el bot cambia de luz a sombra y vuelta (para ver el cambio)\n"
     "  --retrato | --cuerpo          cámara frente a la cara o al cuerpo del protagonista\n"
     "  --camyaw RADIANES             orientación inicial de la cámara\n"
     "  --screenshot FICHERO SEG [N]  guarda N fotogramas (.ppm) desde SEG segundos y sale\n"
@@ -225,6 +226,7 @@ int main(int argc, char** argv) {
     bool bodyShot = false;  // --cuerpo: lo mismo, con el cuerpo entero
     bool turnsBot = false;  // --giros: el bot solo corre haciendo curvas y medias vueltas
     bool fociBot = false;   // --focos: el bot absorbe la luz de una farola y se funde en el foco
+    bool swapBot = false;   // --cambios: el bot se queda quieto y cambia de luz a sombra y vuelta
     float camYaw0 = 0;  // --camyaw: orientación inicial de la cámara (radianes)
     const char* shotPath = nullptr;
     double shotTime = 0;
@@ -236,6 +238,7 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--cuerpo") == 0) portrait = bodyShot = true;
         if (std::strcmp(argv[i], "--giros") == 0) autoplay = turnsBot = true;
         if (std::strcmp(argv[i], "--focos") == 0) autoplay = fociBot = true;
+        if (std::strcmp(argv[i], "--cambios") == 0) autoplay = swapBot = true;
         if (std::strcmp(argv[i], "--camyaw") == 0 && i + 1 < argc) camYaw0 = float(std::atof(argv[++i]));
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 2 < argc) {
             shotPath = argv[i + 1];
@@ -493,8 +496,15 @@ int main(int argc, char** argv) {
                         if (t >= 220 && t < 250) a = kPi * 0.5f, c.move = Vec3{std::sin(a), 0, std::cos(a)} * 0.15f;
                         else if (a >= 0) c.move = Vec3{std::sin(a), 0, std::cos(a)};
                     }
+                    if (swapBot) {  // quieto; cambia de modo y, entre medias, da un par de golpes
+                        c = Controls{};
+                        c.camForward = cam.forwardFlat();
+                        int t = botStep % 150;
+                        c.swapMode = t == 20;
+                        c.attack = t == 80 || t == 92 || t == 104;
+                    }
                     // En los modos de prueba también cambia a sombra y lanza agujeros negros.
-                    if (fociBot || turnsBot) {
+                    if (fociBot || turnsBot || swapBot) {
                     } else if (game.testMode() != TestMode::None) {
                         c.swapMode = botStep == 30;
                         c.nova = c.nova || botStep % 240 == 120;
