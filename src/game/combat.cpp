@@ -162,7 +162,7 @@ void Game::runCommand(int index) {
 bool Game::castSpell(Spell s) {
     const SpellDef& d = spellDef(s);
     if (mp_ < d.cost) {
-        notify("PM insuficientes", rgba(150, 170, 255));
+        notify("Falta Poder", rgba(190, 160, 255));
         return false;
     }
     Vec3 dir = hero_.forward();
@@ -275,6 +275,15 @@ void Game::resolveImpact(Move m) {
         if ((c.hp -= 1) <= 0) breakCrate(c);
         ++hits;
     }
+    // Las farolas se rompen a golpes (por el poste, a la altura del golpe).
+    for (size_t i = 0; i < lamps_.size(); ++i) {
+        const Lamp& l = lamps_[i];
+        if (!l.bulb || l.broken || l.pos.y < chestY - 1.0f || l.pos.y > chestY + 5.0f) continue;
+        Vec3 post{l.pos.x, chestY, l.pos.z};
+        if (!inArc(post - origin, 0.4f)) continue;
+        hitLamp(int(i), hp.heavy ? 2.0f : 1.0f);
+        ++hits;
+    }
     // Los orbes de las polillas se pueden devolver de un golpe.
     for (Projectile& p : projectiles_) {
         if (p.kind != ProjectileKind::EnemyOrb || p.reflected || p.dead) continue;
@@ -351,7 +360,6 @@ void Game::hitEnemy(Enemy& e, Vec3 dir, float damage, float knock, float lift, b
     // protagonista hiere más a la familia contraria.
     if (lightAt(e.body.pos) > 0.3f) damage *= e.def().shadow ? 1.5f : 0.8f;
     damage *= familyDamage(e);
-    if (shadowMode_ && !e.def().shadow) shadow_ = std::min(maxShadow_, shadow_ + 1.5f);  // le arranca sombra
     e.health -= damage;
     e.rlReward -= damage / 15.0f;
     e.hitFlash = 0.12f;
@@ -420,7 +428,7 @@ void Game::killEnemy(Enemy& e) {
         pickups_.push_back(p);
     }
     int hpOrbs = 1 + (random01() < 0.5f ? 1 : 0) + (e.boss ? 4 : 0);
-    int mpOrbs = random01() < 0.75f ? 1 + int(random01() * 2.0f) : 0;  // Luz o Sombra según la familia
+    int mpOrbs = random01() < 0.75f ? 1 + int(random01() * 2.0f) : 0;  // Poder (dorado o violeta según la familia)
     float r = random01();
     ItemId item = ItemId::Potion;
     bool withItem = true;

@@ -107,7 +107,7 @@ void Game::updateAllies(float dt, const Controls& c) {
             if (companions_.size() >= 2)
                 notify("Ya tienes dos compañeros", rgba(200, 200, 215));
             else
-                notify(nora ? "Hacen falta 30 de Luz" : "Hacen falta 40 de Luz para una chispa", rgba(200, 200, 215));
+                notify(nora ? "Hacen falta 30 de Poder" : "Hacen falta 40 de Poder para una chispa", rgba(200, 200, 215));
         }
     }
 

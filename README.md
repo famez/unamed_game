@@ -68,14 +68,13 @@ Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena i
 | Clic derecho (mantener) | Guardia (se puede andar mirando a la cámara). Justo a tiempo: bloqueo perfecto |
 | C / Ctrl | Voltereta de esquiva (invulnerable); un golpe justo después es un **contraataque** |
 | Q | **Luz**: junto a una farola, **entrar en ella**; dentro, saltar a otra fuente. **Sombra**: en la oscuridad, **fundirse** con el suelo |
-| Mantener Q | **Luz**: absorber luz (nodos, Grises aturdidos) |
-| Portal / Z | Cambiar entre **luz y sombra** cruzando un portal (Z solo en el modo prueba) |
-| V | **Supernova** (luz, con la Luz llena) · **Agujero negro** (sombra, 60 de Sombra) |
+| Portal / Z | Cambiar entre **luz y sombra** cruzando un portal (Z en los niveles sin historia) |
+| V | **Supernova** (luz, con el Poder lleno) · **Agujero negro** (sombra, 60 de Poder) |
 | G | **Transformarse** (con un núcleo) |
 | T | **Invocar compañero** (chispa aliada o el eco de Nora) |
 | R | Fijar objetivo / **soltarlo** (dentro de una fuente: elegir a qué fuente saltar) · clic central: siguiente objetivo · X: soltar |
 | 1 2 3 · 4 5 6 · Rueda + E | Técnicas de luz · atajos de objetos · menú de comandos |
-| F | Interactuar: cápsulas, nodos, faroles, espejos, objetos; en modo luz, **encender una farola apagada** (15 de Luz) |
+| F | Interactuar: cápsulas, nodos, faroles, espejos, objetos e **interruptores de farolas** |
 | Tab / I | Inventario y **taller** (pausa) |
 | Esc / P | Pausa: sensibilidad, calidad gráfica, reiniciar, salir |
 | F12 / º | Modo debug (esqueletos, zonas, haces y la táctica de cada Gris) |
@@ -85,21 +84,21 @@ Especiales de combate: atacar corriendo = **embestida**; atacar con la guardia =
 
 ## Jugabilidad
 
-- **Luz y sombra**: dos mitades del mismo protagonista, sin bando bueno ni malo.
-  - **Luz**: se absorbe junto a nodos y faroles o de un Gris aturdido. Junto a una farola
-    encendida, Q **entra en ella**: dentro no te ven ni te hieren, recuperas Luz, saltas a
-    otras fuentes a la vista (R elige cuál), sales con Espacio o **emboscas** con el clic
-    al Gris más cercano. Técnicas (*Lanza de luz*, *Refracción*, *Calidez*) y Supernova.
-  - **Sombra**: la oscuridad es donde no llega la luz de ninguna farola encendida (cada
-    farola alumbra según la energía que le queda). Q en la oscuridad **funde** al protagonista
-    con el suelo: se mueve rápido e invisible por toda la zona oscura, la luz no le deja pasar,
-    gasta Sombra y esa sombra se convierte en luz: las farolas apagadas que roza se vuelven a
-    encender. Sale con Q o Espacio, o con el clic en emboscada. **Agujero negro** (V, 60 de
-    Sombra): atrae a los enemigos y sus proyectiles y acaba en implosión.
-  - **La luz también se gasta**: entrar en una fuente cuesta Luz y saltar a otra más; la farola
-    que se deja atrás pierde luz y, dentro, se recarga Luz a costa de la farola, que se atenúa
-    hasta apagarse. Usar la luz oscurece el mundo; usar la sombra lo ilumina.
-  - Se cambia de luz a sombra **cruzando un portal** (en el modo prueba, también con Z).
+- **Luz y sombra**: dos mitades del mismo protagonista, sin bando bueno ni malo. Cada una con
+  su aspecto (luz: marfil y oro; sombra: negro y violeta), su arma (espada de luz / mazo de
+  sombra, con combos distintos) y sus técnicas.
+  - **Poder**: una única barra para las técnicas de las dos mitades. No se recarga sola: se
+    llena con **pociones de poder** y con los **orbes** que sueltan los Grises.
+  - **Luz**: junto a una farola encendida, Q **entra en ella**: dentro no te ven ni te hieren,
+    saltas a otras fuentes a la vista (R elige cuál), sales con Espacio o **emboscas** con el
+    clic al Gris más cercano. Entrar y saltar gastan Poder, y la farola que te hospeda se atenúa.
+  - **Sombra**: la oscuridad es donde no llega la luz de ninguna farola encendida, nodo o farol
+    (se ve claramente más oscura). Q en la oscuridad **funde** al protagonista con el suelo: se
+    mueve rápido e invisible por la zona oscura, la luz no le deja pasar y gasta Poder. Sale con
+    Q o Espacio, o con el clic en emboscada. **Agujero negro** (V, 60 de Poder).
+  - **Crear sombra**: las farolas se **rompen a golpes** (y ya no se arreglan) o se apagan y
+    encienden con su **interruptor** (F), que suele estar apartado de ellas.
+  - Se cambia de luz a sombra **cruzando un portal** (en los niveles sin historia, también con Z).
 - **Enemigos de luz y de sombra** (todos fueron personas): *Deslumbrado* (figura alta y
   sobreexpuesta, dos zarpazos), *Vigía* (ojo flotante que dispara luz), *Coloso* (mole de
   sombra que aplasta) y *Sabueso* (cuadrúpedo que caza en manada y muerde por la espalda).
@@ -142,8 +141,8 @@ vuelve al selector.
   oscuridad entre las farolas. Grises de luz y de sombra sin fin y un Gris mayor cada 30 bajas.
   Trae todas las armas y materiales para forjar.
 - **Plaza, Mercado, Puente**: los escenarios con sus combates de zona y objetivos.
-- En todos: **Z** cambia entre luz y sombra y **F1 / F2 / F3** hacen infinitas la vida, la Luz y
-  la Sombra (también en la pausa). Por defecto solo la vida.
+- En todos: **Z** cambia entre luz y sombra y **F1 / F2** hacen infinitos la vida y el Poder
+  (también en la pausa). Por defecto solo la vida.
 
 ## Modo debug (F12)
 
@@ -222,7 +221,7 @@ src/
     combat.cpp                   Apuntar, golpes, magias, daño, muerte y reaparición
     enemy_ai.cpp                 Decisiones, movimiento y ataques de los enemigos; proyectiles
     loot.cpp                     Botín, recoger, experiencia y niveles, fabricar, equipar
-    light.cpp / shadow.cpp       La Luz y la Sombra: absorber, focos, fundirse, Supernova
+    light.cpp / shadow.cpp       La luz y la sombra: viajar por la luz, fundirse, farolas, Supernova
     levels.cpp                   Escenarios, partes, combates de zona, puertas, rompecabezas
     test_mode.cpp                Modo prueba (patio con enemigos sin fin)
     allies.cpp                   Formas prismáticas y compañeros

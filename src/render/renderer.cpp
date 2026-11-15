@@ -365,11 +365,9 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
         glUniform4f(glGetUniformLocation(prog, "uOutlineColor"), 0, 0, 0, 0);
         glUniform1f(glGetUniformLocation(prog, "uWorldColor"), worldColor_);
         glUniform1f(glGetUniformLocation(prog, "uDarkness"), darkness_);
-        int litCount = int(litAreas_.size() / 4), darkCount = int(darkAreas_.size() / 4);
+        int litCount = int(litAreas_.size() / 4);
         glUniform1i(glGetUniformLocation(prog, "uLitCount"), litCount);
         if (litCount > 0) glUniform4fv(glGetUniformLocation(prog, "uLit"), litCount, litAreas_.data());
-        glUniform1i(glGetUniformLocation(prog, "uFocusCount"), darkCount);
-        if (darkCount > 0) glUniform4fv(glGetUniformLocation(prog, "uFocus"), darkCount, darkAreas_.data());
         int zoneCount = int(zones_.size() / 4);
         glUniform1i(glGetUniformLocation(prog, "uZoneCount"), zoneCount);
         if (zoneCount > 0) glUniform4fv(glGetUniformLocation(prog, "uZone"), zoneCount, zones_.data());
@@ -441,5 +439,4 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
     paints_.clear();
     zones_.clear();
     litAreas_.clear();
-    darkAreas_.clear();
 }

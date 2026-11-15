@@ -343,7 +343,6 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
         for (const Lantern& ln : lanterns_)
             if (ln.lit) solid->litArea(ln.pos, 6.0f);
         if (inLight_) solid->litArea(hostPos_, 5.0f);
-        for (const ShadowFocus& sf : foci_) solid->darkArea(sf.pos, sf.radius);
     }
     solid->setScenery(true);
     // Charcos de oscuridad (antes que las salpicaduras: tienen prioridad en el límite).
@@ -476,14 +475,35 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
         uint32_t bulb = l.color;
         if (l.on && l.energy < 0.5f)  // queda poca luz: parpadea
             bulb = mixRgb(l.color, rgba(40, 30, 60), (0.5f - l.energy) * (1.2f + 0.8f * std::sin(time_ * 25.0f + float(i))));
-        if (l.bulb)
+        if (l.bulb && l.broken) {  // rota: solo queda el casquillo y unos dientes de cristal
+            solid->ellipsoid(translate(l.pos + Vec3{0, 0.1f, 0}), {}, {0.12f, 0.08f, 0.12f}, rgba(40, 40, 46), Material::Metal);
+            for (int k = 0; k < 5; ++k) {
+                float a = float(k) * 1.257f + float(i);
+                solid->box(translate(l.pos + Vec3{std::cos(a) * 0.09f, 0.0f, std::sin(a) * 0.09f}) * rotateY(a) * rotateZ(0.4f), {},
+                           {0.012f, 0.06f, 0.025f}, rgba(150, 160, 175), Material::Metal);
+            }
+        } else if (l.bulb) {
             solid->ellipsoid(translate(l.pos), {}, {0.2f, 0.2f, 0.2f}, l.on ? bulb : rgba(70, 72, 80),
-                             l.on ? Material::Glow : Material::Metal);
+                             l.on ? Material::Glow : Material::Metal, l.hitFlash > 0 ? 0.7f : 0.0f);
+        }
         if (l.on && l.bulb && length(flat(l.pos - hero_.body.pos)) < 14.0f) {
             float r = float((l.color >> 0) & 0xFF) / 255.0f, g = float((l.color >> 8) & 0xFF) / 255.0f,
                   b = float((l.color >> 16) & 0xFF) / 255.0f;
             solid->light(l.pos, Vec3{0.4f + r * 0.6f, 0.4f + g * 0.6f, 0.4f + b * 0.6f} * 1.3f, 5.0f);
         }
+    }
+
+    // Interruptores de las farolas: poste corto con una caja y su palanca; la luz del panel
+    // dice si sus farolas están encendidas (cálida) o apagadas (violeta).
+    for (const LampSwitch& s : switches_) {
+        Mat4 m = translate(s.pos);
+        solid->box(m, {0, 0.6f, 0}, {0.05f, 0.6f, 0.05f}, rgba(60, 62, 70), Material::Metal);
+        solid->box(m, {0, 1.25f, 0}, {0.16f, 0.2f, 0.09f}, rgba(46, 48, 56), Material::Metal);
+        uint32_t lc = s.on ? rgba(255, 220, 140) : rgba(160, 90, 255);
+        solid->box(m, {0, 1.4f, 0.095f}, {0.11f, 0.025f, 0.01f}, lc, Material::Glow);
+        float lever = (s.on ? -0.6f : 0.6f) * smoothstep01(s.flip / 0.15f) + (s.on ? 0.6f : -0.6f) * (1.0f - smoothstep01(s.flip / 0.15f));
+        solid->box(m * translate({0, 1.2f, 0.1f}) * rotateX(lever), {0, 0.08f, 0}, {0.02f, 0.09f, 0.02f}, rgba(200, 200, 210),
+                   Material::Metal);
     }
 
     for (const Crate& c : crates_) {
@@ -619,7 +639,7 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
     }
     for (const Shape& s : kHeroShapes) solid->ellipsoid(j[s.joint], s.center, s.radii, heroLookColor(look, s.color), s.material, flash);
     // Las vetas: apagadas sin Luz; encendidas, del color de la luz (o de la sombra).
-    float lit = clampf(shadowMode_ ? shadow_ / maxShadow_ : mp_ / maxMp_, 0, 1);
+    float lit = clampf(mp_ / maxMp_, 0, 1);
     uint32_t vein = mixRgb(rgba(70, 68, 72), shadowMode_ ? rgba(170, 100, 255) : kVein, lit);
     for (const NeonLine& l : kNeonLines) solid->box(j[l.joint], l.center, l.half, vein, lit > 0.05f ? Material::Glow : Material::Cloth, flash);
     // Mechones de pelo: se inclinan hacia donde se queda atrás el punto con muelle que

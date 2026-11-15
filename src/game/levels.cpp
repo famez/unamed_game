@@ -571,6 +571,7 @@ void Game::loadLevel(LevelId id) {
     if (freePlay_)  // sin guion que los arme, los combates de jefe esperan desde el principio
         for (Encounter& en : encounters_) en.armed = true;
     rebuildSolids();
+    placeLampSwitches();
     hero_.body.pos = checkpoint_ = heroStart_;
     hero_.body.vel = {};
     hero_.yaw = checkpointYaw_ = heroStartYaw_;
@@ -764,11 +765,8 @@ Game::InteractTarget Game::nearbyInteract() const {
     for (size_t i = 0; i < interacts_.size(); ++i)
         if (!interacts_[i].used) consider(3, int(i), interacts_[i].pos, interacts_[i].label);
     for (size_t i = 0; i < mirrors_.size(); ++i) consider(4, int(i), mirrors_[i].pos, "Girar el espejo");
-    if (!shadowMode_)  // farolas apagadas: en modo luz se pueden volver a encender
-        for (size_t i = 0; i < lamps_.size(); ++i)
-            if (lamps_[i].bulb && !lamps_[i].on)
-                consider(5, int(i), Vec3{lamps_[i].pos.x, groundHeight(lamps_[i].pos + Vec3{0.6f, 0, 0}), lamps_[i].pos.z},
-                         "Encender la farola (15 de Luz)");
+    for (size_t i = 0; i < switches_.size(); ++i)
+        consider(5, int(i), switches_[i].pos, switches_[i].on ? "Apagar las farolas" : "Encender las farolas");
     return best;
 }
 
@@ -776,12 +774,7 @@ void Game::tryInteract() {
     InteractTarget t = nearbyInteract();
     if (t.kind < 0 || hero_.busy()) return;
     if (t.kind == 5) {
-        if (mp_ < 15.0f) {
-            notify("Hacen falta 15 de Luz", rgba(200, 200, 215));
-            return;
-        }
-        mp_ -= 15.0f;
-        relightLamp(t.index);
+        toggleSwitch(t.index);
         return;
     }
     if (t.kind == 0) {

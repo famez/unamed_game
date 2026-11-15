@@ -31,7 +31,7 @@ void Game::init(const char* assetDir) {
     names_ = {{"voz", ""}, {"objeto", ""}, {"ilse", "???"}};
     story_ = assetDir && script_.load(std::string(assetDir) + "/story/capitulo1.txt");
     // Con historia se empieza sin nada: los poderes se recuperan por el camino.
-    if (story_) powers_ = Powers{false, false, false, false, false, false, false, false, false};
+    if (story_) powers_ = Powers{false, false, false, false, false, false, false, false};
     bossBrain_.alpha = 0.45f;  // el jefe aprende muy deprisa durante el combate
     bossBrain_.epsilon = 0.1f;
     loadLevel(LevelId::Plaza);
@@ -84,13 +84,12 @@ void Game::update(float dt, const Controls& input) {
     modeFlash_ = std::max(0.0f, modeFlash_ - dt);
     levelFlash_ = std::max(0.0f, levelFlash_ - dt);
     {
-        float want = shadowUnlocked_ ? (shadowMode_ ? 0.9f : 0.65f) : 0.0f;
+        float want = shadowUnlocked_ ? (shadowMode_ ? 1.0f : 0.8f) : 0.0f;
         darkShown_ = moveTowards(darkShown_, want, 1.5f * dt);
     }
-    absorbHint_ = std::max(0.0f, absorbHint_ - dt);
     lightHint_ = std::max(0.0f, lightHint_ - dt);
     updatePortals(dt);
-    updateFoci(dt);
+    updateLamps(dt);
     guardFlash_ = std::max(0.0f, guardFlash_ - dt);
     heroInvuln_ = std::max(0.0f, heroInvuln_ - dt);
     shake_ = std::max(0.0f, shake_ - dt * 1.5f);
@@ -245,8 +244,7 @@ void Game::update(float dt, const Controls& input) {
     updateEffects(dt);
     if (sandbox()) {  // sin historia: lo que esté marcado como infinito
         if (infHp_) hp_ = maxHp_;
-        if (infLight_) mp_ = maxMp_;
-        if (infShadow_) shadow_ = maxShadow_;
+        if (infPower_) mp_ = maxMp_;
     }
 }
 

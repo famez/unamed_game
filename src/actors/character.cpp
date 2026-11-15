@@ -241,11 +241,6 @@ float stepSpeed(const MoveDef& d, float u, float duration) {
 
 void Character::reset() { *this = Character{}; }
 
-bool Character::absorbing() const {
-    return absorbHeld_ && body.grounded && move_ == Move::None && !rolling() && !hurt() && downTimer < 0 &&
-           lying <= 0.01f;
-}
-
 bool Character::guarding() const {
     return guardHeld_ && body.grounded && move_ == Move::None && !rolling() && !hurt() && downTimer < 0;
 }
@@ -444,7 +439,7 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
     }
     // Correr hacia donde se pide; el cuerpo gira hacia la dirección de la marcha con un
     // giro amortiguado. Con la guardia o cargando se anda despacio mirando a la cámara.
-    bool canMove = !busy() && !absorbing();
+    bool canMove = !busy();
     bool aimed = guarding() || charge() > 0;
     float maxSpeed = (aimed ? kGuardSpeed : (sprintHeld_ && body.grounded ? kSprintSpeed : kRunSpeed)) * speedScale;
     float targetSpeed = canMove ? maxSpeed * input : 0.0f;
@@ -549,7 +544,7 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
     landTimer_ = std::max(0.0f, landTimer_ - dt);
 
     // Tiempo sin hacer nada: el reposo se va relajando.
-    bool still = speed < 0.3f && move_ == Move::None && !rolling() && body.grounded && !hurt() && !guarding() && !absorbing();
+    bool still = speed < 0.3f && move_ == Move::None && !rolling() && body.grounded && !hurt() && !guarding();
     idleTime_ = still ? idleTime_ + dt : 0.0f;
     // La fase avanza con la distancia recorrida (solo pisando suelo): los pies no patinan.
     // Al girar casi parado da pasitos: la fase también avanza con el giro.
@@ -607,7 +602,6 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
     }
     guardTime_ = guarding() ? guardTime_ + dt : 0.0f;
     guardBlend_ = moveTowards(guardBlend_, guarding() ? 1.0f : 0.0f, 12.0f * dt);
-    absorbBlend_ = moveTowards(absorbBlend_, absorbing() ? 1.0f : 0.0f, 6.0f * dt);
 
     // Pose: la del estado actual, fundida desde la anterior si el estado ha cambiado.
     int key = stateKey();
@@ -922,16 +916,6 @@ void Character::animate(Pose& out) const {
         r[KneeR].x += 0.4f * w;
         out.rootOffset.y -= 0.1f * w;
         if (ch >= 1.0f) r[Chest].y += 0.04f * std::sin(time_ * 40.0f);  // tiembla: listo
-    }
-    // Absorbiendo luz: brazos abiertos hacia arriba, cabeza alta, se eleva un poco.
-    if (absorbBlend_ > 0) {
-        float w = smoothstep01(absorbBlend_);
-        float pulse = std::sin(time_ * 6.0f) * 0.05f;
-        applyArm(r, {0, -2.2f, -0.6f, -0.9f, -0.3f, 0.4f, 0, Smooth}, w);
-        applyArm(r, {0, -2.2f, -0.6f, -0.9f, -0.3f, 0.4f, 0, Smooth}, w, true);
-        r[Spine].x -= (0.2f + pulse) * w;
-        r[Neck].x -= 0.35f * w;
-        out.rootOffset.y += (0.12f + pulse) * w;
     }
     // Guardia: hoja horizontal delante del cuerpo, agachado.
     if (guardBlend_ > 0) {

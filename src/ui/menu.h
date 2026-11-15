@@ -12,15 +12,15 @@ public:
     bool open = false;
     float sensitivity = 1.0f;  // multiplicador de la sensibilidad del ratón
     int quality = 1;           // calidad gráfica: 0 baja, 1 media, 2 alta
-    // Niveles sin historia: qué es infinito (también con F1, F2, F3 jugando).
-    bool infHp = true, infLight = false, infShadow = false;
+    // Niveles sin historia: qué es infinito (también con F1 y F2 jugando).
+    bool infHp = true, infPower = false;
 
     void show();
     Result update(const Input& in, int width, int height);
     void draw(UiLayer& ui, int width, int height) const;
 
 private:
-    enum Item { Continue, Restart, ChooseLevelItem, InfHpItem, InfLightItem, InfShadowItem, Sensitivity, QualityItem, Quit, ItemCount };
+    enum Item { Continue, Restart, ChooseLevelItem, InfHpItem, InfPowerItem, Sensitivity, QualityItem, Quit, ItemCount };
 
     struct Rect {
         float x0, y0, x1, y1;

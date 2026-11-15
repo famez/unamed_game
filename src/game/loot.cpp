@@ -83,7 +83,7 @@ void Game::collect(Pickup& p) {
         case PickupKind::Hp: heal(kHpOrb, 0); col = rgba(120, 255, 140); uiSound(Sfx::Pickup, 0.5f, 1.0f); break;
         case PickupKind::Mp: heal(0, kMpOrb); col = rgba(255, 226, 160); uiSound(Sfx::Pickup, 0.5f, 1.25f); break;
         case PickupKind::Shadow:
-            shadow_ = std::min(maxShadow_, shadow_ + kMpOrb);
+            heal(0, kMpOrb);  // el mismo Poder, de color violeta
             col = rgba(150, 80, 255);
             uiSound(Sfx::Pickup, 0.5f, 0.8f);
             break;
@@ -115,10 +115,9 @@ void Game::gainXp(int amount) {
     while (heroLevel_ < kMaxLevel && xp_ >= xpToNext(heroLevel_)) {
         xp_ -= xpToNext(heroLevel_);
         ++heroLevel_;
-        // Cada nivel: más vida (y llena), más fuerza y algo más de Luz y Sombra.
+        // Cada nivel: más vida (y llena), más fuerza y algo más de Poder.
         maxHp_ += 10;
         maxMp_ = std::min(200.0f, maxMp_ + 4);
-        maxShadow_ = std::min(200.0f, maxShadow_ + 4);
         hp_ = hpGhost_ = maxHp_;
         levelFlash_ = 2.5f;
         notify("Nivel " + std::to_string(heroLevel_) + " · vida +10 · fuerza +1,5", rgba(190, 240, 255));

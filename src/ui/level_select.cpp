@@ -69,5 +69,5 @@ void LevelSelect::draw(UiLayer& ui, int width, int height) const {
         drawText(ui, r.x0 + 28, r.y0 + 44, 17, kEntries[i].about, dim);
     }
     drawText(ui, float(width) * 0.5f, float(height) - 46, 15,
-             "W/S elegir · Enter jugar · Esc salir · En el juego: Z luz/sombra, F1-F3 vida, Luz y Sombra infinitas", dim, sub);
+             "W/S elegir · Enter jugar · Esc salir · En el juego: Z luz/sombra, F1 vida y F2 Poder infinitos", dim, sub);
 }

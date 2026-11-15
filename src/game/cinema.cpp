@@ -5,8 +5,8 @@
 //   !plano fx fy fz ex ey ez segundos   la cámara mira a (f) desde (e)
 //   !eco nombre                         aparecen los ecos de ese recuerdo
 //   !ilse x y z | !ilse_gesto | !ilse_fuera
-//   !tutorial tecla acción palabra      p. ej. «!tutorial Q absorber Absorber»
-//   !poder nombre                       fuerza, ataque, absorber, luz, tecnicas, supernova, sombra
+//   !tutorial tecla acción palabra      p. ej. «!tutorial Q entrar Entrar»
+//   !poder nombre                       fuerza, ataque, luz, tecnicas, supernova, sombra
 //   !apagar_luces                       todas las luces del escenario se apagan
 
 #include "game/game.h"
@@ -65,7 +65,6 @@ Controls Game::filterControls(const Controls& in) const {
     if (!p.dodge) c.dodge = false;
     if (!p.sprint) c.sprint = false;
     if (!shadowMode_) {
-        if (!p.absorb) c.absorb = false;
         if (!p.light) c.light = false;
         if (!p.nova) c.nova = false;
     }
@@ -158,7 +157,6 @@ bool Game::cinemaCommand(const StoryLine& cmd) {
         const std::string& p = cmd.text;
         if (p == "fuerza") powers_.strong = powers_.jump = powers_.dodge = powers_.sprint = true;
         else if (p == "ataque") powers_.attack = true;
-        else if (p == "absorber") powers_.absorb = true;
         else if (p == "luz") powers_.light = true;
         else if (p == "tecnicas") powers_.techniques = true;
         else if (p == "supernova") powers_.nova = true;
@@ -252,7 +250,7 @@ void Game::updateCinema(float dt, const Controls& c) {
             walkTime_ = length(c.move) > 0.5f ? walkTime_ + dt : walkTime_;
             bool done = (a == "andar" && walkTime_ > 1.5f) || (a == "atacar" && c.attack) || (a == "esquivar" && c.dodge) ||
                         (a == "saltar" && c.jump) || (a == "correr" && c.sprint && length(c.move) > 0.5f) ||
-                        (a == "absorber" && hero_.absorbing()) || (a == "entrar" && inLight_) ||
+                        (a == "entrar" && inLight_) ||
                         (a == "salir" && !inLight_ && !travel_ && t.age > 0.5f) ||
                         (a == "saltar_luz" && travel_ && travelMode_ == 0 && t.age > 0.5f) || (a == "cambiar" && shadowMode_) ||
                         (a == "fundirse" && diving_) || (a == "girar" && c.interact) || (a == "supernova" && c.nova) ||

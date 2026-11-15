@@ -1,27 +1,20 @@
-// La Luz, la mecánica propia del Prismero:
-//   - Absorber (mantener Q): junto a nodos encendidos o faroles se carga Luz; sobre un Gris
-//     aturdido se le arranca el color robado (le hace daño y da Luz).
-//   - Entrar en la luz (pulsar Q junto a una farola u otra fuente): el Prismero se queda
-//     dentro de ella. Desde dentro salta a cualquier otra fuente a la vista (Q; R elige
-//     cuál), sale cuando quiere (Espacio) o cae sobre el Gris más cercano (clic: emboscada).
-//     Dentro no le ven ni le hieren, recupera Luz y la farola alumbra más (los Grises de
-//     debajo se debilitan).
-//   - Supernova (V con la Luz llena): explosión de área que devuelve croma.
+// La luz, la mitad luminosa del Prismero:
+//   - Entrar en la luz (Q junto a una farola u otra fuente): el Prismero se queda dentro de
+//     ella. Desde dentro salta a cualquier otra fuente a la vista (Q; R elige cuál), sale
+//     cuando quiere (Espacio) o cae sobre el Gris más cercano (clic: emboscada). Dentro no le
+//     ven ni le hieren y la farola alumbra más (los Grises de debajo se debilitan).
+//   - Entrar y saltar gasta Poder (la única barra: se llena con pociones y orbes).
+//   - Supernova (V con el Poder lleno): explosión de área que devuelve croma.
 
 #include "game/game.h"
 
 #include <algorithm>
 
 namespace {
-constexpr float kAbsorbRate = 40.0f;     // Luz por segundo en plena luz
-constexpr float kDrainRate = 14.0f;      // Luz por segundo arrancada a cada Gris aturdido
-constexpr float kDrainDamage = 12.0f;    // daño por segundo al Gris
 constexpr float kNovaRadius = 7.5f;
-constexpr float kLightRecharge = 3.0f;          // Luz por segundo en una zona con luz
 constexpr float kEnterRange = 4.0f;             // distancia horizontal para entrar en una fuente
 constexpr float kJumpRange = 30.0f;             // de fuente a fuente
-constexpr float kInsideRecharge = 12.0f;        // Luz por segundo dentro de una fuente (a costa de ella)
-constexpr float kEnterCost = 5.0f, kJumpCost = 8.0f;  // Luz por entrar en una fuente y por saltar a otra
+constexpr float kEnterCost = 5.0f, kJumpCost = 8.0f;  // Poder por entrar en una fuente y por saltar a otra
 constexpr float kJumpDrain = 0.5f;              // energía que pierde la farola que se deja atrás
 constexpr float kInsideDrain = 0.06f;           // y la que la hospeda, por segundo
 constexpr float kAmbushRange = 9.0f;            // emboscada: Grises a esta distancia de la fuente
@@ -155,9 +148,7 @@ int Game::ambushTarget() const {
     return best;
 }
 
-float Game::lightAt(Vec3 p) const { return lightAtRaw(p) * focusOpen(p); }
-
-float Game::lightAtRaw(Vec3 p) const {
+float Game::lightAt(Vec3 p) const {
     float l = 0;
     for (const ColorNode& n : nodes_) {
         if (!n.lit) continue;
@@ -173,66 +164,12 @@ float Game::lightAtRaw(Vec3 p) const {
 
 void Game::updateLight(float dt, const Controls& c) {
     Vec3 chest = hero_.body.pos + Vec3{0, 1.0f, 0};
-    float here = lightAt(hero_.body.pos);
     novaFlash_ = std::max(0.0f, novaFlash_ - dt);
 
-    // Absorber: la luz de alrededor (nodos, faroles, farolas) pasa al protagonista y donde
-    // estaba queda un foco de sombra que crece mientras se absorbe. Cuando el foco ya no
-    // crece más, ahí no queda luz. La farola de la que bebe se va apagando.
-    hero_.setAbsorb(c.absorb);
-    if (hero_.absorbing()) {
-        float raw = std::max(lightAtRaw(hero_.body.pos), lampLightAt(hero_.body.pos));
-        float gain = 0;
-        Vec3 source = hero_.body.pos + Vec3{0, 2.5f, 0};
-        float best = 0;
-        for (const ColorNode& n : nodes_)  // de dónde vienen las motas de luz
-            if (n.lit && lightAtRaw(n.pos) > best) {
-                best = 1;
-                source = n.pos + Vec3{0, 1.8f, 0};
-            }
-        for (const Lantern& ln : lanterns_)
-            if (ln.lit && length(ln.pos - hero_.body.pos) < 6.0f) source = ln.pos + Vec3{0.42f, 1.95f, 0};
-        int lamp = nearLamp(8.0f, true);
-        if (lamp >= 0 && length(flat(lamps_[size_t(lamp)].pos - hero_.body.pos)) < lampRadius(lamps_[size_t(lamp)])) {
-            source = lamps_[size_t(lamp)].pos;
-            drainLamp(lamp, 0.18f * dt);
-        }
-        if (raw > 0.05f && growFocus(hero_.body.pos, dt)) gain = kAbsorbRate * raw * dt;
-        else raw = 0;
-        bool drained = false;
-        for (Enemy& e : enemies_) {
-            if (!e.targetable() || e.state != AiState::Stagger || length(flat(e.body.pos - hero_.body.pos)) > 4.0f) continue;
-            // Arrancar el color robado: mientras se absorbe sigue aturdido.
-            e.stateTime = std::min(e.stateTime, 0.2f);
-            e.health -= kDrainDamage * dt;
-            gain += kDrainRate * dt;
-            drained = true;
-            if (random01() < dt * 30.0f && particles_.size() < 900) {
-                Vec3 from = e.center();
-                particles_.push_back({from, (chest - from) * 2.2f, 0.45f, 0.45f, 0.07f, rgba(255, 120, 200), 0, true});
-            }
-            if (e.health <= 0) killEnemy(e);
-        }
-        if (raw > 0.05f && random01() < dt * 50.0f * raw && particles_.size() < 900) {
-            Vec3 from = source + Vec3{randRange(-0.5f, 0.5f), randRange(-0.3f, 0.3f), randRange(-0.5f, 0.5f)};
-            particles_.push_back({from, (chest - from) * 1.8f, 0.55f, 0.55f, 0.06f, rgba(255, 240, 190), 0, true});
-        }
-        if (gain <= 0 && !drained && absorbHint_ <= 0) {
-            notify(lampLightAt(hero_.body.pos) > 0.05f || lightAtRaw(hero_.body.pos) > 0.05f ? "Aquí ya no queda luz"
-                                                                                               : "Aquí no hay luz que absorber",
-                   rgba(200, 200, 215));
-            absorbHint_ = 3.0f;
-        }
-        mp_ = std::min(maxMp_, mp_ + gain);
-    }
-
-    // En la luz, la Luz se recarga despacio sola.
-    if (here > 0.3f) mp_ = std::min(maxMp_, mp_ + kLightRecharge * here * dt);
-
     // Entrar en la fuente de luz de al lado.
-    if (c.light && !hero_.absorbing()) {
+    if (c.light) {
         if (lightTarget_ >= 0 && mp_ < kEnterCost) {
-            if (lightHint_ <= 0) notify("Sin Luz", rgba(200, 200, 215));
+            if (lightHint_ <= 0) notify("Sin Poder", rgba(200, 200, 215));
             lightHint_ = 2.5f;
         } else if (lightTarget_ >= 0) {
             mp_ -= kEnterCost;
@@ -252,7 +189,7 @@ void Game::updateLight(float dt, const Controls& c) {
     // Supernova.
     if (c.nova) {
         if (mp_ < maxMp_) {
-            notify("La Supernova necesita la Luz llena", rgba(200, 200, 215));
+            notify("La Supernova necesita el Poder lleno", rgba(200, 200, 215));
         } else if (hero_.cast(hero_.yaw)) {
             mp_ = 0;
             pendingNova_ = true;
@@ -296,14 +233,12 @@ void Game::supernova() {
     uiSound(Sfx::PerfectGuard, 1.0f, 0.8f);
 }
 
-// Dentro de una fuente: invisible e intocable, recupera Luz. Q salta a la fuente elegida,
-// Espacio (o esquivar) sale junto a la farola y el clic cae sobre el Gris más cercano.
+// Dentro de una fuente: invisible e intocable. Q salta a la fuente elegida, Espacio (o
+// esquivar) sale junto a la farola y el clic cae sobre el Gris más cercano.
 void Game::updateInsideLight(float dt, const Controls& c) {
-    // Recupera Luz a costa de la fuente, que se va atenuando (y acaba apagándose).
-    if (hostLamp_ < 0 || lamps_[size_t(hostLamp_)].energy > 0.05f) mp_ = std::min(maxMp_, mp_ + kInsideRecharge * dt);
+    // La farola que le hospeda se va atenuando (y acaba apagándose).
     drainLamp(hostLamp_, kInsideDrain * dt);
     gatherLightPoints();
-    hero_.setAbsorb(false);
     // La fuente puede apagarse o romperse con el Prismero dentro: sale despedido.
     bool hostOn = false;
     for (const LightPoint& p : lightPoints_) hostOn |= length(p.pos - hostPos_) < 0.1f;
@@ -316,7 +251,7 @@ void Game::updateInsideLight(float dt, const Controls& c) {
     if (c.unlock) lightLock_ = false;
     if (c.light && lightTarget_ >= 0) {
         if (mp_ < kJumpCost) {
-            notify("Sin Luz para saltar", rgba(200, 200, 215));
+            notify("Sin Poder para saltar", rgba(200, 200, 215));
         } else {
             mp_ -= kJumpCost;
             drainLamp(hostLamp_, kJumpDrain);  // la que se deja atrás pierde luz

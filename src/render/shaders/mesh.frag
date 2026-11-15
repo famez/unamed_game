@@ -23,8 +23,6 @@ uniform vec4 uZone[8];          // zonas donde el color ya ha vuelto (nodos ence
 uniform float uDarkness;        // cuánto se oscurece lo que no alumbra ninguna fuente
 uniform int uLitCount;
 uniform vec4 uLit[24];          // fuentes de luz (farolas, nodos, faroles): xyz, radio
-uniform int uFocusCount;
-uniform vec4 uFocus[12];        // focos de sombra: xyz, radio
 uniform vec4 uOutlineColor;  // a > 0: pasada de silueta (color plano, sin iluminación)
 uniform float uTime;
 out vec4 fragColor;
@@ -232,15 +230,10 @@ void main() {
             float r = uLit[i].w;
             lit = max(lit, 1.0 - smoothstep(r * 0.6, r, length(vWorldPos.xz - uLit[i].xz)));
         }
-        float open = 1.0;
-        for (int i = 0; i < uFocusCount; ++i) {
-            if (abs(vWorldPos.y - uFocus[i].y) > 3.0) continue;
-            float r = uFocus[i].w;
-            float wob = (noise(vWorldPos.xz * 1.7 + uTime * 0.3) - 0.5) * 0.5;  // borde que respira
-            open = min(open, smoothstep(r * 0.6, r, length(vWorldPos.xz - uFocus[i].xz) + wob));
-        }
-        float dark = 1.0 - lit * open;
-        vec3 night = color * vec3(0.22, 0.18, 0.32) + vec3(0.006, 0.003, 0.014);
+        // Borde que respira un poco, para que la sombra parezca viva.
+        float wob = (noise(vWorldPos.xz * 1.7 + uTime * 0.3) - 0.5) * 0.12;
+        float dark = clamp(1.0 - lit + wob * lit * (1.0 - lit) * 4.0, 0.0, 1.0);
+        vec3 night = color * vec3(0.10, 0.08, 0.17) + vec3(0.004, 0.002, 0.010);
         color = mix(color, night, dark * uDarkness);
         float band = 1.0 - smoothstep(0.0, fwidth(dark) * 1.5 + 0.02, abs(dark - 0.5));
         color += vec3(0.3, 0.12, 0.6) * band * uDarkness * 0.6;

@@ -86,9 +86,6 @@ public:
     bool armed() const { return armed_; }
     bool weaponInHand() const { return drawTime_ < kDrawTime * 0.5f ? !armed_ : armed_; }
     static constexpr float kDrawTime = 0.35f;
-    // La Luz. Absorber (mantener): quieto, brazos abiertos.
-    void setAbsorb(bool held) { absorbHeld_ = held; }
-    bool absorbing() const;
     // Ventana de contraataque tras una esquiva.
     bool counterReady() const { return counterWindow_ > 0; }
     // Voltereta de esquiva en la dirección dada: invulnerable mientras dura.
@@ -161,8 +158,6 @@ private:
     float chargeTime_ = 0;       // segundos con el ataque mantenido sin hacer nada más
     float counterWindow_ = 0;    // tras esquivar, para el contraataque
     bool doubleJumpUsed_ = false;
-    bool absorbHeld_ = false;
-    float absorbBlend_ = 0;
     float flipTime_ = -1;        // voltereta del doble salto
     float camYaw_ = 0;
 

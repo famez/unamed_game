@@ -230,16 +230,13 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
             fillRect(d, right - hpW, cy - 20, right, cy - 17, rgba(30, 32, 40));
             fillRect(d, right - hpW, cy - 20, right - hpW + hpW * frac, cy - 17, rgba(190, 240, 255));
         }
-        // Las barras aparecen cuando se recupera lo que miden.
-        if (powers_.absorb) {
-            segBar(d, right - 14, cy - 12, maxMp_ * 1.8f, 10, mp_ / maxMp_, mp_ / maxMp_, rgba(255, 225, 140), 0, 10);
-            uiText(ui, right - 14 - maxMp_ * 1.8f - 12, cy - 16, 14, "LUZ", rgba(255, 230, 150), FontFace::Title, Align::Right);
+        // Poder: la única barra de las técnicas, del color de la mitad activa.
+        if (powers_.light || shadowUnlocked_) {
+            uint32_t pc = shadowMode_ ? rgba(170, 100, 255) : rgba(255, 220, 130);
+            segBar(d, right - 14, cy - 2, maxMp_ * 1.8f, 12, mp_ / maxMp_, mp_ / maxMp_, pc, 0, 10);
+            uiText(ui, right - 14 - maxMp_ * 1.8f - 12, cy - 6, 14, "PODER", pc, FontFace::Title, Align::Right);
         }
-        if (shadowUnlocked_) {
-            segBar(d, right - 24, cy + 8, maxShadow_ * 1.8f, 10, shadow_ / maxShadow_, shadow_ / maxShadow_, rgba(150, 80, 255), 0, 10);
-            uiText(ui, right - 24 - maxShadow_ * 1.8f - 12, cy + 4, 14, "SOMBRA", rgba(180, 130, 255), FontFace::Title, Align::Right);
-        }
-        if (shadowMode_ ? shadow_ >= 60.0f : mp_ >= maxMp_ && powers_.nova) {  // técnica de V lista
+        if (shadowMode_ ? mp_ >= 60.0f : mp_ >= maxMp_ && powers_.nova) {  // técnica de V lista
             float pulse = 0.6f + 0.4f * std::sin(time_ * 6.0f);
             uiText(ui, right - 60, cy + 26, 15, shadowMode_ ? "V · AGUJERO NEGRO" : "V · SUPERNOVA",
                    withAlpha(shadowMode_ ? rgba(190, 150, 255) : rgba(255, 230, 150), pulse), FontFace::Title, Align::Right, pulse);
@@ -251,12 +248,11 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
                    shadowMode_ ? rgba(180, 130, 255) : rgba(255, 226, 160), FontFace::Title, Align::Center, 0.5f);
             uiText(ui, cx, cy + 62, 12, "Z · cambiar", kUiDim, FontFace::Title, Align::Center);
         }
-        if (shadowMode_ && shadowAt(hero_.body.pos) > 0.5f)
-            uiText(ui, right - 24 - maxShadow_ * 1.8f - 80, cy + 4, 13, "EN LA SOMBRA", rgba(180, 130, 255), FontFace::Title,
-                   Align::Right, 0.6f);
-        if (lightAt(hero_.body.pos) > 0.3f)
-            uiText(ui, right - 14 - maxMp_ * 1.8f - 60, cy - 16, 13, "EN LA LUZ", rgba(255, 245, 200), FontFace::Title,
-                   Align::Right, 0.6f);
+        // Dónde está: en la sombra (se puede fundir) o en la luz.
+        if (shadowMode_ && shadowAt(hero_.body.pos) > 0.6f)
+            uiText(ui, right - 14, cy + 16, 13, "EN LA SOMBRA · Q fundirse", rgba(180, 130, 255), FontFace::Title, Align::Right, 0.6f);
+        else if (std::max(lightAt(hero_.body.pos), lampLightAt(hero_.body.pos)) > 0.3f)
+            uiText(ui, right - 14, cy + 16, 13, "EN LA LUZ", rgba(255, 245, 200), FontFace::Title, Align::Right, 0.6f);
         // Forma activa: nombre y tiempo restante.
         if (form_ != Form::None) {
             uint32_t fc = formColor(form_);
@@ -287,7 +283,7 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
             if (i < 3) {
                 const SpellDef& s = spellDef(Spell(i));
                 std::snprintf(name, sizeof(name), "%s", s.name);
-                std::snprintf(value, sizeof(value), "%d luz", int(s.cost));
+                std::snprintf(value, sizeof(value), "%d poder", int(s.cost));
                 usable = mp_ >= s.cost;
                 accent = s.color;
             } else {
@@ -310,7 +306,7 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
         }
         const char* help = inLight_ ? "DENTRO DE LA LUZ · Q saltar a la fuente señalada · R elegir fuente · Clic emboscada · Espacio salir"
                            : lock_ >= 0 ? "Clic atacar · R soltar objetivo · Clic central cambiar de objetivo · C esquivar · Shift correr"
-                           : shadowMode_ ? "SOMBRA · Mantén Q junto a una farola: beber su luz · Q en la sombra: deslizarte · V agujero negro · Z luz"
+                           : shadowMode_ ? "SOMBRA · Q en la oscuridad: fundirte · Rompe farolas a golpes o apágalas (F en su interruptor) · V agujero negro · Z luz"
                                         : "Clic atacar · Q junto a una farola: entrar en la luz · R fijar · V supernova · C esquivar · Shift correr";
         skewRect(d, x - 6, h - 30, x + 20 + textWidth(help, 14), h - 8, 6, kUiPanel);
         uiText(ui, x, h - 28, 14, help, kUiDim);

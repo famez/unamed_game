@@ -40,8 +40,8 @@ WeaponStats shadowWeapon(WeaponStats w) {
 const ItemDef kItems[int(ItemId::Count)] = {
     {"Célula vital",     "Recupera 40 PV.",                          ItemKind::Consumable, rgb(90, 230, 120), 40, 0, {}},
     {"Célula vital+",    "Recupera 100 PV.",                         ItemKind::Consumable, rgb(60, 200, 255), 100, 0, {}},
-    {"Carga prismática", "Recupera 30 de Luz.",                          ItemKind::Consumable, rgb(120, 140, 255), 0, 30, {}},
-    {"Núcleo puro",      "Recupera toda la vida y la Luz.",              ItemKind::Consumable, rgb(255, 120, 220), 999, 999, {}},
+    {"Poción de poder",  "Recupera 40 de Poder.",                        ItemKind::Consumable, rgb(200, 140, 255), 0, 40, {}},
+    {"Núcleo puro",      "Recupera toda la vida y el Poder.",            ItemKind::Consumable, rgb(255, 120, 220), 999, 999, {}},
     {"Estática cristalizada", "Restos de un Rastrero. Aún chisporrotea.", ItemKind::Material,  rgb(255, 245, 150), 0, 0, {}},
     {"Esquirla de domo", "Pesa más de lo que parece. Está fría.",    ItemKind::Material,   rgb(255, 200, 60), 0, 0, {}},
     {"Polvo de eco",     "Al tocarlo se oye un susurro lejano.",     ItemKind::Material,   rgb(200, 160, 255), 0, 0, {}},

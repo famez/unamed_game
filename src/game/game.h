@@ -56,9 +56,8 @@ struct Controls {
     bool advance = false;      // pasar la línea de diálogo
     Vec3 aimOrigin, aimDir{0, 0, 1};  // rayo de la cámara (para apuntar a fuentes de luz)
     bool sprint = false;       // mantener: correr
-    bool absorb = false;       // mantener Q: absorber luz
-    bool light = false;        // pulsar Q: entrar en la fuente de luz de al lado / saltar a otra
-    bool nova = false;         // V con la Luz llena: Supernova
+    bool light = false;        // Q: entrar en la fuente de luz de al lado / saltar a otra / fundirse en la sombra
+    bool nova = false;         // V con el Poder lleno: Supernova (en la sombra, agujero negro)
     bool transform = false;    // G: transformarse (con un núcleo)
     bool summon = false;       // T: invocar un compañero
     bool swapMode = false;     // Z: cambiar entre luz y sombra
@@ -94,7 +93,9 @@ struct Projectile {
     uint32_t hitMask = 0;  // onda: Grises ya alcanzados (por índice, los 32 primeros)
 };
 
-enum class PickupKind { Hp, Mp, Munny, Item, Shadow, Xp };  // Mp = Luz
+// Mp = Poder (la única barra), en orbe dorado; Shadow = Poder en orbe violeta (lo sueltan los
+// Grises de sombra: mismo efecto, distinto aspecto).
+enum class PickupKind { Hp, Mp, Munny, Item, Shadow, Xp };
 
 // Botín: salta del enemigo, rebota y, al acercarse el jugador, vuela hacia él.
 struct Pickup {
@@ -284,22 +285,27 @@ struct MemoryEcho {
     float appear = 0;  // segundos desde que apareció
 };
 
-// Farola (o fuente de luz fija): el Prismero puede entrar en ella y saltar a otras.
+// Farola (o fuente de luz fija): el Prismero puede entrar en ella y saltar a otras. Se puede
+// romper a golpes (ya no vuelve a alumbrar) o apagar y encender con su interruptor.
 struct Lamp {
     Vec3 pos;            // la bombilla
     uint32_t color = 0;
     bool bulb = true;    // dibujar la bombilla (el prisma de la fuente se dibuja aparte)
     bool on = true;      // apagada: no se puede usar
     float energy = 1;    // luz que le queda: se gasta al usarla; a 0 se apaga
+    bool broken = false; // rota a golpes: apagada para siempre
+    float hp = 3;        // golpes que aguanta
+    float hitFlash = 0;
 };
 float lampRadius(const Lamp& l);  // lo que alumbra (según su energía)
 
-// Foco de sombra: lo deja la luz que se absorbe. Dentro no llega ninguna luz (ni de farolas
-// ni de nodos) hasta que se deshace solo o se absorbe su sombra.
-struct ShadowFocus {
+// Interruptor de un grupo de farolas: apagarlas crea oscuridad para la sombra; encenderlas
+// las devuelve con toda su energía (las rotas no). Suelen estar apartados.
+struct LampSwitch {
     Vec3 pos;
-    float radius = 0.5f;
-    float age = 0;
+    std::vector<int> lamps;
+    bool on = true;
+    float flip = 0;  // segundos desde que se accionó (para la palanca)
 };
 
 // Portal: cruzarlo cambia de luz a sombra o al revés.
@@ -319,7 +325,7 @@ struct BlackHole {
 struct Powers {
     bool strong = true;       // sin fuerzas: anda despacio
     bool attack = true, jump = true, dodge = true, sprint = true;
-    bool absorb = true, light = true, techniques = true, nova = true;
+    bool light = true, techniques = true, nova = true;
 };
 
 // Plano de una escena: la cámara mira a `focus` desde `eye` durante `duration` segundos.
@@ -377,17 +383,16 @@ public:
     // Desarrollo: salta la intro y reproduce ya una escena del guion (en el escenario que toque).
     void jumpToScene(const std::string& id);
     // Un nivel suelto, sin historia: sus combates y objetivos, la sombra ya despierta y los
-    // trucos del modo prueba (lo usa el selector de niveles).
+    // trucos (lo usa el selector de niveles).
     void initLevel(LevelId id);
     // Modo de prueba con un escenario generado a partir de `seed`.
     void initTest(TestMode mode, uint32_t seed);
-    // Sin historia (modo prueba o nivel suelto): Z cambia de modo y valen los trucos F1-F3.
+    // Sin historia (modo prueba o nivel suelto): Z cambia de modo y valen los trucos F1-F2.
     bool sandbox() const { return testMode_ != TestMode::None || freePlay_; }
     TestMode testMode() const { return testMode_; }
-    void setTestCheats(bool hp, bool light, bool shadow);
+    void setTestCheats(bool hp, bool power);
     bool infiniteHp() const { return infHp_; }
-    bool infiniteLight() const { return infLight_; }
-    bool infiniteShadow() const { return infShadow_; }
+    bool infinitePower() const { return infPower_; }
     uint32_t testSeed() const { return testSeed_; }
     void update(float dt, const Controls& c);
 
@@ -411,8 +416,6 @@ public:
     float maxHp() const { return maxHp_; }
     float mp() const { return mp_; }
     float maxMp() const { return maxMp_; }
-    float shadow() const { return shadow_; }
-    float maxShadow() const { return maxShadow_; }
     Inventory& inventory() { return inv_; }
     const Inventory& inventory() const { return inv_; }
     // Usar un consumible (desde el inventario o un atajo). Falso si no hay o no hace falta.
@@ -434,17 +437,14 @@ public:
     const Brain& bossBrain() const { return bossBrain_; }
     // Intensidad de luz (0..1) en un punto: zonas de nodos encendidos y faroles.
     float lightAt(Vec3 p) const;
-    float lightAtRaw(Vec3 p) const;   // sin contar los focos de sombra
     float lampLightAt(Vec3 p) const;  // luz de las farolas encendidas
-    float focusOpen(Vec3 p) const;    // 0 dentro de un foco de sombra, 1 fuera
-    const std::vector<ShadowFocus>& shadowFoci() const { return foci_; }
-    static constexpr float kFocusMax = 5.0f;
     // Viaje por la luz: dentro de una fuente, o la fuente señalada (al lado para entrar o, ya
     // dentro, la elegida para saltar; -1 si no hay).
     bool insideLight() const { return inLight_; }
     // Luz o sombra: el protagonista cambia de una a otra (Z) cuando ya ha despertado la sombra.
     bool shadowMode() const { return shadowMode_; }
     const std::vector<Lamp>& lamps() const { return lamps_; }
+    const std::vector<LampSwitch>& lampSwitches() const { return switches_; }
     bool shadowUnlocked() const { return shadowUnlocked_; }
     void unlockShadow() { shadowUnlocked_ = true; }
     // Oscuridad (0..1) en un punto: donde no llega la luz de las farolas, nodos y faroles.
@@ -515,7 +515,7 @@ private:
     void traceBeams();
     // Interacción con lo más cercano (cápsula, nodo, farol, objeto, espejo). -1 si no hay nada.
     struct InteractTarget {
-        int kind = -1;  // 0 cápsula, 1 nodo, 2 farol, 3 objeto, 4 espejo
+        int kind = -1;  // 0 cápsula, 1 nodo, 2 farol, 3 objeto, 4 espejo, 5 interruptor
         int index = -1;
         std::string label;
     };
@@ -648,8 +648,9 @@ private:
     float hp_ = 100, maxHp_ = 100;
     int heroLevel_ = 1, xp_ = 0;
     float levelFlash_ = 0;  // destello del HUD al subir de nivel
-    float mp_ = 40, maxMp_ = 100;  // Luz: se absorbe del mundo (no se regenera sola)
-    float shadow_ = 0, maxShadow_ = 100;  // Sombra: la sueltan los Vaciados
+    // Poder: la única barra de las técnicas de luz y de sombra. No se regenera sola: se llena
+    // con pociones de poder y con los orbes que sueltan los Grises.
+    float mp_ = 40, maxMp_ = 100;
     float hpGhost_ = 100;     // barra roja que va detrás al perder vida
     float heroInvuln_ = 0;    // tras un golpe, un momento sin recibir otro
     float heroFlash_ = 0;
@@ -657,7 +658,6 @@ private:
     bool perfectGuard_ = false;
     Spell pendingSpell_ = Spell::Fire;  // la que sale al llegar el impacto del Cast
     bool pendingNova_ = false;          // el Cast en curso es la Supernova
-    float absorbHint_ = 0;              // para no repetir el aviso de "no hay luz"
     float novaFlash_ = 0;
     std::vector<LightPoint> lightPoints_;
     int lightTarget_ = -1;
@@ -674,12 +674,12 @@ private:
     bool diving_ = false;      // fundido con la sombra del suelo
     Vec3 diveFrom_, lastDark_;
     std::vector<Portal> portals_;
-    std::vector<ShadowFocus> foci_;
     float darkShown_ = 0;  // cuánto se oscurece en pantalla lo que no alumbra ninguna luz
-    // Absorber: de luz deja (o agranda) un foco de sombra; de sombra los deshace.
-    bool growFocus(Vec3 at, float dt);
-    void updateFoci(float dt);
-    void absorbShadow(float dt);
+    std::vector<LampSwitch> switches_;
+    void placeLampSwitches();
+    void toggleSwitch(int i);
+    void hitLamp(int i, float damage);
+    void updateLamps(float dt);
     std::vector<BlackHole> holes_;
     Vec3 lightLockPos_;
     float lightHint_ = 0;
@@ -750,9 +750,9 @@ private:
     float testArena_ = 20;       // medio lado del escenario de combate
     float testSpawnTimer_ = 0;
     int testBossAt_ = 30;        // bajas con las que aparece el siguiente Gris mayor
-    // Trucos del modo prueba (F1, F2, F3 o el menú de pausa): por defecto solo la vida es
-    // infinita, para poder probar la gestión de la Luz y la Sombra.
-    bool infHp_ = true, infLight_ = false, infShadow_ = false;
+    // Trucos sin historia (F1, F2 o el menú de pausa): por defecto solo la vida es infinita,
+    // para poder probar la gestión del Poder.
+    bool infHp_ = true, infPower_ = false;
     bool freePlay_ = false;  // nivel suelto elegido en el selector (sin guion)
 
 };

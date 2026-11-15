@@ -216,20 +216,14 @@ int main() {
         run(g, 0.6f, c);
         CHECK(g.projectiles_.size() == before && g.mp_ >= 5, "sin Luz no sale la Refraccion");
     }
-    {  // La Luz: absorber, hacerse luz y Supernova
+    {  // El Poder: no se recarga solo; Q lejos de una fuente no hace nada; Supernova
         Game g = fresh();
-        place(g, {0, 0, -10});
-        Controls hold;
-        hold.absorb = true;
-        float l0 = g.mp_;
-        run(g, 1.0f, hold);
-        CHECK(g.mp_ == l0, "en una zona gris no hay luz que absorber");
         g.nodes_[0].lit = true;
         g.nodes_[0].litTime = 10;
         place(g, g.nodes_[0].pos + Vec3{1.5f, 0, 0});
-        g.mp_ = 0;
-        run(g, 1.0f, hold);
-        CHECK(g.mp_ > 30 && g.hero_.body.pos.y > -0.01f, "junto a un nodo encendido se absorbe (%.0f de Luz en 1 s)", g.mp_);
+        g.mp_ = 10;
+        run(g, 2.0f);
+        CHECK(g.mp_ == 10, "en la luz el Poder no se recarga solo (solo pociones y orbes)");
         // Lejos de las farolas, Q no hace nada (ya no hay haz que gaste Luz).
         place(g, {0, 0, -12});
         g.mp_ = 50;
@@ -237,18 +231,7 @@ int main() {
         run(g, 0.8f, press(&Controls::light));
         CHECK(g.mp_ >= 50 && !g.insideLight() && !g.travelingByLight() && length(flat(g.hero_.body.pos - p0)) < 0.1f,
               "Q lejos de una fuente de luz: no se mueve ni gasta Luz");
-        addEnemy(g, EnemyKind::Dazzled, {0, 0, -7}, AiState::Idle);
-        // Arrancar el color a un Gris aturdido.
-        Enemy& e = g.enemies_[0];
-        e.state = AiState::Stagger;
-        e.stateTime = 0;
-        place(g, e.body.pos + Vec3{1.5f, 0, 0});
-        g.mp_ = 0;
-        float hpE = e.health;
-        e.state = AiState::Stagger;
-        run(g, 0.5f, hold);
-        CHECK(g.mp_ > 3 && (g.enemies_.empty() || g.enemies_[0].health < hpE), "absorber de un Gris aturdido: le arranca su color (+%.0f de Luz)", g.mp_);
-        // Supernova: solo con la Luz llena.
+        // Supernova: solo con el Poder lleno.
         g.enemies_.clear();
         for (int i = 0; i < 4; ++i) addEnemy(g, EnemyKind::Brute, g.hero_.body.pos + Vec3{std::cos(float(i)) * 3, 0, std::sin(float(i)) * 3});
         g.mp_ = 50;
@@ -368,7 +351,7 @@ int main() {
         CHECK(g.lightTarget() >= 0 && length(g.lightTargetPos() - lampA) < 0.01f, "junto a una farola, queda señalada");
         float l0 = g.mp_;
         run(g, 1.0f, press(&Controls::light));
-        CHECK(g.insideLight() && length(g.hostLight() - lampA) < 0.01f && g.mp_ > l0, "Q: entra en la farola (y recupera Luz)");
+        CHECK(g.insideLight() && length(g.hostLight() - lampA) < 0.01f && g.mp_ < l0, "Q: entra en la farola (gasta Poder)");
         // Dentro no le ven ni le hieren.
         Enemy& imp = addEnemy(g, EnemyKind::Dazzled, {lampA.x + 3, 0, lampA.z}, AiState::Chase);
         g.hurtHero({1, 0, 0}, 30, 2, &imp);
@@ -439,11 +422,7 @@ int main() {
         addEnemy(w, EnemyKind::Dazzled, w.nodes_[0].pos + Vec3{-1, 0, 0});
         w.hitEnemy(w.enemies_[2], {1, 0, 0}, 10, 0, 0, false);
         CHECK(w.enemies_[2].health == enemyDef(EnemyKind::Dazzled).maxHealth - 8, "a uno de luz, en la luz, un 20%% menos");
-        place(w, w.nodes_[0].pos + Vec3{2, 0, 0});
-        w.mp_ = 0;
-        w.enemies_.clear();
-        run(w, 2.0f);
-        CHECK(w.mp_ > 3, "en la luz la Luz se recarga sola (%.1f en 2 s)", w.mp_);
+
     }
     {  // Corte cargado: mantener el clic carga; al soltar, la onda atraviesa a varios
         Game g = fresh();
@@ -604,8 +583,8 @@ int main() {
         }
         run(g, 0.2f);
         skipDialogues(g);
-        CHECK(g.partIndex() == 2 && g.gates_[0].closed && !g.receptors_[0].lit && g.powers().absorb && g.powers().light,
-              "tres nodos: vuelven la absorción y la luz; la puerta sigue sellada (rompecabezas)");
+        CHECK(g.partIndex() == 2 && g.gates_[0].closed && !g.receptors_[0].lit && g.powers().light,
+              "tres nodos: vuelve la luz; la puerta sigue sellada (rompecabezas)");
         // Rompecabezas: girar los espejos (F) hasta que el haz llegue al receptor.
         place(g, g.mirrors_[0].pos + Vec3{0.9f, 0, 0});
         int before = g.mirrors_[0].angle;
@@ -776,16 +755,15 @@ int main() {
         CHECK(g.hero_.downTimer < 0 && g.hp_ == g.maxHp_, "vida infinita: un golpe de 500 no derriba");
         g.mp_ = 0;
         run(g, 0.05f);
-        CHECK(g.mp_ < 1.0f, "por defecto la Luz no es infinita (para probar su gestión)");
-        g.setTestCheats(true, true, true);
-        g.shadow_ = 0;
+        CHECK(g.mp_ < 1.0f, "por defecto el Poder no es infinito (para probar su gestión)");
+        g.setTestCheats(true, true);
         run(g, 0.05f);
-        CHECK(g.mp_ == g.maxMp_ && g.shadow_ == g.maxShadow_, "con F2 y F3: Luz y Sombra infinitas");
-        g.setTestCheats(false, false, false);
+        CHECK(g.mp_ == g.maxMp_, "con F2: Poder infinito");
+        g.setTestCheats(false, false);
         g.hp_ = 50;
         run(g, 0.05f);
         CHECK(g.hp_ < g.maxHp_, "con F1 apagado la vida ya no se rellena");
-        g.setTestCheats(true, false, false);
+        g.setTestCheats(true, false);
         for (int wave = 0; wave < 3; ++wave) {
             for (Enemy& e : g.enemies_)
                 if (e.alive()) g.killEnemy(e);
@@ -834,10 +812,11 @@ int main() {
             k.killEnemy(e);
             for (const Pickup& p : k.pickups_) shadowOrbs += p.kind == PickupKind::Shadow, lightOrbs += p.kind == PickupKind::Mp;
         }
-        CHECK(shadowOrbs > 0 && lightOrbs > 0, "los de sombra sueltan Sombra (%d) y los de luz, Luz (%d)", shadowOrbs, lightOrbs);
-        float s0 = k.shadow_;
+        CHECK(shadowOrbs > 0 && lightOrbs > 0, "orbes de Poder violetas de los de sombra (%d) y dorados de los de luz (%d)",
+              shadowOrbs, lightOrbs);
+        k.mp_ = 0;
         run(k, 3.0f);
-        CHECK(k.shadow_ > s0, "recoger Sombra la suma (%.0f)", k.shadow_);
+        CHECK(k.mp_ > 0, "los dos suman a la misma barra de Poder (%.0f)", k.mp_);
     }
     {  // Niveles: los enemigos sueltan experiencia y vida; al subir, más vida y fuerza
         Game g = fresh();
@@ -875,14 +854,14 @@ int main() {
         CHECK(g.shadowAt({lamp.x, 0, lamp.z}) < 0.1f && g.shadowAt({0, 0, -14}) > 0.9f,
               "junto a una farola encendida hay luz; lejos de ellas, oscuridad");
         place(g, {-2, 0, -14});
-        g.shadow_ = 50;
+        g.mp_ = 50;
         run(g, 0.1f, press(&Controls::light));
         CHECK(g.diving(), "Q en la oscuridad: se funde con la sombra");
-        float s0 = g.shadow_;
+        float s0 = g.mp_;
         Controls go;
         go.move = {1, 0, 0};
         run(g, 1.0f, go);
-        CHECK(g.shadow_ < s0 && g.hero_.body.pos.x > 2.0f, "fundido se mueve rápido por la oscuridad y gasta Sombra (%.0f)", g.shadow_);
+        CHECK(g.mp_ < s0 && g.hero_.body.pos.x > 2.0f, "fundido se mueve rápido por la oscuridad y gasta Poder (%.0f)", g.mp_);
         // La luz no deja pasar: hacia la farola se queda en el borde de su luz.
         Controls toLamp;
         toLamp.move = normalize(flat(Vec3{lamp.x, 0, lamp.z} - g.hero_.body.pos));
@@ -893,16 +872,6 @@ int main() {
         (void)d;
         run(g, 0.5f);
         CHECK(g.enemies_[0].state == AiState::Idle, "fundido con la sombra no le ven");
-        // La sombra que gasta se hace luz: una farola apagada cercana se enciende.
-        g.lamps_[2].on = false;
-        g.lamps_[2].energy = 0;
-        g.enemies_.clear();
-        place(g, {g.lamps_[2].pos.x + 1.0f, 0, g.lamps_[2].pos.z + 1.0f});
-        g.diving_ = false;
-        g.shadow_ = 100;
-        run(g, 0.1f, press(&Controls::light));
-        run(g, 3.5f);
-        CHECK(g.lamps_[2].on, "fundido junto a una farola apagada, la vuelve a encender");
         // Salir en emboscada.
         run(g, 0.1f, press(&Controls::light));
         CHECK(!g.diving(), "Q otra vez: sale de la sombra");
@@ -911,12 +880,12 @@ int main() {
         place(g, {0, 0, -12}, 0);
         addEnemy(g, EnemyKind::Dazzled, {0, 0, -8.5f});
         addEnemy(g, EnemyKind::Hound, {1.5f, 0, -8});
-        g.shadow_ = 100;
+        g.mp_ = 100;
         float h0 = g.enemies_[0].health + g.enemies_[1].health;
         run(g, 3.5f, press(&Controls::nova));
         float h1 = 0;
         for (const Enemy& e : g.enemies_) h1 += std::max(0.0f, e.health);
-        CHECK(g.shadow_ < 75 && h1 < h0 * 0.6f, "V: el agujero negro atrae y deshace (vida %.0f → %.0f)", h0, h1);
+        CHECK(g.mp_ < 75 && h1 < h0 * 0.6f, "V: el agujero negro atrae y deshace (vida %.0f → %.0f)", h0, h1);
         // Golpes cruzados.
         g.enemies_.clear();
         addEnemy(g, EnemyKind::Dazzled, {0, 0, 10});
@@ -926,34 +895,44 @@ int main() {
         g.hitEnemy(g.enemies_[1], {1, 0, 0}, 10, 0, 0, false);
         CHECK(hd - g.enemies_[0].health > hb - g.enemies_[1].health, "en modo sombra se hiere más a los de luz");
     }
-    {  // Absorber: la luz absorbida deja un foco de sombra; la sombra absorbida lo deshace
+    {  // Farolas: romperlas a golpes crea sombra para siempre; los interruptores las apagan y encienden
         Game g = fresh();
         g.unlockShadow();
         g.portals_.clear();
-        Vec3 lamp = g.lamps_[1].pos;
-        place(g, {lamp.x + 1.2f, 0, lamp.z});
-        g.mp_ = 0;
-        float e0 = g.lamps_[1].energy;
-        Controls hold;
-        hold.absorb = true;
-        CHECK(g.shadowAt(g.hero_.body.pos) < 0.2f, "junto a la farola hay luz");
-        run(g, 2.0f, hold);
-        CHECK(g.mp_ > 10 && !g.foci_.empty() && g.foci_[0].radius > 2.0f && g.lamps_[1].energy < e0,
-              "absorber luz da Luz (%.0f), deja un foco de sombra (%.1f m) y apaga la farola", g.mp_,
-              g.foci_.empty() ? 0.0f : g.foci_[0].radius);
-        CHECK(g.shadowAt(g.hero_.body.pos) > 0.9f, "dentro del foco está oscuro aunque la farola siga encendida");
-        run(g, 3.0f, hold);
-        float full = g.mp_;
-        run(g, 1.0f, hold);
-        CHECK(g.foci_[0].radius == Game::kFocusMax && g.mp_ == full, "con el foco a tope ahí ya no queda luz (%.0f)", g.mp_);
         g.shadowMode_ = true;
-        g.shadow_ = 0;
-        float r0 = g.foci_[0].radius;
-        run(g, 1.5f, hold);
-        CHECK(g.shadow_ > 10 && g.foci_[0].radius < r0, "en modo sombra, absorber sombra da Sombra (%.0f) y deshace el foco",
-              g.shadow_);
+        Vec3 lamp = g.lamps_[1].pos;
+        place(g, {lamp.x, 0, lamp.z + 1.2f}, kPi);  // al lado del poste, mirándolo
+        CHECK(g.shadowAt(g.hero_.body.pos) < 0.2f, "junto a la farola encendida hay luz");
+        g.mp_ = 50;
         run(g, 0.1f, press(&Controls::light));
-        CHECK(g.diving(), "en el foco puede fundirse con la sombra");
+        CHECK(!g.diving(), "con la farola encendida no se puede fundir");
+        for (int i = 0; i < 6 && !g.lamps_[1].broken; ++i) {
+            run(g, 0.05f, press(&Controls::attack));
+            run(g, 0.6f);
+        }
+        CHECK(g.lamps_[1].broken && !g.lamps_[1].on, "a golpes la farola se rompe");
+        CHECK(g.shadowAt(g.hero_.body.pos) > 0.9f, "rota, ahí hay sombra");
+        run(g, 0.1f, press(&Controls::light));
+        CHECK(g.diving(), "y ya se puede fundir en ella");
+        g.diving_ = false;
+        CHECK(!g.switches_.empty(), "hay interruptores (%zu)", g.switches_.size());
+        int si = -1;
+        for (size_t i = 0; i < g.switches_.size(); ++i)
+            for (int li : g.switches_[i].lamps)
+                if (li == 1) si = int(i);
+        CHECK(si >= 0, "la farola rota tiene su interruptor");
+        const LampSwitch sw = g.switches_[size_t(si)];
+        CHECK(length(flat(sw.pos - lamp)) > 5.0f, "el interruptor está apartado de sus farolas (%.1f m)", length(flat(sw.pos - lamp)));
+        place(g, sw.pos + Vec3{0.8f, 0, 0});
+        run(g, 0.1f, press(&Controls::interact));
+        bool othersOff = true;
+        for (int li : sw.lamps) othersOff = othersOff && !g.lamps_[size_t(li)].on;
+        CHECK(!g.switches_[size_t(si)].on && othersOff, "el interruptor apaga su grupo de farolas");
+        run(g, 0.5f);
+        run(g, 0.1f, press(&Controls::interact));
+        bool othersOn = true;
+        for (int li : sw.lamps) othersOn = othersOn && (g.lamps_[size_t(li)].on || g.lamps_[size_t(li)].broken);
+        CHECK(othersOn && g.lamps_[1].broken && !g.lamps_[1].on, "al encenderlas vuelven todas menos la rota");
     }
     {  // La luz se gasta: saltar de farola en farola cuesta Luz y apaga las farolas que se usan
         Game g = fresh();

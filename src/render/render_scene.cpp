@@ -74,11 +74,6 @@ void Renderer::litArea(Vec3 pos, float radius) {
     litAreas_.insert(litAreas_.end(), {pos.x, pos.y, pos.z, radius});
 }
 
-void Renderer::darkArea(Vec3 pos, float radius) {
-    if (int(darkAreas_.size() / 4) >= kMaxDarkAreas || radius <= 0) return;
-    darkAreas_.insert(darkAreas_.end(), {pos.x, pos.y, pos.z, radius});
-}
-
 void Renderer::colorZone(Vec3 pos, float radius) {
     if (zones_.size() / 4 >= 8 || radius <= 0) return;
     zones_.insert(zones_.end(), {pos.x, pos.y, pos.z, radius});

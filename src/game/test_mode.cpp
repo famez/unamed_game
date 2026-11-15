@@ -2,8 +2,8 @@
 // (edificios alrededor, pilares, plataformas, árboles, farolas, nodos encendidos y dos
 // portales) con Grises de luz y de sombra sin fin, cada vez más numerosos; cada 30 bajas
 // aparece un Gris mayor. Entre las farolas queda oscuridad de sobra para la sombra.
-// Vida, Luz y Sombra infinitas se encienden y apagan aparte (F1, F2, F3): por defecto solo
-// la vida, para probar la gestión de la Luz y la Sombra (absorber, gastar, focos, portales).
+// Vida y Poder infinitos se encienden y apagan aparte (F1, F2): por defecto solo la vida,
+// para probar la gestión del Poder (gastarlo, recogerlo, romper farolas, interruptores).
 // Todo sale de una semilla: la misma semilla da el mismo escenario.
 
 #include "game/game.h"
@@ -40,10 +40,9 @@ void Game::initTest(TestMode mode, uint32_t seed) {
     inv_.add(ItemId::BlazeGem, 2);
     hp_ = hpGhost_ = maxHp_;
     mp_ = maxMp_;
-    shadow_ = maxShadow_;
     shadowUnlocked_ = true;
     applyWeapon();
-    notify("Modo prueba · F1 vida, F2 Luz, F3 Sombra infinitas · Z cambia de modo", kCyan);
+    notify("Modo prueba · F1 vida y F2 Poder infinitos · Z cambia de modo", kCyan);
 }
 
 void Game::initLevel(LevelId id) {
@@ -52,16 +51,14 @@ void Game::initLevel(LevelId id) {
     loadLevel(id);  // (otra vez si es la plaza: ahora con los combates armados)
     hp_ = hpGhost_ = maxHp_;
     mp_ = maxMp_;
-    shadow_ = maxShadow_;
     shadowUnlocked_ = true;
     applyWeapon();
-    notify("Z cambia entre luz y sombra · F1 vida, F2 Luz, F3 Sombra infinitas", kCyan);
+    notify("Z cambia entre luz y sombra · F1 vida y F2 Poder infinitos", kCyan);
 }
 
-void Game::setTestCheats(bool hp, bool light, bool shadow) {
+void Game::setTestCheats(bool hp, bool power) {
     infHp_ = hp;
-    infLight_ = light;
-    infShadow_ = shadow;
+    infPower_ = power;
 }
 
 // --- Patio de combate aleatorio -------------------------------------------------------------
@@ -205,7 +202,6 @@ void Game::updateTestMode(float dt) {
     if (alive < want && testSpawnTimer_ <= 0 && hero_.downTimer < 0 && spawnTestEnemy()) testSpawnTimer_ = 0.8f;
     if (!parts_.empty()) {
         auto mark = [](bool on) { return on ? "infinita" : "no"; };
-        parts_[0].objective = "Grises: " + std::to_string(kills_) + " · F1 vida " + mark(infHp_) + " · F2 Luz " +
-                              mark(infLight_) + " · F3 Sombra " + mark(infShadow_);
+        parts_[0].objective = "Grises: " + std::to_string(kills_) + " · F1 vida " + mark(infHp_) + " · F2 Poder " + mark(infPower_);
     }
 }

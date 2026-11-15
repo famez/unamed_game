@@ -89,8 +89,8 @@ const char kHelp[] =
     "\n"
     "Niveles (sin opciones, se elige en el selector del principio)\n"
     "  --nivel plaza|mercado|puente  entra directamente en ese nivel\n"
-    "  --prueba [semilla]            patio de combate: enemigos sin fin; F1, F2 y F3 hacen\n"
-    "                                infinitas la vida, la Luz y la Sombra; Z cambia de modo\n"
+    "  --prueba [semilla]            patio de combate: enemigos sin fin; F1 y F2 hacen infinitos\n"
+    "                                la vida y el Poder; Z cambia de modo\n"
     "  --historia                    la historia (capítulo 1), aparcada por ahora\n"
     "  --escena ID                   historia: empieza reproduciendo esa escena del guion\n"
     "\n"
@@ -98,7 +98,6 @@ const char kHelp[] =
     "  --debug                       solo esqueletos y cajas en alambre (también F12)\n"
     "  --autoplay                    un bot juega solo\n"
     "  --giros                       el bot solo corre haciendo curvas (para ver el giro)\n"
-    "  --focos                       el bot absorbe una farola y se funde en el foco de sombra\n"
     "  --cambios                     el bot cambia de luz a sombra y vuelta (para ver el cambio)\n"
     "  --retrato | --cuerpo          cámara frente a la cara o al cuerpo del protagonista\n"
     "  --camyaw RADIANES             orientación inicial de la cámara\n"
@@ -215,7 +214,6 @@ int main(int argc, char** argv) {
     float cineBlend = 0;   // 0 = cámara normal, 1 = plano de escena del guion
     float camDist = 6.0f;  // distancia de la cámara tras apartarse de las paredes
     Vec3 cineEye, cineFocus;
-    float qHeld = -1;      // tiempo con Q mantenida (-1 = suelta)
     DrawFlags flags;
     // Modo debug (F12 / º, o --debug al arrancar): solo esqueletos y cajas en alambre.
     bool debugView = false;
@@ -225,7 +223,6 @@ int main(int argc, char** argv) {
     bool portrait = false;  // --retrato: cámara frente a la cara del protagonista (para modelarlo)
     bool bodyShot = false;  // --cuerpo: lo mismo, con el cuerpo entero
     bool turnsBot = false;  // --giros: el bot solo corre haciendo curvas y medias vueltas
-    bool fociBot = false;   // --focos: el bot absorbe la luz de una farola y se funde en el foco
     bool swapBot = false;   // --cambios: el bot se queda quieto y cambia de luz a sombra y vuelta
     float camYaw0 = 0;  // --camyaw: orientación inicial de la cámara (radianes)
     const char* shotPath = nullptr;
@@ -237,7 +234,6 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--retrato") == 0) portrait = true;
         if (std::strcmp(argv[i], "--cuerpo") == 0) portrait = bodyShot = true;
         if (std::strcmp(argv[i], "--giros") == 0) autoplay = turnsBot = true;
-        if (std::strcmp(argv[i], "--focos") == 0) autoplay = fociBot = true;
         if (std::strcmp(argv[i], "--cambios") == 0) autoplay = swapBot = true;
         if (std::strcmp(argv[i], "--camyaw") == 0 && i + 1 < argc) camYaw0 = float(std::atof(argv[++i]));
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 2 < argc) {
@@ -310,7 +306,7 @@ int main(int argc, char** argv) {
                 freeLevel = e.level;
                 story = false;
                 startGame();
-                game.setTestCheats(menu.infHp, menu.infLight, menu.infShadow);
+                game.setTestCheats(menu.infHp, menu.infPower);
                 cam = OrbitCamera{};
                 cam.target = game.hero().body.pos + Vec3{0, 1.0f, 0};
                 platform::setMouseCaptured(true);
@@ -336,12 +332,12 @@ int main(int argc, char** argv) {
                     break;
                 case PauseMenu::Result::Restart:
                     startGame();
-                    game.setTestCheats(menu.infHp, menu.infLight, menu.infShadow);
+                    game.setTestCheats(menu.infHp, menu.infPower);
                     cam = OrbitCamera{};
                     cam.target = game.hero().body.pos + Vec3{0, 1.0f, 0};
                     closeMenu();
                     break;
-                case PauseMenu::Result::CheatsChanged: game.setTestCheats(menu.infHp, menu.infLight, menu.infShadow); break;
+                case PauseMenu::Result::CheatsChanged: game.setTestCheats(menu.infHp, menu.infPower); break;
                 case PauseMenu::Result::Quit: quit = true; break;
                 case PauseMenu::Result::QualityChanged: renderer.setQuality(Quality(menu.quality)); break;
                 case PauseMenu::Result::None: break;
@@ -362,13 +358,12 @@ int main(int argc, char** argv) {
             if (input.wasPressed(Key::F2)) flags.joints = !flags.joints;
             if (input.wasPressed(Key::F3)) flags.body = !flags.body;
             if (input.wasPressed(Key::F4)) flags.grid = !flags.grid;
-        } else if (game.sandbox() && !menu.open && !selector.open) {  // sin historia: F1-F3, qué es infinito
+        } else if (game.sandbox() && !menu.open && !selector.open) {  // sin historia: F1-F2, qué es infinito
             bool changed = true;
             if (input.wasPressed(Key::F1)) menu.infHp = !menu.infHp;
-            else if (input.wasPressed(Key::F2)) menu.infLight = !menu.infLight;
-            else if (input.wasPressed(Key::F3)) menu.infShadow = !menu.infShadow;
+            else if (input.wasPressed(Key::F2)) menu.infPower = !menu.infPower;
             else changed = false;
-            if (changed) game.setTestCheats(menu.infHp, menu.infLight, menu.infShadow);
+            if (changed) game.setTestCheats(menu.infHp, menu.infPower);
         }
 
         bool guardHeld = false;
@@ -389,13 +384,8 @@ int main(int argc, char** argv) {
                 pending.transform |= input.wasPressed(Key::G);
                 pending.summon |= input.wasPressed(Key::T);
                 pending.swapMode |= input.wasPressed(Key::Z);
-                // Q: pulsación corta = entrar en la luz / saltar a otra fuente; mantenida = absorber.
-                if (input.wasPressed(Key::Q)) qHeld = 0;
-                if (input.isDown(Key::Q)) qHeld += float(frameDt);
-                else if (qHeld >= 0) {
-                    if (qHeld < 0.22f) pending.light = true;
-                    qHeld = -1;
-                }
+                // Q: entrar en la luz / saltar a otra fuente / fundirse en la sombra.
+                pending.light |= input.wasPressed(Key::Q);
             }
             pending.scroll -= int(input.wheel);  // rueda arriba = entrada de arriba
             const Key slotKeys[] = {Key::N1, Key::N2, Key::N3, Key::N4, Key::N5, Key::N6};
@@ -438,7 +428,6 @@ int main(int argc, char** argv) {
                 c.runCommand = pending.runCommand;
                 c.advance = pending.advance;
                 c.sprint = playing && input.isDown(Key::Shift);
-                c.absorb = playing && qHeld >= 0.22f;
                 c.light = pending.light;
                 c.nova = pending.nova;
                 c.transform = pending.transform;
@@ -465,27 +454,6 @@ int main(int argc, char** argv) {
                         if (botStep % 300 == 150) c.jump = true;
                     }
                     c.interact = botStep % 30 == 0;
-                    if (fociBot) {  // a la farola más cercana, absorber, cambiar a sombra y fundirse
-                        c = Controls{};
-                        c.camForward = cam.forwardFlat();
-                        c.advance = botStep % 25 == 0;
-                        static int lamp = -1;
-                        const auto& lamps = game.lamps();
-                        Vec3 hp = game.hero().body.pos;
-                        if (lamp < 0)
-                            for (size_t i = 0; i < lamps.size(); ++i)
-                                if (lamp < 0 || length(flat(lamps[i].pos - hp)) < length(flat(lamps[size_t(lamp)].pos - hp)))
-                                    lamp = int(i);
-                        Vec3 to = lamp >= 0 ? flat(lamps[size_t(lamp)].pos - hp) : Vec3{};
-                        if (botStep < 300 && length(to) > 1.3f) c.move = normalize(to);
-                        else if (botStep < 300) c.absorb = true;
-                        else if (botStep == 300) c.swapMode = true;
-                        else if (botStep == 330) c.light = true;
-                        else if (botStep > 340) {
-                            float a = float(botStep) * 0.03f;
-                            c.move = Vec3{std::cos(a), 0, std::sin(a)};
-                        }
-                    }
                     if (turnsBot) {  // tramos: recto, curva de 90°, media vuelta, giro parado
                         int t = botStep % 360;
                         c = Controls{};
@@ -504,7 +472,7 @@ int main(int argc, char** argv) {
                         c.attack = t == 80 || t == 92 || t == 104;
                     }
                     // En los modos de prueba también cambia a sombra y lanza agujeros negros.
-                    if (fociBot || turnsBot || swapBot) {
+                    if (turnsBot || swapBot) {
                     } else if (game.testMode() != TestMode::None) {
                         c.swapMode = botStep == 30;
                         c.nova = c.nova || botStep % 240 == 120;

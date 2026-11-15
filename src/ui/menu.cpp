@@ -80,11 +80,11 @@ PauseMenu::Result PauseMenu::update(const Input& in, int width, int height) {
         return Result::None;
     }
 
-    if (selected_ == InfHpItem || selected_ == InfLightItem || selected_ == InfShadowItem) {
+    if (selected_ == InfHpItem || selected_ == InfPowerItem) {
         bool toggle = clicked || in.wasPressed(Key::Enter) || in.wasPressed(Key::Space) || in.wasPressed(Key::A) ||
                       in.wasPressed(Key::D) || in.wasPressed(Key::Left) || in.wasPressed(Key::Right);
         if (!toggle) return Result::None;
-        bool& b = selected_ == InfHpItem ? infHp : selected_ == InfLightItem ? infLight : infShadow;
+        bool& b = selected_ == InfHpItem ? infHp : infPower;
         b = !b;
         return Result::CheatsChanged;
     }
@@ -119,11 +119,10 @@ void PauseMenu::draw(UiLayer& ui, int width, int height) const {
     const char* qnames[3] = {"baja", "media", "alta"};
     char qual[48];
     std::snprintf(qual, sizeof(qual), "Calidad gráfica   ‹ %s ›", qnames[quality]);
-    char hp[48], lt[48], sh[48];
+    char hp[48], pw[48];
     std::snprintf(hp, sizeof(hp), "Vida infinita   ‹ %s ›", infHp ? "sí" : "no");
-    std::snprintf(lt, sizeof(lt), "Luz infinita   ‹ %s ›", infLight ? "sí" : "no");
-    std::snprintf(sh, sizeof(sh), "Sombra infinita   ‹ %s ›", infShadow ? "sí" : "no");
-    const char* labels[ItemCount] = {"Continuar", "Reiniciar nivel", "Elegir nivel", hp, lt, sh, sens, qual, "Salir"};
+    std::snprintf(pw, sizeof(pw), "Poder infinito   ‹ %s ›", infPower ? "sí" : "no");
+    const char* labels[ItemCount] = {"Continuar", "Reiniciar nivel", "Elegir nivel", hp, pw, sens, qual, "Salir"};
     for (int i = 0; i < ItemCount; ++i) {
         Rect r = itemRect(i, width, height);
         bool sel = i == selected_;

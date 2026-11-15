@@ -101,12 +101,10 @@ public:
     // ve a todo color dentro del radio, con transición suave en el borde. Máximo 8.
     void colorZone(Vec3 pos, float radius);
     // Oscuridad: lo que no alumbra ninguna fuente (`litArea`) se ve oscuro y con un borde
-    // violeta, y dentro de un foco de sombra (`darkArea`) no llega ninguna luz. `amount`:
-    // cuánto se oscurece (0 = nada, se usa antes de despertar la sombra).
+    // violeta. `amount`: cuánto se oscurece (0 = nada, se usa antes de despertar la sombra).
     void litArea(Vec3 pos, float radius);
-    void darkArea(Vec3 pos, float radius);
     void setDarkness(float amount) { darkness_ = amount; }
-    static constexpr int kMaxLitAreas = 24, kMaxDarkAreas = 12;
+    static constexpr int kMaxLitAreas = 24;
     static constexpr int kMaxPaints = 16;
 
     static constexpr int kMaxLights = 8, kMaxScorches = 8, kMaxBones = 20;
@@ -195,7 +193,7 @@ private:
     float worldColor_ = 1.0f;
     std::vector<float> paints_;  // x, y, z, radio, r, g, b
     std::vector<float> zones_;   // x, y, z, radio
-    std::vector<float> litAreas_, darkAreas_;  // x, y, z, radio
+    std::vector<float> litAreas_;  // x, y, z, radio
     float darkness_ = 0;
     uint32_t highlightColor_ = 0;
     std::vector<PointLight> lights_;

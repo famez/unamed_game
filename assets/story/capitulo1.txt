@@ -30,10 +30,8 @@
 !tutorial Shift correr Correr
 
 == nodo_1
-!poder absorber
 !plano -9.5 1.8 -9.0  -6.0 2.8 -4.5 2.5
 !eco_activa 1
-!tutorial Q absorber Mantén para absorber
 
 # Una mujer arregla una farola; un chico le sujeta la escalera y luego se va.
 == eco_alba
