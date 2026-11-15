@@ -568,6 +568,8 @@ void Game::loadLevel(LevelId id) {
         case LevelId::Prueba: buildPrueba(); break;
         case LevelId::Count: break;
     }
+    if (freePlay_)  // sin guion que los arme, los combates de jefe esperan desde el principio
+        for (Encounter& en : encounters_) en.armed = true;
     rebuildSolids();
     hero_.body.pos = checkpoint_ = heroStart_;
     hero_.body.vel = {};
@@ -691,7 +693,7 @@ void Game::updateLevel(float dt) {
         if (e.alive() && e.body.pos.y < -10.0f) killEnemy(e);
 
     updateTestMode(dt);
-    if (!story_) return;
+    if (!story_ && !freePlay_) return;
     // Combates: empiezan al entrar en su zona; las rondas siguen al vencer la anterior.
     for (size_t i = 0; i < encounters_.size(); ++i) {
         Encounter& en = encounters_[i];

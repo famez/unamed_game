@@ -125,24 +125,25 @@ Especiales de combate: atacar corriendo = **embestida**; atacar con la guardia =
   rodea), aprovechan cuando les das la espalda y se apartan de tus golpes cada vez mejor. El
   jefe aprende muy deprisa durante el combate.
 
-## Modo prueba
+## Niveles
 
-Un solo modo para probarlo todo, sin historia, con la sombra ya despierta y todas las armas,
-núcleos de forma y materiales para forjar en el inventario. Se abre desde el menú de pausa (cada
-vez con un escenario nuevo) o al arrancar:
+La historia está aparcada por ahora: al arrancar se elige un nivel en el selector, cada uno
+para probar mecánicas, sin escenas y con la sombra ya despierta. Desde la pausa, «Elegir nivel»
+vuelve al selector.
 
 ```bash
-./build/game --prueba          # patio aleatorio
-./build/game --prueba 1234     # con semilla: la misma semilla da el mismo escenario
+./build/game                    # selector de niveles
+./build/game --nivel mercado    # directamente un nivel (plaza, mercado, puente)
+./build/game --prueba 1234      # patio de combate; con semilla, siempre el mismo
+./build/game --historia         # la historia (capítulo 1)
 ```
 
-- Patio cerrado por edificios, con pilares, plataformas, árboles, cajas, farolas, nodos encendidos
-  y dos portales, todo colocado al azar; entre las farolas queda oscuridad para la sombra.
-- Siempre hay Grises de luz y de sombra (de 3 a 9 a la vez, más cuantos más disipas) y cada 30
-  bajas aparece un Gris mayor.
-- **F1 / F2 / F3**: vida / Luz / Sombra infinitas (también en el menú de pausa). Por defecto solo la
-  vida, para probar la gestión de la Luz y la Sombra: absorber (Q mantenida), los focos de sombra,
-  saltar entre farolas, fundirse y cambiar de modo (portales o Z).
+- **Patio de combate**: patio aleatorio cerrado por edificios, con farolas, nodos, dos portales y
+  oscuridad entre las farolas. Grises de luz y de sombra sin fin y un Gris mayor cada 30 bajas.
+  Trae todas las armas y materiales para forjar.
+- **Plaza, Mercado, Puente**: los escenarios con sus combates de zona y objetivos.
+- En todos: **Z** cambia entre luz y sombra y **F1 / F2 / F3** hacen infinitas la vida, la Luz y
+  la Sombra (también en la pausa). Por defecto solo la vida.
 
 ## Modo debug (F12)
 

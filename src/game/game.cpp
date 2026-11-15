@@ -111,7 +111,7 @@ void Game::update(float dt, const Controls& input) {
         lock_ = -1;
         if (c.advance && dialogue_.active()) dialogue_.advance();
     } else {
-        if (c.swapMode && testMode_ != TestMode::None) swapMode();  // en la historia se cambia con los portales
+        if (c.swapMode && sandbox()) swapMode();  // en la historia se cambia con los portales
         updateLightTarget(c);
         if (shadowMode_) updateShadow(dt, c);
         else updateLight(dt, c);
@@ -240,7 +240,7 @@ void Game::update(float dt, const Controls& input) {
     for (ColorSplash& sp : splashes_) sp.age += dt;
     updateLevel(dt);
     updateEffects(dt);
-    if (testMode_ != TestMode::None) {  // modo prueba: lo que esté marcado como infinito
+    if (sandbox()) {  // sin historia: lo que esté marcado como infinito
         if (infHp_) hp_ = maxHp_;
         if (infLight_) mp_ = maxMp_;
         if (infShadow_) shadow_ = maxShadow_;

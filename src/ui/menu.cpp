@@ -93,7 +93,7 @@ PauseMenu::Result PauseMenu::update(const Input& in, int width, int height) {
         switch (selected_) {
             case Continue: return Result::Resume;
             case Restart: return Result::Restart;
-            case TestCombatItem: return Result::TestCombat;
+            case ChooseLevelItem: return Result::ChooseLevel;
             case Quit: return Result::Quit;
         }
     }
@@ -120,10 +120,10 @@ void PauseMenu::draw(UiLayer& ui, int width, int height) const {
     char qual[48];
     std::snprintf(qual, sizeof(qual), "Calidad gráfica   ‹ %s ›", qnames[quality]);
     char hp[48], lt[48], sh[48];
-    std::snprintf(hp, sizeof(hp), "Prueba · vida infinita   ‹ %s ›", infHp ? "sí" : "no");
-    std::snprintf(lt, sizeof(lt), "Prueba · Luz infinita   ‹ %s ›", infLight ? "sí" : "no");
-    std::snprintf(sh, sizeof(sh), "Prueba · Sombra infinita   ‹ %s ›", infShadow ? "sí" : "no");
-    const char* labels[ItemCount] = {"Continuar", "Reiniciar nivel", "Modo prueba", hp, lt, sh, sens, qual, "Salir"};
+    std::snprintf(hp, sizeof(hp), "Vida infinita   ‹ %s ›", infHp ? "sí" : "no");
+    std::snprintf(lt, sizeof(lt), "Luz infinita   ‹ %s ›", infLight ? "sí" : "no");
+    std::snprintf(sh, sizeof(sh), "Sombra infinita   ‹ %s ›", infShadow ? "sí" : "no");
+    const char* labels[ItemCount] = {"Continuar", "Reiniciar nivel", "Elegir nivel", hp, lt, sh, sens, qual, "Salir"};
     for (int i = 0; i < ItemCount; ++i) {
         Rect r = itemRect(i, width, height);
         bool sel = i == selected_;

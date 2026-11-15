@@ -447,7 +447,7 @@ void Game::hurtHero(Vec3 dir, float damage, float knock, Enemy* source) {
         knock *= 0.2f;
     }
     hp_ = std::max(0.0f, hp_ - damage);
-    if (testMode_ != TestMode::None && infHp_) hp_ = maxHp_;  // modo prueba: vida infinita
+    if (sandbox() && infHp_) hp_ = maxHp_;  // modo prueba: vida infinita
     if (source) source->rlReward += damage / 10.0f;  // le ha hecho daño: buena táctica
     sound(Sfx::HeroHurt, chest);
     heroInvuln_ = kInvulnAfterHit;

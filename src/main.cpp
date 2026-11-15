@@ -3,6 +3,7 @@
 #include "game/game.h"
 #include "core/gl.h"
 #include "ui/inventory_menu.h"
+#include "ui/level_select.h"
 #include "ui/menu.h"
 #include "render/models.h"
 #include "core/platform.h"
@@ -86,10 +87,12 @@ const char kHelp[] =
     "  --volumen 0..1                volumen general\n"
     "  --silencio                    sin audio\n"
     "\n"
-    "Pruebas\n"
-    "  --prueba [semilla]            modo prueba: patio aleatorio con enemigos sin fin; F1, F2 y F3\n"
-    "                                hacen infinitas la vida, la Luz y la Sombra; Z cambia de modo\n"
-    "  --escena ID                   empieza reproduciendo esa escena del guion\n"
+    "Niveles (sin opciones, se elige en el selector del principio)\n"
+    "  --nivel plaza|mercado|puente  entra directamente en ese nivel\n"
+    "  --prueba [semilla]            patio de combate: enemigos sin fin; F1, F2 y F3 hacen\n"
+    "                                infinitas la vida, la Luz y la Sombra; Z cambia de modo\n"
+    "  --historia                    la historia (capítulo 1), aparcada por ahora\n"
+    "  --escena ID                   historia: empieza reproduciendo esa escena del guion\n"
     "\n"
     "Desarrollo\n"
     "  --debug                       solo esqueletos y cajas en alambre (también F12)\n"
@@ -176,6 +179,17 @@ int main(int argc, char** argv) {
             if (i + 1 < argc && std::strcmp(argv[i + 1], "combate") == 0) ++i;  // (nombre antiguo)
             if (i + 1 < argc && argv[i + 1][0] != '-') testSeed = uint32_t(std::strtoul(argv[++i], nullptr, 10));
         }
+    // Nivel: el del selector, o el que se pida al arrancar (--nivel, --prueba, --historia).
+    bool story = false, levelGiven = testMode != TestMode::None;
+    LevelId freeLevel = LevelId::Plaza;
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--historia") == 0 || std::strcmp(argv[i], "--escena") == 0) story = levelGiven = true;
+        if (std::strcmp(argv[i], "--nivel") == 0 && i + 1 < argc) {
+            const char* n = argv[++i];
+            freeLevel = std::strcmp(n, "mercado") == 0 ? LevelId::Mercado : std::strcmp(n, "puente") == 0 ? LevelId::Puente : LevelId::Plaza;
+            levelGiven = true;
+        }
+    }
     Game game;
     auto startGame = [&] {
         game.saveBrains();
@@ -183,8 +197,10 @@ int main(int argc, char** argv) {
         if (testMode != TestMode::None) {
             game.initTest(testMode, testSeed);
             std::printf("modo prueba, semilla %u\n", testSeed);
-        } else {
+        } else if (story) {
             game.init(assetDir);
+        } else {
+            game.initLevel(freeLevel);
         }
         game.loadBrains(dataDir);
         for (int i = 1; i + 1 < argc; ++i)  // --escena id: reproduce ya esa escena (para escribirlas)
@@ -234,9 +250,12 @@ int main(int argc, char** argv) {
     PauseMenu menu;
     menu.quality = int(quality);
     InventoryMenu inventory;
+    LevelSelect selector;
+    bool fromPause = false;  // el selector se abrió desde la pausa (Esc vuelve a ella)
+    if (!levelGiven && !autoplay) selector.show();
     Input input;
     PendingInput pending;
-    platform::setMouseCaptured(!autoplay);  // se hace efectiva en cuanto la ventana tenga foco
+    platform::setMouseCaptured(!autoplay && !selector.open);  // se hace efectiva en cuanto la ventana tenga foco
     bool wasCaptured = false;
 
     auto openMenu = [&] {
@@ -273,9 +292,27 @@ int main(int argc, char** argv) {
 
         // Menús: Esc/P abren y cierran la pausa; I el inventario. La pausa también se abre
         // sola si se pierde el ratón (alt-tab), para que el juego no siga sin control.
-        bool menuWasOpen = menu.open || inventory.open;
+        bool menuWasOpen = menu.open || inventory.open || selector.open;
         bool captured = platform::mouseCaptured();
-        if (inventory.open) {
+        if (selector.open) {
+            int pick = selector.update(uiInput, uw, uh);
+            if (pick == -2) {  // Esc: al arrancar sale del juego; desde la pausa, vuelve a ella
+                if (fromPause) openMenu();
+                else quit = true;
+            } else if (pick >= 0) {
+                int n = 0;
+                const LevelSelect::Entry& e = LevelSelect::entries(n)[pick];
+                testMode = e.test ? TestMode::Combat : TestMode::None;
+                testSeed = uint32_t(platform::timeSeconds() * 1000.0) ^ 0x5bd1e995u;
+                freeLevel = e.level;
+                story = false;
+                startGame();
+                game.setTestCheats(menu.infHp, menu.infLight, menu.infShadow);
+                cam = OrbitCamera{};
+                cam.target = game.hero().body.pos + Vec3{0, 1.0f, 0};
+                platform::setMouseCaptured(true);
+            }
+        } else if (inventory.open) {
             if (inventory.update(uiInput, game, uw, uh)) {
                 inventory.open = false;
                 platform::setMouseCaptured(true);
@@ -289,13 +326,12 @@ int main(int argc, char** argv) {
             PauseMenu::Result result = menu.update(uiInput, uw, uh);
             switch (result) {
                 case PauseMenu::Result::Resume: closeMenu(); break;
+                case PauseMenu::Result::ChooseLevel:
+                    menu.open = false;
+                    fromPause = true;
+                    selector.show();
+                    break;
                 case PauseMenu::Result::Restart:
-                case PauseMenu::Result::TestCombat:
-                    // El modo prueba genera un escenario nuevo; reiniciar repite el actual.
-                    if (result != PauseMenu::Result::Restart) {
-                        testMode = TestMode::Combat;
-                        testSeed = uint32_t(platform::timeSeconds() * 1000.0) ^ 0x5bd1e995u;
-                    }
                     startGame();
                     game.setTestCheats(menu.infHp, menu.infLight, menu.infShadow);
                     cam = OrbitCamera{};
@@ -314,7 +350,7 @@ int main(int argc, char** argv) {
             openMenu();
         }
         wasCaptured = captured;
-        bool paused = menu.open || inventory.open;
+        bool paused = menu.open || inventory.open || selector.open;
         bool playing = !paused && !menuWasOpen;  // el clic que cierra el menú no ataca
 
         if (input.wasPressed(Key::DebugView)) debugView = !debugView;
@@ -323,7 +359,7 @@ int main(int argc, char** argv) {
             if (input.wasPressed(Key::F2)) flags.joints = !flags.joints;
             if (input.wasPressed(Key::F3)) flags.body = !flags.body;
             if (input.wasPressed(Key::F4)) flags.grid = !flags.grid;
-        } else if (game.testMode() != TestMode::None && !menu.open) {  // modo prueba: F1-F3, qué es infinito
+        } else if (game.sandbox() && !menu.open && !selector.open) {  // sin historia: F1-F3, qué es infinito
             bool changed = true;
             if (input.wasPressed(Key::F1)) menu.infHp = !menu.infHp;
             else if (input.wasPressed(Key::F2)) menu.infLight = !menu.infLight;
@@ -572,8 +608,9 @@ int main(int argc, char** argv) {
         ViewInfo uiView = vi;
         uiView.width = uw;
         uiView.height = uh;
-        if (!portrait) game.drawHud(hud, uiView, debugView);
+        if (!portrait && !selector.open) game.drawHud(hud, uiView, debugView);
         if (menu.open) menu.draw(overlay, uw, uh);
+        if (selector.open) selector.draw(overlay, uw, uh);
         if (inventory.open) inventory.draw(overlay, game, uw, uh);
         size_t verts = dd.vertexCount() + glow.vertexCount() + hud.vertexCount() + overlay.vertexCount();
         size_t instances = renderer.instanceCount();
@@ -634,7 +671,7 @@ int main(int argc, char** argv) {
             }
             audio.play(e.id, gain, pan, e.pitch);
         }
-        if (menu.open || inventory.open) {
+        if (menu.open || inventory.open || selector.open) {
             if (input.wasPressed(Key::W) || input.wasPressed(Key::S) || input.wasPressed(Key::Up) ||
                 input.wasPressed(Key::Down) || input.wasPressed(Key::A) || input.wasPressed(Key::D))
                 audio.play(Sfx::MenuMove, 0.5f);

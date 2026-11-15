@@ -376,8 +376,13 @@ public:
     void loadLevel(LevelId id);
     // Desarrollo: salta la intro y reproduce ya una escena del guion (en el escenario que toque).
     void jumpToScene(const std::string& id);
+    // Un nivel suelto, sin historia: sus combates y objetivos, la sombra ya despierta y los
+    // trucos del modo prueba (lo usa el selector de niveles).
+    void initLevel(LevelId id);
     // Modo de prueba con un escenario generado a partir de `seed`.
     void initTest(TestMode mode, uint32_t seed);
+    // Sin historia (modo prueba o nivel suelto): Z cambia de modo y valen los trucos F1-F3.
+    bool sandbox() const { return testMode_ != TestMode::None || freePlay_; }
     TestMode testMode() const { return testMode_; }
     void setTestCheats(bool hp, bool light, bool shadow);
     bool infiniteHp() const { return infHp_; }
@@ -747,5 +752,6 @@ private:
     // Trucos del modo prueba (F1, F2, F3 o el menú de pausa): por defecto solo la vida es
     // infinita, para poder probar la gestión de la Luz y la Sombra.
     bool infHp_ = true, infLight_ = false, infShadow_ = false;
+    bool freePlay_ = false;  // nivel suelto elegido en el selector (sin guion)
 
 };

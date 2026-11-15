@@ -44,6 +44,18 @@ void Game::initTest(TestMode mode, uint32_t seed) {
     notify("Modo prueba · F1 vida, F2 Luz, F3 Sombra infinitas · Z cambia de modo", kCyan);
 }
 
+void Game::initLevel(LevelId id) {
+    init();  // sin guion
+    freePlay_ = true;
+    loadLevel(id);  // (otra vez si es la plaza: ahora con los combates armados)
+    hp_ = hpGhost_ = maxHp_;
+    mp_ = maxMp_;
+    shadow_ = maxShadow_;
+    shadowUnlocked_ = true;
+    applyWeapon();
+    notify("Z cambia entre luz y sombra · F1 vida, F2 Luz, F3 Sombra infinitas", kCyan);
+}
+
 void Game::setTestCheats(bool hp, bool light, bool shadow) {
     infHp_ = hp;
     infLight_ = light;
