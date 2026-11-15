@@ -332,6 +332,7 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
     }
     // Todo el escenario se ve con el croma actual; las salpicaduras de color lo devuelven.
     solid->setWorldColor(cromaShown_);
+    solid->setNight(night_);
     // Oscuridad: en cuanto la sombra ha despertado se ve con claridad qué está a oscuras
     // (más aún en modo sombra, que solo puede moverse por ahí).
     solid->setDarkness(darkShown_);
@@ -475,7 +476,46 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
         uint32_t bulb = l.color;
         if (l.on && l.energy < 0.5f)  // queda poca luz: parpadea
             bulb = mixRgb(l.color, rgba(40, 30, 60), (0.5f - l.energy) * (1.2f + 0.8f * std::sin(time_ * 25.0f + float(i))));
-        if (l.bulb && l.broken) {  // rota: solo queda el casquillo y unos dientes de cristal
+        float hf = l.hitFlash > 0 ? 0.7f : 0.0f;
+        bool lit = l.on && !l.broken;
+        if (l.bulb && l.style == LampStyle::Torch) {  // antorcha: cuenco de hierro y llama que baila
+            solid->ellipsoid(translate(l.pos - Vec3{0, 0.18f, 0}), {}, {0.14f, 0.08f, 0.14f}, rgba(46, 40, 36), Material::Metal, hf);
+            if (lit) {
+                for (int k = 0; k < 3; ++k) {
+                    float fl = 0.8f + 0.25f * std::sin(time_ * (15.0f + 4.0f * float(k)) + float(i) * 3.1f);
+                    float sz = (0.16f - 0.04f * float(k)) * fl * (0.6f + 0.4f * l.energy);
+                    solid->ellipsoid(translate(l.pos + Vec3{0.02f * std::sin(time_ * 9.0f + float(k)), 0.06f + 0.11f * float(k), 0}), {},
+                                     {sz, sz * 1.8f, sz}, k == 0 ? rgba(255, 150, 50) : k == 1 ? rgba(255, 200, 90) : rgba(255, 245, 200),
+                                     Material::Glow);
+                }
+            } else {
+                solid->ellipsoid(translate(l.pos - Vec3{0, 0.08f, 0}), {}, {0.1f, 0.05f, 0.1f}, rgba(20, 18, 18), Material::Cloth);  // ascuas apagadas
+            }
+        } else if (l.bulb && l.style == LampStyle::Crystal) {  // racimo de cristales que brillan desde dentro
+            for (int k = 0; k < 5; ++k) {
+                float a = float(k) * 1.26f + float(i) * 0.7f, tilt = 0.25f + 0.12f * float(k % 3);
+                float len = (l.broken ? 0.12f : 0.32f) * (1.0f - 0.12f * float(k));
+                Mat4 m = translate(l.pos - Vec3{0, 0.35f, 0}) * rotateY(a) * rotateX(tilt);
+                solid->box(m, {0, len, 0}, {0.06f, len, 0.06f}, lit ? l.color : rgba(50, 52, 64), lit ? Material::Glow : Material::Stone, hf);
+            }
+        } else if (l.bulb && l.style == LampStyle::Paper) {  // farolillo de papel colgado
+            Mat4 m = translate(l.pos) * rotateZ(0.06f * std::sin(time_ * 1.3f + float(i)));
+            if (l.broken) {
+                solid->ellipsoid(m * rotateZ(0.7f), {0, -0.15f, 0}, {0.12f, 0.2f, 0.1f}, rgba(60, 30, 30), Material::Cloth);
+            } else {
+                solid->ellipsoid(m, {}, {0.24f, 0.3f, 0.24f}, lit ? l.color : rgba(80, 40, 40), lit ? Material::Glow : Material::Cloth, hf);
+                for (float y : {-0.31f, 0.31f}) solid->box(m, {0, y, 0}, {0.13f, 0.03f, 0.13f}, rgba(40, 30, 24), Material::Metal);
+            }
+        } else if (l.bulb && l.style == LampStyle::Neon) {  // letrero de neón en la pared (parpadea al irse)
+            bool flick = l.on && l.energy < 0.5f && std::sin(time_ * 31.0f + float(i)) > 0.6f;
+            solid->box(translate(l.pos), {}, {0.75f, 0.3f, 0.06f}, rgba(24, 24, 30), Material::Metal, hf);
+            uint32_t nc = lit && !flick ? l.color : rgba(54, 50, 60);
+            Material nm = lit && !flick ? Material::Glow : Material::Metal;
+            for (int k = 0; k < 3; ++k)  // tres trazos de letra
+                solid->box(translate(l.pos + Vec3{-0.45f + 0.45f * float(k), 0, 0.07f}) * rotateZ(0.3f * float(k - 1)), {},
+                           {0.035f, l.broken && k == 1 ? 0.08f : 0.2f, 0.02f}, nc, nm);
+            solid->box(translate(l.pos + Vec3{0, -0.24f, 0.07f}), {}, {0.6f, 0.025f, 0.02f}, nc, nm);
+        } else if (l.bulb && l.broken) {  // rota: solo queda el casquillo y unos dientes de cristal
             solid->ellipsoid(translate(l.pos + Vec3{0, 0.1f, 0}), {}, {0.12f, 0.08f, 0.12f}, rgba(40, 40, 46), Material::Metal);
             for (int k = 0; k < 5; ++k) {
                 float a = float(k) * 1.257f + float(i);
@@ -486,10 +526,12 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
             solid->ellipsoid(translate(l.pos), {}, {0.2f, 0.2f, 0.2f}, l.on ? bulb : rgba(70, 72, 80),
                              l.on ? Material::Glow : Material::Metal, l.hitFlash > 0 ? 0.7f : 0.0f);
         }
-        if (l.on && l.bulb && length(flat(l.pos - hero_.body.pos)) < 14.0f) {
+        if (l.on && l.bulb && length(flat(l.pos - hero_.body.pos)) < 16.0f) {
             float r = float((l.color >> 0) & 0xFF) / 255.0f, g = float((l.color >> 8) & 0xFF) / 255.0f,
                   b = float((l.color >> 16) & 0xFF) / 255.0f;
-            solid->light(l.pos, Vec3{0.4f + r * 0.6f, 0.4f + g * 0.6f, 0.4f + b * 0.6f} * 1.3f, 5.0f);
+            float flicker = l.style == LampStyle::Torch ? 0.85f + 0.15f * std::sin(time_ * 17.0f + float(i) * 2.3f) : 1.0f;
+            solid->light(l.pos, Vec3{0.4f + r * 0.6f, 0.4f + g * 0.6f, 0.4f + b * 0.6f} * (1.3f + night_ * 1.2f) * flicker,
+                         lampRadius(l) * 0.85f);
         }
     }
 

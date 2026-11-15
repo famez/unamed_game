@@ -222,6 +222,7 @@ void Renderer::drawEffects(const RenderCamera& cam, int width, int height, float
             glUniform2f(glGetUniformLocation(prog, "uFxSize"), float(fxWidth_), float(fxHeight_));
             glUniform2f(glGetUniformLocation(prog, "uNearFar"), cam.zNear, cam.zFar);
             glUniform1f(glGetUniformLocation(prog, "uTime"), time);
+            glUniform1f(glGetUniformLocation(prog, "uNight"), night_);
             setVec3(prog, "uCamPos", cam.position);
         };
         if (!smoke_.empty()) {

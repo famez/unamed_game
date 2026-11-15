@@ -30,6 +30,7 @@ set(LOGIC_SOURCES
     src/game/loot.cpp
     src/game/game_story.cpp
     src/game/levels.cpp
+    src/game/levels_night.cpp
     src/game/light.cpp
     src/game/test_mode.cpp
     src/game/shadow.cpp

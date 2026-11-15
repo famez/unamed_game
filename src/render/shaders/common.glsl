@@ -7,11 +7,15 @@ const vec3 kFillWarm = vec3(0.55, 0.65, 0.95) * 0.4, kFillGrey = vec3(0.50, 0.53
 const vec3 kZenithWarm = vec3(0.07, 0.22, 0.70), kZenithGrey = vec3(0.17, 0.18, 0.21);
 const vec3 kHorizonWarm = vec3(0.80, 0.60, 0.68), kHorizonGrey = vec3(0.36, 0.37, 0.40);
 const vec3 kBounceWarm = vec3(0.28, 0.24, 0.17), kBounceGrey = vec3(0.13, 0.13, 0.14);
-#define kSunColor mix(kSunGrey, kSunWarm, uWorldColor)
-#define kFillColor mix(kFillGrey, kFillWarm, uWorldColor)
-#define kZenith mix(kZenithGrey, kZenithWarm, uWorldColor)
-#define kHorizon mix(kHorizonGrey, kHorizonWarm, uWorldColor)
-#define kBounce mix(kBounceGrey, kBounceWarm, uWorldColor)
+// De noche (uNight = 1) el sol pasa a ser una luna fría y débil, el cielo casi negro y azul,
+// y la niebla oscura: las únicas luces de verdad son las del escenario.
+uniform float uNight;
+const vec3 kMoon = vec3(0.30, 0.38, 0.62) * 0.55;
+#define kSunColor mix(mix(kSunGrey, kSunWarm, uWorldColor), kMoon, uNight)
+#define kFillColor (mix(kFillGrey, kFillWarm, uWorldColor) * mix(1.0, 0.25, uNight))
+#define kZenith mix(mix(kZenithGrey, kZenithWarm, uWorldColor), vec3(0.004, 0.008, 0.03), uNight)
+#define kHorizon mix(mix(kHorizonGrey, kHorizonWarm, uWorldColor), vec3(0.035, 0.045, 0.09), uNight)
+#define kBounce (mix(kBounceGrey, kBounceWarm, uWorldColor) * mix(1.0, 0.3, uNight))
 #define kWorldFog mix(0.024, 0.007, uWorldColor)  // niebla de la ciudad parada
 const float kFogDensity = 0.007;  // humo y volúmenes
 

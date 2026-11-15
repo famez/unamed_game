@@ -560,12 +560,16 @@ void Game::loadLevel(LevelId id) {
     inLight_ = travel_ = lightLock_ = false;
     lastLevel_ = false;
     world_.ground = true;
+    night_ = 0;
     croma_ = cromaShown_ = 0.05f;  // cada escenario empieza casi sin color
     switch (id) {
         case LevelId::Plaza: buildPlaza(); break;
         case LevelId::Mercado: buildMercado(); break;
         case LevelId::Puente: buildPuente(); break;
         case LevelId::Prueba: buildPrueba(); break;
+        case LevelId::Selva: buildSelva(); break;
+        case LevelId::Cueva: buildCueva(); break;
+        case LevelId::Callejones: buildCallejones(); break;
         case LevelId::Count: break;
     }
     if (freePlay_)  // sin guion que los arme, los combates de jefe esperan desde el principio

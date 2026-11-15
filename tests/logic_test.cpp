@@ -953,6 +953,24 @@ int main() {
         run(g, 2.0f, command(3));
         CHECK(g.enemies_[0].health < kBruteHp - 25, "Mina oscura: implosiona sobre el Coloso (%.0f)", g.enemies_[0].health);
     }
+    {  // Niveles de noche: cada uno con su tipo de luz, oscuridad de sobra y sus combates
+        const LevelId ids[] = {LevelId::Selva, LevelId::Cueva, LevelId::Callejones};
+        const LampStyle styles[] = {LampStyle::Torch, LampStyle::Crystal, LampStyle::Paper};
+        for (int k = 0; k < 3; ++k) {
+            Game g;
+            g.initLevel(ids[k]);
+            run(g, 1.0f);
+            int ofStyle = 0;
+            for (const Lamp& l : g.lamps_) ofStyle += l.style == styles[k];
+            int dark = 0, n = 0;
+            for (float x = -8; x <= 8; x += 2)
+                for (float z = 0; z <= 40; z += 2, ++n) dark += g.shadowAt({x, g.hero_.body.pos.y, z}) > 0.6f;
+            CHECK(g.level() == ids[k] && ofStyle >= 3 && g.night_ > 0.5f && g.partCount() >= 2 && !g.encounters_.empty(),
+                  "%s: de noche, %d luces de su estilo, %d partes", g.levelName().c_str(), ofStyle, g.partCount());
+            CHECK(dark > n / 3 && dark < n, "%s: hay luz y oscuridad (%d de %d puntos a oscuras)", g.levelName().c_str(), dark, n);
+            CHECK(g.hero_.body.grounded && g.hero_.body.pos.y > -1.0f, "%s: se empieza de pie en el suelo", g.levelName().c_str());
+        }
+    }
     {  // Farolas: romperlas a golpes crea sombra para siempre; los interruptores las apagan y encienden
         Game g = fresh();
         g.unlockShadow();

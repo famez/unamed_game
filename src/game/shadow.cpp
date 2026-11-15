@@ -22,7 +22,7 @@ const uint32_t kShadowCol = rgba(150, 80, 255), kShadowDark = rgba(30, 16, 48);
 }  // namespace
 
 // Radio que alumbra una farola según su energía.
-float lampRadius(const Lamp& l) { return 2.5f + 4.0f * l.energy; }
+float lampRadius(const Lamp& l) { return (2.5f + 4.0f * l.energy) * l.reach; }
 
 float Game::lampLightAt(Vec3 p) const {
     float light = 0;
@@ -158,7 +158,9 @@ void Game::placeLampSwitches() {
             float a = float(t) * 2.399f + float(i), r = 7.0f + float(t % 4);
             Vec3 p{c.x + std::cos(a) * r, 0, c.z + std::sin(a) * r};
             p.y = groundHeight(p + Vec3{0, 6, 0});
-            if (p.y < -5.0f || length(flat(p - heroStart_)) < 5.0f) continue;
+            if (length(flat(p - heroStart_)) < 5.0f) continue;
+            RayHit under;  // sin suelo debajo (barrancos) no se pone
+            if (!world_.ground && !segmentVsWorld(p + Vec3{0, 0.3f, 0}, p - Vec3{0, 0.3f, 0}, world_, under)) continue;
             bool blocked = false;
             Vec3 q = p + Vec3{0, 0.6f, 0};
             for (const AABB& b : world_.solids)

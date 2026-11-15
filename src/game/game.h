@@ -187,7 +187,7 @@ struct Companion {
 // encender faroles, usar algo, llegar a un sitio, salir). Al cumplirlo se abren puertas,
 // suena su escena y empieza la siguiente.
 
-enum class LevelId { Plaza, Mercado, Puente, Prueba, Count };
+enum class LevelId { Plaza, Mercado, Puente, Prueba, Selva, Cueva, Callejones, Count };
 
 // Modos de prueba (sin historia, con vida, Luz y Sombra infinitas): un escenario aleatorio
 // con Grises sin fin, un archipiélago de islas flotantes para practicar el viaje por la luz,
@@ -293,6 +293,10 @@ struct MemoryEcho {
     float appear = 0;  // segundos desde que apareció
 };
 
+// Forma de una fuente de luz: farola de la ciudad, antorcha (selva), cristal (cueva), farolillo
+// de papel colgado (callejones) o letrero de neón en una pared.
+enum class LampStyle { Post, Torch, Crystal, Paper, Neon };
+
 // Farola (o fuente de luz fija): el Prismero puede entrar en ella y saltar a otras. Se puede
 // romper a golpes (ya no vuelve a alumbrar) o apagar y encender con su interruptor.
 struct Lamp {
@@ -304,6 +308,8 @@ struct Lamp {
     bool broken = false; // rota a golpes: apagada para siempre
     float hp = 3;        // golpes que aguanta
     float hitFlash = 0;
+    LampStyle style = LampStyle::Post;
+    float reach = 1;     // multiplica el radio que alumbra
 };
 float lampRadius(const Lamp& l);  // lo que alumbra (según su energía)
 
@@ -474,6 +480,12 @@ public:
     int partIndex() const { return int(part_); }
     int partCount() const { return int(parts_.size()); }
     const LevelPart* currentPart() const { return part_ < parts_.size() ? &parts_[part_] : nullptr; }
+    // Hacia dónde está el objetivo actual (falso si no hay).
+    bool objective(Vec3& at) const {
+        const LevelPart* p = currentPart();
+        if (p) at = objectivePos(*p);
+        return p != nullptr;
+    }
     float transition() const { return transition_; }
     // Historia.
     const Dialogue& dialogue() const { return dialogue_; }
@@ -508,6 +520,13 @@ private:
     void buildMercado();
     void buildPuente();
     void buildPrueba();
+    void buildSelva();
+    void buildCueva();
+    void buildCallejones();
+    void addTorch(Vec3 base);
+    void addCrystal(Vec3 base, uint32_t color);
+    void addPaperLantern(Vec3 a, Vec3 b, float y, uint32_t color);
+    void addNeonSign(Vec3 pos, Vec3 out, uint32_t color);
     void updateTestMode(float dt);
     bool spawnTestEnemy();
     void addLampPost(Vec3 base, uint32_t color);
@@ -655,6 +674,7 @@ private:
     float transition_ = 0;     // fundido a negro al cambiar de escenario (0..1)
     bool leaving_ = false;
     uint32_t floorColor_ = 0;
+    float night_ = 0;  // escenario de noche (0..1): cielo oscuro, solo alumbran sus luces
     Material floorMaterial_ = Material::Ground;
     Character hero_;
     Inventory inv_;

@@ -312,6 +312,7 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
     setVec3(skyProgram_, "uSunDir", kSunDir);
     glUniform1f(glGetUniformLocation(skyProgram_, "uTime"), time);
     glUniform1f(glGetUniformLocation(skyProgram_, "uWorldColor"), worldColor_);
+    glUniform1f(glGetUniformLocation(skyProgram_, "uNight"), night_);
     float t = std::tan(cam.fovY * 0.5f);
     glUniform2f(glGetUniformLocation(skyProgram_, "uTanHalf"), t * cam.aspect, t);
     glBindVertexArray(emptyVao_);
@@ -364,6 +365,7 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
         glUniform1f(glGetUniformLocation(prog, "uInflate"), 0.0f);
         glUniform4f(glGetUniformLocation(prog, "uOutlineColor"), 0, 0, 0, 0);
         glUniform1f(glGetUniformLocation(prog, "uWorldColor"), worldColor_);
+        glUniform1f(glGetUniformLocation(prog, "uNight"), night_);
         glUniform1f(glGetUniformLocation(prog, "uDarkness"), darkness_);
         int litCount = int(litAreas_.size() / 4);
         glUniform1i(glGetUniformLocation(prog, "uLitCount"), litCount);

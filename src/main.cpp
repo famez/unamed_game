@@ -88,7 +88,8 @@ const char kHelp[] =
     "  --silencio                    sin audio\n"
     "\n"
     "Niveles (sin opciones, se elige en el selector del principio)\n"
-    "  --nivel plaza|mercado|puente  entra directamente en ese nivel\n"
+    "  --nivel NOMBRE                entra directamente en ese nivel: plaza, mercado, puente,\n"
+    "                                selva, cueva o callejones\n"
     "  --prueba [semilla]            patio de combate: enemigos sin fin; F1 y F2 hacen infinitos\n"
     "                                la vida y el Poder; Z cambia de modo\n"
     "  --historia                    la historia (capítulo 1), aparcada por ahora\n"
@@ -187,7 +188,12 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--historia") == 0 || std::strcmp(argv[i], "--escena") == 0) story = levelGiven = true;
         if (std::strcmp(argv[i], "--nivel") == 0 && i + 1 < argc) {
             const char* n = argv[++i];
-            freeLevel = std::strcmp(n, "mercado") == 0 ? LevelId::Mercado : std::strcmp(n, "puente") == 0 ? LevelId::Puente : LevelId::Plaza;
+            freeLevel = std::strcmp(n, "mercado") == 0      ? LevelId::Mercado
+                        : std::strcmp(n, "puente") == 0     ? LevelId::Puente
+                        : std::strcmp(n, "selva") == 0      ? LevelId::Selva
+                        : std::strcmp(n, "cueva") == 0      ? LevelId::Cueva
+                        : std::strcmp(n, "callejones") == 0 ? LevelId::Callejones
+                                                            : LevelId::Plaza;
             levelGiven = true;
         }
     }
@@ -447,6 +453,9 @@ int main(int argc, char** argv) {
                     Vec3 target;
                     if (!game.lockTarget(target)) {
                         c.lockOn = botStep % 20 == 0;
+                        Vec3 goal;  // sin nadie a mano, hacia el objetivo
+                        if (game.objective(goal) && length(flat(goal - game.hero().body.pos)) > 2.0f)
+                            c.move = normalize(flat(goal - game.hero().body.pos));
                     } else {
                         Vec3 to = flat(target - game.hero().body.pos);
                         if (length(to) > 2.2f) c.move = normalize(to);
@@ -684,8 +693,9 @@ int main(int argc, char** argv) {
             audio.setStemGains(stems);
             // Una pista por escenario; la del jefe mientras haya uno.
             TrackId track = game.bossAlive() ? TrackId::Jefe
-                            : game.level() == LevelId::Mercado ? TrackId::Mercado
-                            : game.level() == LevelId::Puente ? TrackId::Puente
+                            : game.level() == LevelId::Mercado || game.level() == LevelId::Callejones ? TrackId::Mercado
+                            : game.level() == LevelId::Puente || game.level() == LevelId::Selva || game.level() == LevelId::Cueva
+                                ? TrackId::Puente
                             : game.level() == LevelId::Prueba ? TrackId(game.testSeed() % 3)
                                                               : TrackId::Plaza;
             audio.playTrack(track);

@@ -2,13 +2,16 @@
 
 namespace {
 
-constexpr float kPanelW = 760, kItemH = 74, kItemGap = 12, kTop = 150;
+constexpr float kPanelW = 760, kItemH = 62, kItemGap = 8, kTop = 136;
 
 const LevelSelect::Entry kEntries[] = {
     {"Patio de combate", "Grises sin fin de las dos familias, farolas, portales y oscuridad", true, LevelId::Prueba},
     {"1 · Plaza del Reloj", "Combates de zona, nodos de color y faroles", false, LevelId::Plaza},
     {"2 · Mercado Quemado", "Calles estrechas, rompecabezas de luz con espejos", false, LevelId::Mercado},
     {"3 · Puente de los Faroles", "Faroles que encender y el Gris mayor al final", false, LevelId::Puente},
+    {"4 · Selva de los Puentes", "De noche: puentes colgantes entre árboles, antorchas", false, LevelId::Selva},
+    {"5 · Cueva de Cristal", "Salas de roca alumbradas por cristales y un río subterráneo", false, LevelId::Cueva},
+    {"6 · Callejones del Farol", "Calles estrechas con farolillos de papel y letreros de neón", false, LevelId::Callejones},
 };
 constexpr int kCount = int(sizeof(kEntries) / sizeof(kEntries[0]));
 
@@ -65,8 +68,8 @@ void LevelSelect::draw(UiLayer& ui, int width, int height) const {
         bool sel = i == selected_;
         fillRect(d, r.x0, r.y0, r.x1, r.y1, sel ? rgba(222, 214, 198, 36) : rgba(16, 16, 20, 220));
         if (sel) fillRect(d, r.x0, r.y0, r.x0 + 6, r.y1, accent);
-        drawText(ui, r.x0 + 28, r.y0 + 10, 28, kEntries[i].name, sel ? accent : ink);
-        drawText(ui, r.x0 + 28, r.y0 + 44, 17, kEntries[i].about, dim);
+        drawText(ui, r.x0 + 28, r.y0 + 7, 25, kEntries[i].name, sel ? accent : ink);
+        drawText(ui, r.x0 + 28, r.y0 + 37, 16, kEntries[i].about, dim);
     }
     drawText(ui, float(width) * 0.5f, float(height) - 46, 15,
              "W/S elegir · Enter jugar · Esc salir · En el juego: Z luz/sombra, F1 vida y F2 Poder infinitos", dim, sub);

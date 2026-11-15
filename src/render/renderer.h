@@ -94,6 +94,8 @@ public:
     // "El color es energía": croma del mundo (0 gris, 1 a todo color). Afecta solo a lo que
     // se añade entre setScenery(true) y setScenery(false) (el escenario) y al cielo.
     void setWorldColor(float c) { worldColor_ = c; }
+    // Noche (0..1): luna en vez de sol, cielo estrellado y oscuro; solo alumbran las luces.
+    void setNight(float n) { night_ = n; }
     void setScenery(bool on) { scenery_ = on; }
     // Salpicadura de color en el suelo (no le afecta la falta de croma).
     void paint(Vec3 pos, float radius, uint32_t color);
@@ -191,6 +193,7 @@ private:
     bool highlighting_ = false;
     bool scenery_ = false;
     float worldColor_ = 1.0f;
+    float night_ = 0.0f;
     std::vector<float> paints_;  // x, y, z, radio, r, g, b
     std::vector<float> zones_;   // x, y, z, radio
     std::vector<float> litAreas_;  // x, y, z, radio

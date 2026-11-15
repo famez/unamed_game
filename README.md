@@ -137,7 +137,7 @@ vuelve al selector.
 
 ```bash
 ./build/game                    # selector de niveles
-./build/game --nivel mercado    # directamente un nivel (plaza, mercado, puente)
+./build/game --nivel selva      # directamente un nivel (plaza, mercado, puente, selva, cueva, callejones)
 ./build/game --prueba 1234      # patio de combate; con semilla, siempre el mismo
 ./build/game --historia         # la historia (capítulo 1)
 ```
@@ -146,6 +146,13 @@ vuelve al selector.
   oscuridad entre las farolas. Grises de luz y de sombra sin fin y un Gris mayor cada 30 bajas.
   Trae todas las armas y materiales para forjar.
 - **Plaza, Mercado, Puente**: los escenarios con sus combates de zona y objetivos.
+- **De noche**, con oscuridad de verdad y luces propias que se pueden usar para viajar o romper:
+  - **Selva de los Puentes**: plataformas en árboles gigantes unidas por puentes colgantes sobre
+    un barranco, alumbradas con antorchas.
+  - **Cueva de Cristal**: salas de roca unidas por túneles, racimos de cristal que brillan y un
+    río subterráneo.
+  - **Callejones del Farol**: calles estrechas con farolillos de papel colgados de lado a lado y
+    letreros de neón en las fachadas.
 - En todos: **Z** cambia entre luz y sombra y **F1 / F2** hacen infinitos la vida y el Poder
   (también en la pausa). Por defecto solo la vida.
 
@@ -228,6 +235,7 @@ src/
     loot.cpp                     Botín, recoger, experiencia y niveles, fabricar, equipar
     light.cpp / shadow.cpp       La luz y la sombra: viajar por la luz, fundirse, farolas, Supernova
     levels.cpp                   Escenarios, partes, combates de zona, puertas, rompecabezas
+    levels_night.cpp             Niveles de noche: selva, cueva, callejones (antorchas, cristales, farolillos)
     test_mode.cpp                Modo prueba (patio con enemigos sin fin)
     allies.cpp                   Formas prismáticas y compañeros
     game_story.cpp / cinema.cpp  Escenas del guion, órdenes y cinemáticas
