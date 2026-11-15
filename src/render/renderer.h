@@ -120,6 +120,10 @@ public:
     // Dibuja cielo + sombras + escena en el framebuffer actual y vacía la lista.
     // `shadowCenter`: centro del área con sombras (normalmente el jugador).
     void render(const RenderCamera& cam, Vec3 shadowCenter, int width, int height, float time);
+    // Retrato (el del HUD): dibuja las mallas con skinning encoladas desde el último render
+    // directamente en la pantalla, en el rectángulo (x, y, w, h) en píxeles desde abajo a la
+    // izquierda, sin fondo, sin sombras ni efectos. Vacía la cola.
+    void portrait(const RenderCamera& cam, int x, int y, int w, int h);
 
     size_t instanceCount() const { return boxes_.items.size() + spheres_.items.size(); }
     size_t skinnedCount() const { return skinDraws_.size(); }

@@ -1212,3 +1212,49 @@ void Game::drawGhosts(Renderer* solid, DebugDraw& lines, float alpha) const {
         }
     }
 }
+
+// Retrato del HUD: el busto en reposo, con la cabeza ladeada a su manera (Vela, despreocupada;
+// Hollín, mirando desde abajo) y respirando; se enciende como el cuerpo al cambiar de modo.
+bool Game::drawPortrait(Renderer& r, RenderCamera& cam, float aspect) const {
+    HeroLook look = !shadowUnlocked_ ? HeroLook::Base : shadowMode_ ? HeroLook::Shadow : HeroLook::Light;
+    float flash = heroFlash_ > 0 ? 0.6f : 0.0f;
+    if (modeFlash_ > 0 && shadowUnlocked_) {
+        float t = modeFlash_ / kModeSwapTime;
+        if (t > 0.5f) look = shadowMode_ ? HeroLook::Light : HeroLook::Shadow;
+        flash = std::max(flash, 1.0f - std::fabs(t - 0.5f) * 2.0f);
+    }
+    const HeroGlbModel* glb = heroGlb(look);
+    if (!glb) return false;
+    bool dark = look == HeroLook::Shadow;
+    Pose p;
+    float breath = std::sin(time_ * 1.7f);
+    p.rotation[Head] = dark ? Vec3{0.18f, -0.25f, 0.06f} : Vec3{-0.04f, 0.2f, -0.12f};
+    p.rotation[Neck].x = (dark ? 0.1f : 0.0f) + 0.015f * breath;
+    p.rotation[Chest].x = 0.02f * breath;
+    p.rotation[ShoulderL].z = 0.12f;
+    p.rotation[ShoulderR].z = -0.12f;
+    Mat4 j[kMaxJoints];
+    computeWorldMatrices(p, Mat4::identity(), j);
+    Mat4 skin[kMaxJoints];
+    skinMatrices(glb->body, j, skin);
+    uint32_t line = dark ? rgba(34, 18, 56) : rgba(120, 84, 30);
+    r.skinned(glb->body.mesh, skin, JointCount, flash, line);
+    if (glb->detail.mesh >= 0) r.skinned(glb->detail.mesh, skin, JointCount, flash, 0);
+    for (const HeroPart& part : glb->parts) {
+        Mat4 bones[kMaxJoints];
+        bones[part.joint] = j[part.joint] * part.inverseBind;
+        r.skinned(part.mesh, bones, part.joint + 1, flash, part.kind == HeroPartKind::Lantern ? 0 : line);
+    }
+    // Cámara de frente, a la altura de los ojos, un poco desde el lado al que mira.
+    Vec3 face = translationOf(j[Head]) + Vec3{0, 0.07f, 0};
+    Vec3 eye = face + Vec3{dark ? -0.12f : 0.12f, 0.02f, 0.62f};
+    cam.view = lookAt(eye, face - Vec3{0, 0.03f, 0}, {0, 1, 0});
+    cam.fovY = 0.42f;
+    cam.aspect = aspect;
+    cam.proj = perspective(cam.fovY, aspect, 0.05f, 10.0f);
+    cam.position = eye;
+    cam.forward = normalize(face - eye);
+    cam.right = normalize(cross(cam.forward, {0, 1, 0}));
+    cam.up = cross(cam.right, cam.forward);
+    return true;
+}

@@ -432,6 +432,10 @@ public:
     void draw(DebugDraw& lines, DebugDraw& glow, Renderer* solid, const DrawFlags& flags, const ViewInfo& view,
               float alpha = 1) const;
     void drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const;
+    // Retrato del HUD: encola el busto de la protagonista (Vela o Hollín según el modo) y da la
+    // cámara que lo encuadra. Falso si no hay modelo (.glb) que retratar.
+    bool drawPortrait(Renderer& r, RenderCamera& cam, float aspect) const;
+    static constexpr float kPortraitInset = 86;  // centro del hexágono: px virtuales desde la esquina
 
     const Character& hero() const { return hero_; }
     float hp() const { return hp_; }

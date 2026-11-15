@@ -704,6 +704,16 @@ int main(int argc, char** argv) {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         Mat4 pixels = ortho(0, float(uw), float(uh), 0, -1, 1);
         hud.flush(pixels);
+        if (!debugView && !portrait && !selector.open) {  // la cara de la protagonista en el hexágono del HUD
+            float k = float(w) / float(uw);
+            float cxp = (float(uw) - Game::kPortraitInset) * k, cyp = Game::kPortraitInset * k;  // desde abajo
+            int hw = int(31.0f * k), hh = int(29.0f * k);
+            RenderCamera pc;
+            if (game.drawPortrait(renderer, pc, float(hw) / float(hh)))
+                renderer.portrait(pc, int(cxp) - hw, int(cyp) - hh + int(2 * k), 2 * hw, 2 * hh);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        }
         overlay.flush(pixels);
         glDisable(GL_BLEND);
         if (shotPath && platform::timeSeconds() - startTime >= shotTime) {

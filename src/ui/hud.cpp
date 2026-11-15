@@ -2,6 +2,7 @@
 // textos de la historia y las cinemáticas. Todo en 2D sobre UiLayer.
 
 #include "game/game.h"
+#include "render/hero_model.h"
 
 #include "render/text.h"
 
@@ -198,19 +199,25 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
     // Vitalidad abajo a la derecha: retrato hexagonal y barras de PV y PM inclinadas y
     // segmentadas (su longitud crece con el máximo).
     {
-        float cx = w - 86, cy = h - 86;
+        float cx = w - kPortraitInset, cy = h - kPortraitInset;
         fillCircle(d, cx, cy, 58, kUiPanel, 6, kPi / 6);
         // Retrato sobrio: silueta (cabeza y hombros del abrigo) y la veta de luz del pecho.
         fillCircle(d, cx, cy, 52, hp_ / maxHp_ < 0.25f ? rgba(200, 60, 70) : rgba(150, 148, 144), 6, kPi / 6);
         fillCircle(d, cx, cy, 47, rgba(22, 22, 26), 6, kPi / 6);
-        d.triangle({cx - 34, cy + 40, 0}, {cx + 34, cy + 40, 0}, {cx, cy + 6, 0}, rgba(44, 45, 52));  // hombros
-        fillRect(d, cx - 30, cy + 22, cx + 30, cy + 40, rgba(44, 45, 52));
-        fillRect(d, cx - 12, cy + 14, cx + 12, cy + 22, rgba(104, 58, 50));                      // bufanda
-        fillCircle(d, cx, cy - 4, 17, rgba(150, 134, 122), 20);                                  // cara en penumbra
-        fillCircle(d, cx, cy - 13, 16, rgba(64, 62, 66), 20);                                    // pelo
-        fillRect(d, cx - 16, cy - 13, cx + 16, cy - 8, rgba(64, 62, 66));
-        float litP = clampf(mp_ / maxMp_, 0, 1);
-        fillRect(d, cx - 1.5f, cy + 24, cx + 1.5f, cy + 38, withAlpha(rgba(255, 222, 170), 0.25f + 0.75f * litP));
+        bool face = heroGlb(shadowMode_ && shadowUnlocked_ ? HeroLook::Shadow : HeroLook::Light) != nullptr;
+        if (face) {  // fondo del retrato (la cara la pinta drawPortrait encima): luz cálida o violeta
+            fillCircle(d, cx, cy, 47, shadowMode_ ? rgba(40, 24, 60) : rgba(70, 58, 44), 6, kPi / 6);
+            fillCircle(d, cx, cy - 6, 30, shadowMode_ ? rgba(64, 38, 100) : rgba(120, 100, 70), 24);
+        } else {  // sin modelo: silueta sobria (cabeza y hombros del abrigo) y la veta de luz del pecho
+            d.triangle({cx - 34, cy + 40, 0}, {cx + 34, cy + 40, 0}, {cx, cy + 6, 0}, rgba(44, 45, 52));  // hombros
+            fillRect(d, cx - 30, cy + 22, cx + 30, cy + 40, rgba(44, 45, 52));
+            fillRect(d, cx - 12, cy + 14, cx + 12, cy + 22, rgba(104, 58, 50));  // bufanda
+            fillCircle(d, cx, cy - 4, 17, rgba(150, 134, 122), 20);              // cara en penumbra
+            fillCircle(d, cx, cy - 13, 16, rgba(64, 62, 66), 20);                // pelo
+            fillRect(d, cx - 16, cy - 13, cx + 16, cy - 8, rgba(64, 62, 66));
+            float litP = clampf(mp_ / maxMp_, 0, 1);
+            fillRect(d, cx - 1.5f, cy + 24, cx + 1.5f, cy + 38, withAlpha(rgba(255, 222, 170), 0.25f + 0.75f * litP));
+        }
         if (heroFlash_ > 0) fillCircle(d, cx, cy, 52, withAlpha(rgba(255, 60, 90), heroFlash_ * 2.5f), 6, kPi / 6);
 
         float right = cx - 66;
@@ -245,7 +252,7 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
             float pulse = modeFlash_ > 0 ? 1.0f + modeFlash_ : 1.0f;
             uiText(ui, cx, cy - 76, 15 * pulse, shadowMode_ ? "SOMBRA" : "LUZ",
                    shadowMode_ ? rgba(180, 130, 255) : rgba(255, 226, 160), FontFace::Title, Align::Center, 0.5f);
-            uiText(ui, cx, cy + 62, 12, "Z · cambiar", kUiDim, FontFace::Title, Align::Center);
+            uiText(ui, cx, cy - 92, 11, "Z · cambiar", kUiDim, FontFace::Title, Align::Center);
         }
         // Dónde está: en la sombra (se puede fundir) o en la luz.
         if (shadowMode_ && shadowAt(hero_.body.pos) > 0.6f)

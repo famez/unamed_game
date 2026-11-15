@@ -168,3 +168,44 @@ void Renderer::drawSkinned(GLuint prog, bool outlinePass) {
         glDrawElements(GL_TRIANGLES, m.count, GL_UNSIGNED_INT, nullptr);
     }
 }
+
+void Renderer::portrait(const RenderCamera& cam, int x, int y, int w, int h) {
+    if (skinDraws_.empty() || w <= 0 || h <= 0) return;
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(x, y, w, h);
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(x, y, w, h);
+    glDepthMask(GL_TRUE);
+    glClear(GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+    glDisable(GL_BLEND);
+    GLuint prog = skinProgram_;
+    glUseProgram(prog);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, shadowTex_);
+    setMat4(prog, "uViewProj", cam.proj * cam.view);
+    setMat4(prog, "uLightViewProj", translate({0, 0, 10}));  // fuera del mapa de sombras: todo iluminado
+    setVec3(prog, "uSunDir", normalize(Vec3{0.3f, 0.6f, 0.75f}));
+    setVec3(prog, "uCameraPos", cam.position);
+    glUniform1f(glGetUniformLocation(prog, "uTime"), 0.0f);
+    glUniform1i(glGetUniformLocation(prog, "uShadowMap"), 0);
+    for (const char* n : {"uLightCount", "uScorchCount", "uLitCount", "uZoneCount", "uPaintCount"})
+        glUniform1i(glGetUniformLocation(prog, n), 0);
+    glUniform1f(glGetUniformLocation(prog, "uInflate"), 0.0f);
+    glUniform4f(glGetUniformLocation(prog, "uOutlineColor"), 0, 0, 0, 0);
+    glUniform1f(glGetUniformLocation(prog, "uWorldColor"), 1.0f);
+    glUniform1f(glGetUniformLocation(prog, "uNight"), 0.0f);
+    glUniform1f(glGetUniformLocation(prog, "uDarkness"), 0.0f);
+    drawSkinned(prog, false);
+    glCullFace(GL_FRONT);
+    glUniform1f(glGetUniformLocation(prog, "uInflate"), 0.004f);
+    drawSkinned(prog, true);
+    glCullFace(GL_BACK);
+    glDisable(GL_SCISSOR_TEST);
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_DEPTH_TEST);
+    glViewport(0, 0, windowW_, windowH_);
+    skinDraws_.clear();
+}
