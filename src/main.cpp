@@ -1,4 +1,5 @@
 #include "audio/audio.h"
+#include "audio/synth.h"
 #include "render/debug_draw.h"
 #include "game/game.h"
 #include "core/gl.h"
@@ -264,6 +265,12 @@ int main(int argc, char** argv) {
     int videoFrames = 0, videoW = 0, videoH = 0;
     std::vector<unsigned char> videoPx;
     Showcase vitrina;
+    struct VideoSound {  // efectos que han sonado durante la grabación (se mezclan al acabar)
+        double time;
+        Sfx id;
+        float gain, pan, pitch;
+    };
+    std::vector<VideoSound> videoSounds;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--debug") == 0) debugView = true;
         if (std::strcmp(argv[i], "--autoplay") == 0) autoplay = true;
@@ -741,7 +748,8 @@ int main(int argc, char** argv) {
                 glPixelStorei(GL_PACK_ALIGNMENT, 1);
                 glReadPixels(0, 0, videoW, videoH, GL_RGB, GL_UNSIGNED_BYTE, videoPx.data());
                 std::fwrite(videoPx.data(), 1, videoPx.size(), video);
-                if (videoSeconds > 0 && ++videoFrames >= int(videoSeconds * 30)) quit = true;
+                ++videoFrames;
+                if (videoSeconds > 0 && videoFrames >= int(videoSeconds * 30)) quit = true;
             }
         }
         platform::swapBuffers();
@@ -760,6 +768,7 @@ int main(int argc, char** argv) {
                 gain /= 1.0f + 0.06f * dist;
             }
             audio.play(e.id, gain, pan, e.pitch);
+            if (videoPath) videoSounds.push_back({double(videoFrames) / 30.0, e.id, gain, pan, e.pitch});
         }
         if (menu.open || inventory.open || selector.open) {
             if (input.wasPressed(Key::W) || input.wasPressed(Key::S) || input.wasPressed(Key::Up) ||
@@ -806,7 +815,40 @@ int main(int argc, char** argv) {
     }
 
     game.saveBrains();
-    if (video) pclose(video);  // ffmpeg termina de escribir el vídeo
+    if (video) {
+        pclose(video);  // ffmpeg termina de escribir el vídeo
+        // Sonido: los efectos mezclados en su instante (con su tono y su panorámica) y unidos al
+        // vídeo. La música no va (es aleatoria por capas).
+        size_t frames = size_t(double(videoFrames) / 30.0 * kSampleRate) + kSampleRate;
+        std::vector<float> mix(frames * 2, 0.0f);
+        std::vector<StereoBuffer> cache(size_t(Sfx::Count));
+        for (const VideoSound& s : videoSounds) {
+            StereoBuffer& b = cache[size_t(s.id)];
+            if (b.data.empty()) b = renderSfx(s.id);
+            float a = (s.pan + 1.0f) * 0.25f * 3.14159f, gl = std::cos(a) * 1.41f, gr = std::sin(a) * 1.41f;
+            size_t start = size_t(s.time * kSampleRate), n = b.frames();
+            for (size_t i = 0; start + i < frames; ++i) {
+                double src = double(i) * double(s.pitch);  // tono: se lee más deprisa o más despacio
+                size_t k = size_t(src);
+                if (k + 1 >= n) break;
+                float f = float(src - double(k));
+                for (int ch = 0; ch < 2; ++ch) {
+                    float v = (float(b.data[k * 2 + size_t(ch)]) * (1 - f) + float(b.data[(k + 1) * 2 + size_t(ch)]) * f) / 32768.0f;
+                    mix[(start + i) * 2 + size_t(ch)] += v * s.gain * (ch ? gr : gl) * 0.7f;
+                }
+            }
+        }
+        StereoBuffer out;
+        out.data.resize(mix.size());
+        for (size_t i = 0; i < mix.size(); ++i) out.data[i] = int16_t(std::tanh(mix[i]) * 32000.0f);
+        std::string wav = std::string(videoPath) + ".wav", tmp = std::string(videoPath) + ".tmp.mp4";
+        if (saveWav(wav, out)) {
+            std::string cmd = "ffmpeg -loglevel error -y -i '" + std::string(videoPath) + "' -i '" + wav +
+                              "' -c:v copy -c:a aac -b:a 160k -shortest '" + tmp + "' && mv '" + tmp + "' '" + videoPath + "'";
+            if (std::system(cmd.c_str()) != 0) std::fprintf(stderr, "No se pudo añadir el sonido al vídeo\n");
+            std::remove(wav.c_str());
+        }
+    }
     audio.shutdown();
     unloadFonts();
     overlay.shutdown();
