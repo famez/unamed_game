@@ -898,6 +898,32 @@ int main() {
         // Salir en emboscada.
         run(g, 0.1f, press(&Controls::light));
         CHECK(!g.diving(), "Q otra vez: sale de la sombra");
+        // Trepar como sombra: contra una pared a oscuras sube por ella y pasa al tejado.
+        {
+            g.enemies_.clear();
+            std::vector<AABB> keep = g.world_.solids;  // a solas con la pared de prueba
+            g.world_.solids = {AABB{{-2, 0, -24}, {2, 3, -21}}};
+            place(g, {0, 0, -19});
+            g.mp_ = 100;
+            run(g, 0.1f, press(&Controls::light));
+            Controls up;
+            up.move = {0, 0, -1};
+            run(g, 0.6f, up);
+            CHECK(g.diving() && g.onWall() && g.hero_.body.pos.y > 0.5f, "fundido contra una pared oscura, sube por ella (y=%.1f)",
+                  g.hero_.body.pos.y);
+            for (int k = 0; k < 120 && g.onWall(); ++k) g.update(dt, up);  // hasta llegar arriba
+            CHECK(g.diving() && !g.onWall() && std::fabs(g.hero_.body.pos.y - 3.0f) < 0.1f && g.hero_.body.pos.z < -21.0f,
+                  "arriba pasa al tejado (y=%.1f)", g.hero_.body.pos.y);
+            run(g, 0.5f);
+            CHECK(std::fabs(g.hero_.body.pos.y - 3.0f) < 0.1f, "y se queda en el tejado");
+            Controls back;
+            back.move = {0, 0, 1};
+            run(g, 1.0f, back);  // vuelve al borde y se deja caer
+            run(g, 1.5f);
+            CHECK(g.hero_.body.pos.y < 0.1f, "al salir del tejado cae al suelo (y=%.1f)", g.hero_.body.pos.y);
+            g.world_.solids = keep;
+            run(g, 0.1f, press(&Controls::light));
+        }
         // Agujero negro.
         g.portals_.clear();
         place(g, {0, 0, -12}, 0);

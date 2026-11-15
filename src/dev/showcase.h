@@ -24,5 +24,6 @@ private:
     int act_ = -1, t_ = 0;
     bool cut_ = false;
     Vec3 home_;            // sitio despejado del acto
+    Vec3 dir_;             // hacia dónde empujar
     int lampA_ = -1, lampB_ = -1, switch_ = -1;
 };

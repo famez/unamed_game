@@ -586,7 +586,7 @@ void Game::hurtHero(Vec3 dir, float damage, float knock, Enemy* source) {
 
 void Game::defeatHero() {
     hp_ = 0;
-    inLight_ = travel_ = lightLock_ = diving_ = false;
+    inLight_ = travel_ = lightLock_ = diving_ = onWall_ = false;
     hero_.downTimer = 0;
     lock_ = -1;
     trail_.clear();

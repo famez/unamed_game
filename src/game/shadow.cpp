@@ -227,10 +227,92 @@ void Game::startDive() {
     sound(Sfx::Dodge, hero_.body.pos, 0.8f, 0.5f);
 }
 
+// --- Trepar como sombra -------------------------------------------------------------------
+
+namespace {
+constexpr float kClimbSpeed = 5.5f;
+constexpr float kMinWall = 0.9f;  // lo más bajo ya se sube andando; esto es una pared
+}  // namespace
+
+// Empujando contra un bloque alto cuya cara está a oscuras: la sombra se pega a ella.
+bool Game::tryWallClimb(const Controls& c) {
+    if (length(c.move) < 0.3f) return false;
+    Vec3 dir = normalize(flat(c.move)), p = hero_.body.pos;
+    Vec3 probe = p + dir * (hero_.body.radius + 0.25f) + Vec3{0, 0.3f, 0};
+    for (size_t i = 0; i < world_.solids.size(); ++i) {
+        const AABB& b = world_.solids[i];
+        if (b.max.y - p.y < kMinWall || b.min.y > p.y + 0.3f) continue;
+        if (probe.x < b.min.x || probe.x > b.max.x || probe.z < b.min.z || probe.z > b.max.z) continue;
+        // La cara: el lado de la caja por el que está fuera el protagonista.
+        float out[4] = {b.min.x - p.x, p.x - b.max.x, b.min.z - p.z, p.z - b.max.z};
+        const Vec3 normals[4] = {{-1, 0, 0}, {1, 0, 0}, {0, 0, -1}, {0, 0, 1}};
+        int face = 0;
+        for (int k = 1; k < 4; ++k)
+            if (out[k] > out[face]) face = k;
+        if (out[face] < -0.05f) continue;  // dentro: no es una cara
+        Vec3 n = normals[face];
+        if (dot(dir, -n) < 0.5f) continue;  // tiene que empujar de frente
+        Vec3 onFace = p + n * (-out[face]);
+        if (shadowAt(onFace + Vec3{0, 1.0f, 0}) < 0.6f) continue;  // pared iluminada: no
+        onWall_ = true;
+        wallBox_ = int(i);
+        wallNormal_ = n;
+        wallBase_ = p.y;
+        hero_.slide(onFace + n * hero_.body.radius + Vec3{0, 0.2f, 0});
+        spawnRing(onFace + Vec3{0, 0.3f, 0}, 1.0f, 0.3f, kShadowCol);
+        sound(Sfx::Dodge, p, 0.6f, 0.6f);
+        return true;
+    }
+    return false;
+}
+
+// En la pared: empujar hacia ella sube, alejarse baja y los lados mueven a lo largo de la
+// cara. La luz tampoco deja pasar aquí.
+void Game::updateWallClimb(float dt, const Controls& c) {
+    const AABB& b = world_.solids[size_t(wallBox_)];
+    Vec3 n = wallNormal_, side{-n.z, 0, n.x};
+    Vec3 move = flat(c.move);
+    float up = dot(move, -n), along = dot(move, side);
+    Vec3 p = hero_.body.pos + Vec3{0, up, 0} * (kClimbSpeed * dt) + side * (along * kClimbSpeed * dt);
+    // A lo largo de la cara, sin salirse de ella.
+    float margin = 0.25f;
+    if (side.x != 0) p.x = clampf(p.x, b.min.x + margin, b.max.x - margin);
+    else p.z = clampf(p.z, b.min.z + margin, b.max.z - margin);
+    if (std::fabs(along) > 0.1f || std::fabs(up) > 0.1f) hero_.yaw = std::atan2(-n.x, -n.z);
+    if (p.y + 0.2f >= b.max.y && up > 0) {  // arriba: pasa al tejado
+        float depth = std::min(0.6f, 0.5f * (n.x != 0 ? b.max.x - b.min.x : b.max.z - b.min.z));
+        Vec3 top = p - n * (hero_.body.radius + depth);
+        top.y = b.max.y + 0.02f;  // justo encima (en el borde exacto la física lo cuenta dentro)
+        onWall_ = false;
+        hero_.slide(top);
+        hero_.body.grounded = true;
+        lastDark_ = top;
+        spawnRing(top + Vec3{0, 0.04f, 0}, 1.0f, 0.3f, kShadowCol);
+        return;
+    }
+    if (p.y <= wallBase_ && up < 0) {  // abajo: vuelve al suelo
+        onWall_ = false;
+        Vec3 foot = p + n * 0.15f;
+        foot.y = wallBase_;
+        hero_.slide(foot);
+        hero_.body.grounded = true;
+        lastDark_ = foot;
+        return;
+    }
+    p.y = std::max(p.y, wallBase_);
+    if (shadowAt(p - n * hero_.body.radius) < 0.45f) p = hero_.body.pos;  // la luz no deja pasar
+    hero_.slide(p);
+}
+
 // Salir de la sombra: de pie donde está o, con el clic, golpeando desde abajo al enemigo
 // más cercano.
 void Game::endDive(bool ambush) {
     diving_ = false;
+    if (onWall_) {  // se despega de la pared y cae
+        onWall_ = false;
+        hero_.slide(hero_.body.pos + wallNormal_ * 0.3f);
+        hero_.body.vel = wallNormal_ * 3.0f;
+    }
     Vec3 at = hero_.body.pos;
     spawnRing(at + Vec3{0, 0.04f, 0}, ambush ? 3.0f : 1.6f, 0.45f, kShadowCol);
     spawnSparks(at + Vec3{0, 0.5f, 0}, {0, 1, 0}, 20, kShadowDark, 4.0f, false);
@@ -279,7 +361,7 @@ void Game::updateShadow(float dt, const Controls& c) {
 // Fundido con la sombra, la luz no deja pasar: si el movimiento le lleva a una zona
 // iluminada, vuelve al último punto oscuro.
 void Game::constrainDive() {
-    if (!diving_) return;
+    if (!diving_ || onWall_) return;
     if (shadowAt(hero_.body.pos) < 0.45f) {
         hero_.body.pos.x = lastDark_.x;
         hero_.body.pos.z = lastDark_.z;

@@ -181,7 +181,12 @@ void Game::update(float dt, const Controls& input) {
     bool light = inLight_ || travel_;
     // Fundido con la sombra: dentro de un charco, en modo sombra, corre más.
     hero_.speedScale = formSpeed() * (diving_ ? 1.7f : 1.0f) * (powers_.strong ? 1.0f : 0.4f);  // sin fuerzas, apenas camina
-    hero_.update(dt, down || light ? Vec3{} : c.move, !down && !light && !diving_ && c.jump, world_, std::atan2(c.camForward.x, c.camForward.z));
+    if (diving_ && !onWall_) tryWallClimb(c);
+    if (diving_ && onWall_)
+        updateWallClimb(dt, c);
+    else
+        hero_.update(dt, down || light ? Vec3{} : c.move, !down && !light && !diving_ && c.jump, world_,
+                     std::atan2(c.camForward.x, c.camForward.z));
     updateWolf(dt);
     if (c.jump && wasGrounded && hero_.body.vel.y > 1.0f) sound(Sfx::Jump, hero_.body.pos, 0.7f);
     updateTravel(dt);

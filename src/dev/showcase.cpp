@@ -24,6 +24,7 @@ const Act kActs[] = {
     {"AGUJERO NEGRO", "Técnica 5 de la sombra", 360},
     {"LOBO DE SOMBRA", "G · 50 de Poder: corre, muerde y roba vida", 560},
     {"FUNDIRSE CON LA SOMBRA", "Q en la oscuridad · la luz no deja pasar · clic: emboscada desde el suelo", 660},
+    {"TREPAR COMO SOMBRA", "Fundido, empuja contra una pared oscura: sube por ella y pasa al tejado", 480},
 };
 constexpr int kActCount = int(sizeof(kActs) / sizeof(kActs[0]));
 
@@ -197,6 +198,31 @@ Controls Showcase::step(Game& g, float& camYaw, const Controls& base) {
                 camYaw = clearestYaw(g, best, yaw, {0.0f, 0.6f, -0.6f, kPi});
                 break;
             }
+            case 13: {  // la cara oscura de un bloque alto, con sitio delante
+                if (!g.shadowMode()) c.swapMode = true;
+                const Vec3 normals[4] = {{-1, 0, 0}, {1, 0, 0}, {0, 0, -1}, {0, 0, 1}};
+                float best = -1;
+                Vec3 at, face;
+                for (const AABB& b : g.world().solids) {
+                    float h = b.max.y - b.min.y;
+                    if (b.min.y > 0.1f || h < 2.5f || h > 7.0f) continue;
+                    Vec3 mid = (b.min + b.max) * 0.5f, half = (b.max - b.min) * 0.5f;
+                    for (const Vec3& n : normals) {
+                        float w = n.x != 0 ? half.z : half.x;
+                        if (w < 1.0f) continue;
+                        Vec3 f{mid.x + n.x * half.x, 0, mid.z + n.z * half.z};
+                        Vec3 p = f + n * 3.0f, q = p;
+                        if (!g.devFreeSpot(q, 0.6f) || length(q - p) > 0.1f || nearPortal(g, p, 5.0f)) continue;
+                        float dark = g.shadowAt(f + n * 0.2f + Vec3{0, 1, 0}) + g.shadowAt(p);
+                        if (dark > best) best = dark, at = p, face = f;
+                    }
+                }
+                home_ = face;
+                dir_ = normalize(flat(face - at));
+                place(at, yawTo(at, face));
+                camYaw = clearestYaw(g, at, camYaw, {0.5f, -0.5f, 0.0f, 0.9f, -0.9f});
+                break;
+            }
         }
         return c;
     }
@@ -250,6 +276,11 @@ Controls Showcase::step(Game& g, float& camYaw, const Controls& base) {
             if (t > 480) fight(g, c, t);
             break;
         }
+        case 13:
+            if (t == 30) c.light = true;
+            if (t > 60 && t < 330) c.move = dir_;  // hacia la pared, y sigue empujando: sube
+            if (t == 400) c.light = true;  // sale, ya en el tejado
+            break;
     }
     return c;
 }

@@ -73,6 +73,13 @@ public:
     void reset();
     // Lo pone en otro sitio de golpe (sin interpolar desde donde estaba).
     void teleport(Vec3 pos, float newYaw);
+    // Lo desplaza sin física (trepando como sombra): interpola desde donde estaba.
+    void slide(Vec3 pos) {
+        prevPos_ = body.pos;
+        body.pos = pos;
+        body.vel = {};
+        body.grounded = false;
+    }
 
     // Siguiente golpe del combo hacia `faceYaw`. `dash` (m) acerca al personaje al objetivo
     // al empezar el golpe. Si llega durante otro golpe queda en cola y se encadena.

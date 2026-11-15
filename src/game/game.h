@@ -473,6 +473,8 @@ public:
     // Oscuridad (0..1) en un punto: donde no llega la luz de las farolas, nodos y faroles.
     float shadowAt(Vec3 p) const;
     bool diving() const { return diving_; }
+    bool onWall() const { return onWall_; }
+    const World& world() const { return world_; }
     void addPortal(Vec3 pos) { portals_.push_back({pos}); }
     const std::vector<Portal>& portals() const { return portals_; }
     Vec3 hostLight() const { return hostPos_; }
@@ -612,6 +614,10 @@ private:
     void drainLamp(int lamp, float amount);
     void updatePortals(float dt);
     void startDive();
+    // Fundido en la sombra por las paredes: empujando contra una pared oscura, la sombra sube
+    // por ella; arriba pasa al tejado y abajo vuelve al suelo.
+    bool tryWallClimb(const Controls& c);
+    void updateWallClimb(float dt, const Controls& c);
     void endDive(bool ambush);
     void constrainDive();
     void relightLamp(int lamp);
@@ -712,6 +718,10 @@ private:
     static constexpr float kModeSwapTime = 0.6f;  // lo que dura la transformación al cambiar de modo
     float swapCooldown_ = 0, modeFlash_ = 0;
     bool diving_ = false;      // fundido con la sombra del suelo
+    bool onWall_ = false;      // ...o de una pared
+    int wallBox_ = -1;         // el bloque por el que trepa
+    Vec3 wallNormal_;          // hacia fuera de la cara
+    float wallBase_ = 0;       // altura del pie de la pared
     Vec3 diveFrom_, lastDark_;
     std::vector<Portal> portals_;
     float darkShown_ = 0;  // cuánto se oscurece en pantalla lo que no alumbra ninguna luz

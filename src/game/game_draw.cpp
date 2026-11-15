@@ -625,6 +625,10 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
         Vec3 c = hero_.interpolatedPos(alpha) + Vec3{0, 0.04f, 0};
         float pulse = 1.0f + 0.06f * std::sin(time_ * 7.0f);
         Mat4 m = translate(c) * rotateY(hero_.yaw);
+        if (onWall_) {  // pegada a la pared: el charco de pie sobre la cara
+            c = hero_.interpolatedPos(alpha) - wallNormal_ * (hero_.body.radius - 0.04f) + Vec3{0, 0.5f, 0};
+            m = translate(c) * basisY(wallNormal_);
+        }
         solid->ellipsoid(m, {}, Vec3{0.55f, 0.04f, 0.75f} * pulse, rgba(10, 8, 16), Material::Cloth);
         solid->ellipsoid(m, {0, 0.03f, 0}, Vec3{0.3f, 0.03f, 0.45f} * pulse, rgba(150, 80, 255), Material::Glow);
         return;

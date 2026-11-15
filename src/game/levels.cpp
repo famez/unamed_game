@@ -552,7 +552,7 @@ void Game::loadLevel(LevelId id) {
     holes_.clear();
     ghosts_.clear();
     portals_.clear();
-    diving_ = false;
+    diving_ = onWall_ = false;
     level_ = id;
     part_ = 0;
     activeEncounter_ = -1;
