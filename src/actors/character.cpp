@@ -625,6 +625,7 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
     blendTime_ += dt;
     drawTime_ = std::min(kDrawTime, drawTime_ + dt);
     armedBlend_ = moveTowards(armedBlend_, weaponInHand() ? 1.0f : 0.0f, dt / 0.2f);
+    alertBlend_ = moveTowards(alertBlend_, alert_ || move_ != Move::None ? 1.0f : 0.0f, dt / 0.35f);
     Pose target;
     animate(target);
     pose = blendTime_ >= blendDur_ ? target : lerpPose(blendFrom_, target, smoothstep01(blendTime_ / blendDur_), JointCount);
@@ -778,7 +779,10 @@ void Character::animate(Pose& out) const {
     // Con el arma en la mano: guardia de combate, agachado y con un rebote ligero (listo).
     // Guardia de combate: de lado, pierna izquierda adelantada, rodillas flexionadas, la hoja
     // levantada en diagonal hacia delante y la mano libre adelantada; rebota, alerta.
-    float ready = armedBlend_ * idle * (guarding() ? 0.0f : 1.0f);
+    float ready = armedBlend_ * idle * (guarding() ? 0.0f : 1.0f) * alertBlend_;
+    // Sin peligro cerca: de pie, rodillas sueltas, la hoja baja junto a la pierna apuntando
+    // al suelo por delante y el otro brazo colgando.
+    float calm = armedBlend_ * idle * (guarding() ? 0.0f : 1.0f) * (1.0f - alertBlend_);
     float hop = std::sin(time_ * 6.5f);
     out.rootOffset.y -= (0.07f + 0.018f * hop) * ready;
     r[Pelvis].y += 0.3f * ready;
@@ -798,6 +802,13 @@ void Character::animate(Pose& out) const {
     r[ShoulderL].x = lerpf(r[ShoulderL].x, -0.8f, ready);
     r[ShoulderL].z = lerpf(r[ShoulderL].z, 0.25f, ready);
     r[ElbowL].x = lerpf(r[ElbowL].x, -0.9f, ready);
+    r[ShoulderR].x = lerpf(r[ShoulderR].x, 0.05f, calm);
+    r[ShoulderR].z = lerpf(r[ShoulderR].z, -0.18f, calm);
+    r[ElbowR].x = lerpf(r[ElbowR].x, -0.45f + 0.03f * breath, calm);
+    r[WristR].x = lerpf(r[WristR].x, 0.85f, calm);
+    r[ShoulderL].x = lerpf(r[ShoulderL].x, 0.08f, calm);
+    r[ShoulderL].z = lerpf(r[ShoulderL].z, 0.12f, calm);
+    r[ElbowL].x = lerpf(r[ElbowL].x, -0.25f, calm);
     r[HipL].z += (0.12f - 0.04f * relax) * idle;
     r[HipR].z -= (0.12f - 0.04f * relax) * idle;
     r[KneeL].x += (0.18f + 0.14f * std::max(0.0f, -weight)) * idle;  // se dobla la rodilla que descansa

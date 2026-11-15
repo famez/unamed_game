@@ -86,6 +86,9 @@ public:
         drawTime_ = instant ? kDrawTime : 0.0f;
     }
     bool armed() const { return armed_; }
+    // En guardia (enemigo cerca o fijado): postura de combate al estar quieto. Si no, con el
+    // arma en la mano pero relajado (la hoja baja, a un lado).
+    void setAlert(bool a) { alert_ = a; }
     bool weaponInHand() const { return drawTime_ < kDrawTime * 0.5f ? !armed_ : armed_; }
     static constexpr float kDrawTime = 0.35f;
     // Ventana de contraataque tras una esquiva.
@@ -173,6 +176,8 @@ private:
     Vec3 moveVel_;        // velocidad propia en el plano (con inercia)
     bool armed_ = true;
     float drawTime_ = 1.0f, armedBlend_ = 1.0f;
+    bool alert_ = false;
+    float alertBlend_ = 0;
     // Animación limitada (como el anime): en los golpes la pose se renueva a 20 fps y se
     // mantiene entre medias; el cuerpo se sigue desplazando con suavidad.
     bool stepping_ = false;

@@ -162,6 +162,10 @@ void Game::update(float dt, const Controls& input) {
             danger = danger || (e.targetable() && length(flat(e.body.pos - hero_.body.pos)) < 16.0f);
         combatTimer_ = danger ? 5.0f : std::max(0.0f, combatTimer_ - dt);
         hero_.setArmed(powers_.attack && combatTimer_ > 0);
+        bool alert = lock_ >= 0;  // en guardia: con un objetivo fijado o un Gris muy cerca
+        for (const Enemy& e : enemies_)
+            alert = alert || (e.targetable() && length(flat(e.body.pos - hero_.body.pos)) < 6.0f);
+        hero_.setAlert(alert);
     }
 
     // Parón al golpear: todo se congela un instante salvo los efectos.
