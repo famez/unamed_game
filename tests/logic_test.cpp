@@ -23,7 +23,7 @@ int fails = 0;
 void run(Game& g, float secs, Controls c = {}) {
     for (int i = 0; i < int(secs * 60); ++i) {
         g.update(dt, c);
-        c.jump = c.attack = c.dodge = c.interact = c.lockOn = c.nextTarget = c.unlock = c.runCommand = c.light = c.nova = c.transform = c.summon = c.swapMode = false;
+        c.jump = c.attack = c.dodge = c.interact = c.lockOn = c.nextTarget = c.unlock = c.runCommand = c.light = c.transform = c.summon = c.swapMode = false;
         c.command = -1;
         c.commandScroll = 0;
     }
@@ -31,6 +31,12 @@ void run(Game& g, float secs, Controls c = {}) {
 Controls press(bool Controls::*flag) {
     Controls c;
     c.*flag = true;
+    return c;
+}
+// Ejecutar la entrada `i` del menú de comandos (técnicas 0-4 de la mitad activa).
+Controls command(int i) {
+    Controls c;
+    c.command = i;
     return c;
 }
 
@@ -235,14 +241,14 @@ int main() {
         g.enemies_.clear();
         for (int i = 0; i < 4; ++i) addEnemy(g, EnemyKind::Brute, g.hero_.body.pos + Vec3{std::cos(float(i)) * 3, 0, std::sin(float(i)) * 3});
         g.mp_ = 50;
-        run(g, 0.5f, press(&Controls::nova));
-        CHECK(g.enemies_[0].health == kBruteHp, "sin la Luz llena no hay Supernova");
+        run(g, 0.5f, command(4));
+        CHECK(g.enemies_[0].health == kBruteHp, "sin el Poder lleno no hay Supernova");
         g.mp_ = 100;
         float c0 = g.croma_;
-        run(g, 1.0f, press(&Controls::nova));
+        run(g, 1.0f, command(4));
         bool all = true;
         for (const Enemy& en : g.enemies_) all = all && en.health < kBruteHp - 25;
-        CHECK(all && g.mp_ == 0 && g.croma_ > c0, "Supernova: dana a todos alrededor, gasta la Luz y devuelve croma");
+        CHECK(all && g.mp_ == 0 && g.croma_ > c0, "Supernova (técnica 5): daña a todos alrededor, gasta el Poder y devuelve croma");
     }
     {  // Hielo congela: el enemigo va más lento
         Game g = fresh();
@@ -262,7 +268,7 @@ int main() {
               "pocion: +40 PV (PV %.0f, quedan %d)", g.hp_, g.inventory().count(ItemId::Potion));
         g.hp_ = 50;
         Controls c;
-        c.command = 3;  // atajo 4: pocion
+        c.command = kSpellSlots;  // primer atajo de objetos: pocion
         run(g, 0.1f, c);
         CHECK(g.hp_ == 90, "atajo del menu de comandos usa la pocion (PV %.0f)", g.hp_);
         CHECK(!g.equip(ItemId::StarStaff), "no se puede equipar un arma que no se tiene");
@@ -882,10 +888,10 @@ int main() {
         addEnemy(g, EnemyKind::Hound, {1.5f, 0, -8});
         g.mp_ = 100;
         float h0 = g.enemies_[0].health + g.enemies_[1].health;
-        run(g, 3.5f, press(&Controls::nova));
+        run(g, 3.5f, command(4));
         float h1 = 0;
         for (const Enemy& e : g.enemies_) h1 += std::max(0.0f, e.health);
-        CHECK(g.mp_ < 75 && h1 < h0 * 0.6f, "V: el agujero negro atrae y deshace (vida %.0f → %.0f)", h0, h1);
+        CHECK(g.mp_ < 75 && h1 < h0 * 0.6f, "técnica 5 en la sombra: el agujero negro atrae y deshace (vida %.0f → %.0f)", h0, h1);
         // Golpes cruzados.
         g.enemies_.clear();
         addEnemy(g, EnemyKind::Dazzled, {0, 0, 10});
@@ -894,6 +900,41 @@ int main() {
         g.hitEnemy(g.enemies_[0], {1, 0, 0}, 10, 0, 0, false);
         g.hitEnemy(g.enemies_[1], {1, 0, 0}, 10, 0, 0, false);
         CHECK(hd - g.enemies_[0].health > hb - g.enemies_[1].health, "en modo sombra se hiere más a los de luz");
+    }
+    {  // Técnicas de cada mitad: la luz y la sombra tienen las suyas en el menú de comandos
+        Game g = fresh();
+        g.unlockShadow();
+        g.portals_.clear();
+        place(g, {0, 0, -12}, kPi);
+        CHECK(modeSpell(false, 3) == Spell::Burst && modeSpell(true, 0) == Spell::Spikes, "cada mitad, sus cinco técnicas");
+        addEnemy(g, EnemyKind::Brute, {0, 0, -16});
+        g.mp_ = 100;
+        run(g, 2.0f, command(3));
+        CHECK(g.enemies_[0].health < kBruteHp - 15, "Estallido solar: la bola estalla en el Coloso (%.0f)", g.enemies_[0].health);
+        g.shadowMode_ = true;
+        g.enemies_.clear();
+        Enemy& d = addEnemy(g, EnemyKind::Dazzled, {0, 0, -16});
+        float hd = d.health;
+        g.mp_ = 100;
+        run(g, 0.6f, command(0));
+        CHECK(g.enemies_[0].health < hd && g.enemies_[0].body.pos.y > 0.3f, "Púas de sombra: hieren y lanzan por los aires");
+        g.enemies_.clear();
+        for (int i = 0; i < 3; ++i) addEnemy(g, EnemyKind::Dazzled, Vec3{std::cos(float(i) * 2.0f) * 4, 0, -12 + std::sin(float(i) * 2.0f) * 4});
+        run(g, 0.6f, command(1));
+        run(g, 1.2f);
+        bool held = true;
+        for (const Enemy& e : g.enemies_) held = held && e.state == AiState::Stagger;
+        CHECK(held, "Cadenas del vacío: los de alrededor se quedan quietos un buen rato");
+        g.hp_ = 40;
+        run(g, 0.6f, command(2));
+        CHECK(g.hp_ > 40, "Drenar: roba vida (%.0f PV)", g.hp_);
+        g.enemies_.clear();
+        g.hp_ = g.maxHp_;
+        run(g, 1.0f);  // que se recupere si le han golpeado
+        addEnemy(g, EnemyKind::Brute, {0, 0, -15});
+        g.mp_ = 100;
+        run(g, 2.0f, command(3));
+        CHECK(g.enemies_[0].health < kBruteHp - 25, "Mina oscura: implosiona sobre el Coloso (%.0f)", g.enemies_[0].health);
     }
     {  // Farolas: romperlas a golpes crea sombra para siempre; los interruptores las apagan y encienden
         Game g = fresh();

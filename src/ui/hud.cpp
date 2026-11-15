@@ -236,10 +236,9 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
             segBar(d, right - 14, cy - 2, maxMp_ * 1.8f, 12, mp_ / maxMp_, mp_ / maxMp_, pc, 0, 10);
             uiText(ui, right - 14 - maxMp_ * 1.8f - 12, cy - 6, 14, "PODER", pc, FontFace::Title, Align::Right);
         }
-        if (shadowMode_ ? mp_ >= 60.0f : mp_ >= maxMp_ && powers_.nova) {  // técnica de V lista
+        if (!shadowMode_ && mp_ >= maxMp_ && powers_.nova) {  // la Supernova está lista
             float pulse = 0.6f + 0.4f * std::sin(time_ * 6.0f);
-            uiText(ui, right - 60, cy + 26, 15, shadowMode_ ? "V · AGUJERO NEGRO" : "V · SUPERNOVA",
-                   withAlpha(shadowMode_ ? rgba(190, 150, 255) : rgba(255, 230, 150), pulse), FontFace::Title, Align::Right, pulse);
+            uiText(ui, right - 60, cy + 30, 15, "5 · SUPERNOVA", withAlpha(rgba(255, 230, 150), pulse), FontFace::Title, Align::Right, pulse);
         }
         // La mitad activa (Z cambia, cuando la sombra ya ha despertado).
         if (shadowUnlocked_) {
@@ -268,7 +267,8 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
         uiText(ui, w - 180 + textWidth(buf, 22, FontFace::Title) + 8, cy + 40, 14, "LUM", kUiDim, FontFace::Title);
     }
 
-    // Menú de comandos abajo a la izquierda: magias (1-3) y atajos de objetos (4-6).
+    // Menú de comandos abajo a la izquierda: técnicas de la mitad activa (1-5) y atajos de
+    // objetos (6-8).
     if (powers_.techniques) {
         const float x = 28, rowH = 34, width = 300;
         float y0 = h - 30 - rowH * float(kCommandCount) - 40;
@@ -280,14 +280,16 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
             char name[64], value[32];
             bool usable;
             uint32_t accent;
-            if (i < 3) {
-                const SpellDef& s = spellDef(Spell(i));
+            if (i < kSpellSlots) {
+                Spell sp = modeSpell(shadowMode_, i);
+                const SpellDef& s = spellDef(sp);
                 std::snprintf(name, sizeof(name), "%s", s.name);
-                std::snprintf(value, sizeof(value), "%d poder", int(s.cost));
-                usable = mp_ >= s.cost;
+                if (sp == Spell::Nova) std::snprintf(value, sizeof(value), "todo el poder");
+                else std::snprintf(value, sizeof(value), "%d poder", int(s.cost));
+                usable = sp == Spell::Nova ? mp_ >= maxMp_ && powers_.nova : mp_ >= s.cost;
                 accent = s.color;
             } else {
-                ItemId id = inv_.quick[i - 3];
+                ItemId id = inv_.quick[i - kSpellSlots];
                 std::snprintf(name, sizeof(name), "%s", itemName(id));
                 std::snprintf(value, sizeof(value), "×%d", inv_.count(id));
                 usable = inv_.count(id) > 0;
@@ -306,8 +308,8 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
         }
         const char* help = inLight_ ? "DENTRO DE LA LUZ · Q saltar a la fuente señalada · R elegir fuente · Clic emboscada · Espacio salir"
                            : lock_ >= 0 ? "Clic atacar · R soltar objetivo · Clic central cambiar de objetivo · C esquivar · Shift correr"
-                           : shadowMode_ ? "SOMBRA · Q en la oscuridad: fundirte · Rompe farolas a golpes o apágalas (F en su interruptor) · V agujero negro · Z luz"
-                                        : "Clic atacar · Q junto a una farola: entrar en la luz · R fijar · V supernova · C esquivar · Shift correr";
+                           : shadowMode_ ? "SOMBRA · Q en la oscuridad: fundirte · Rompe farolas a golpes o apágalas (F en su interruptor) · Z luz"
+                                        : "Clic atacar · Q junto a una farola: entrar en la luz · R fijar · C esquivar · Shift correr";
         skewRect(d, x - 6, h - 30, x + 20 + textWidth(help, 14), h - 8, 6, kUiPanel);
         uiText(ui, x, h - 28, 14, help, kUiDim);
     }

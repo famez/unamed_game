@@ -69,11 +69,10 @@ Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena i
 | C / Ctrl | Voltereta de esquiva (invulnerable); un golpe justo después es un **contraataque** |
 | Q | **Luz**: junto a una farola, **entrar en ella**; dentro, saltar a otra fuente. **Sombra**: en la oscuridad, **fundirse** con el suelo |
 | Portal / Z | Cambiar entre **luz y sombra** cruzando un portal (Z en los niveles sin historia) |
-| V | **Supernova** (luz, con el Poder lleno) · **Agujero negro** (sombra, 60 de Poder) |
 | G | **Transformarse** (con un núcleo) |
 | T | **Invocar compañero** (chispa aliada o el eco de Nora) |
 | R | Fijar objetivo / **soltarlo** (dentro de una fuente: elegir a qué fuente saltar) · clic central: siguiente objetivo · X: soltar |
-| 1 2 3 · 4 5 6 · Rueda + E | Técnicas de luz · atajos de objetos · menú de comandos |
+| 1-5 · 6 7 8 · Rueda + E | Técnicas de la mitad activa · atajos de objetos · menú de comandos |
 | F | Interactuar: cápsulas, nodos, faroles, espejos, objetos e **interruptores de farolas** |
 | Tab / I | Inventario y **taller** (pausa) |
 | Esc / P | Pausa: sensibilidad, calidad gráfica, reiniciar, salir |
@@ -95,7 +94,13 @@ Especiales de combate: atacar corriendo = **embestida**; atacar con la guardia =
   - **Sombra**: la oscuridad es donde no llega la luz de ninguna farola encendida, nodo o farol
     (se ve claramente más oscura). Q en la oscuridad **funde** al protagonista con el suelo: se
     mueve rápido e invisible por la zona oscura, la luz no le deja pasar y gasta Poder. Sale con
-    Q o Espacio, o con el clic en emboscada. **Agujero negro** (V, 60 de Poder).
+    Q o Espacio, o con el clic en emboscada.
+  - **Técnicas** (1-5), distintas en cada mitad:
+    - Luz: *Lanza de luz* (persigue), *Refracción* (tres esquirlas que congelan), *Calidez*
+      (cura), *Estallido solar* (bola en arco que estalla y lanza por los aires) y *Supernova*
+      (con el Poder lleno).
+    - Sombra: *Púas de sombra* (recorren el suelo y lanzan), *Cadenas del vacío* (inmovilizan a
+      los de alrededor), *Drenar* (roba vida), *Mina oscura* (implosiona fuerte) y *Agujero negro*.
   - **Crear sombra**: las farolas se **rompen a golpes** (y ya no se arreglan) o se apagan y
     encienden con su **interruptor** (F), que suele estar apartado de ellas.
   - Se cambia de luz a sombra **cruzando un portal** (en los niveles sin historia, también con Z).

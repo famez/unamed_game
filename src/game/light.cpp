@@ -4,7 +4,7 @@
 //     cuando quiere (Espacio) o cae sobre el Gris más cercano (clic: emboscada). Dentro no le
 //     ven ni le hieren y la farola alumbra más (los Grises de debajo se debilitan).
 //   - Entrar y saltar gasta Poder (la única barra: se llena con pociones y orbes).
-//   - Supernova (V con el Poder lleno): explosión de área que devuelve croma.
+//   - Supernova (técnica 5, con el Poder lleno): explosión de área que devuelve croma.
 
 #include "game/game.h"
 
@@ -183,17 +183,6 @@ void Game::updateLight(float dt, const Controls& c) {
         if (lightHint_ <= 0) {
             notify("Acércate a una farola encendida para entrar en su luz", rgba(200, 200, 215));
             lightHint_ = 2.5f;
-        }
-    }
-
-    // Supernova.
-    if (c.nova) {
-        if (mp_ < maxMp_) {
-            notify("La Supernova necesita el Poder lleno", rgba(200, 200, 215));
-        } else if (hero_.cast(hero_.yaw)) {
-            mp_ = 0;
-            pendingNova_ = true;
-            uiSound(Sfx::Echo, 1.0f, 0.8f);
         }
     }
 }

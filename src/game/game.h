@@ -57,7 +57,6 @@ struct Controls {
     Vec3 aimOrigin, aimDir{0, 0, 1};  // rayo de la cámara (para apuntar a fuentes de luz)
     bool sprint = false;       // mantener: correr
     bool light = false;        // Q: entrar en la fuente de luz de al lado / saltar a otra / fundirse en la sombra
-    bool nova = false;         // V con el Poder lleno: Supernova (en la sombra, agujero negro)
     bool transform = false;    // G: transformarse (con un núcleo)
     bool summon = false;       // T: invocar un compañero
     bool swapMode = false;     // Z: cambiar entre luz y sombra
@@ -71,16 +70,22 @@ struct ViewInfo {
     int width = 1, height = 1;
 };
 
-enum class Spell { Fire, Ice, Cure, Count };
+// Técnicas, cinco por mitad, en el menú de comandos (1-5, o rueda + E). Luz: lanza que
+// persigue, tres esquirlas que congelan, curación, una bola que estalla y la Supernova (con
+// el Poder lleno). Sombra: púas que recorren el suelo y lanzan por los aires, cadenas que
+// inmovilizan alrededor, drenar vida, una mina que implosiona y el agujero negro.
+enum class Spell { Fire, Ice, Cure, Burst, Nova, Spikes, Chains, Drain, DarkBomb, Hole, Count };
 
 struct SpellDef {
     const char* name;
-    float cost;  // PM
+    float cost;  // Poder (la Supernova pide la barra llena y la gasta entera)
     uint32_t color;
 };
 const SpellDef& spellDef(Spell s);
+constexpr int kSpellSlots = 5;
+Spell modeSpell(bool shadow, int slot);
 
-enum class ProjectileKind { Fire, Ice, EnemyOrb, Wave };
+enum class ProjectileKind { Fire, Ice, EnemyOrb, Wave, Burst, Spikes };
 
 struct Projectile {
     ProjectileKind kind;
@@ -315,10 +320,12 @@ struct Portal {
     bool inside = false;
 };
 
-// Agujero negro (V en modo sombra): atrae a los enemigos y los proyectiles y acaba en implosión.
+// Agujero negro (técnica de la sombra): atrae a los enemigos y los proyectiles y acaba en
+// implosión. La mina oscura es uno pequeño y rápido que estalla con más fuerza.
 struct BlackHole {
     Vec3 pos;
     float life = 0, age = 0;
+    bool bomb = false;
 };
 
 // Poderes: la historia los va devolviendo (sin guion, todos desde el principio).
@@ -374,7 +381,7 @@ struct Decor {
 
 class Game {
 public:
-    static constexpr int kCommandCount = 3 + Inventory::kQuickSlots;  // magias + atajos de objetos
+    static constexpr int kCommandCount = kSpellSlots + Inventory::kQuickSlots;  // técnicas + atajos de objetos
 
     // `assetDir`: carpeta assets (para cargar el guion). Sin ella no hay historia: el
     // juego empieza directamente con las oleadas (lo usan los tests).
@@ -576,7 +583,8 @@ private:
     void endDive(bool ambush);
     void constrainDive();
     void relightLamp(int lamp);
-    void spawnBlackHole();
+    Vec3 spellSpot(float range) const;  // dónde cae una técnica: el objetivo o delante
+    void explodeBurst(Vec3 point);
     void updateBlackHoles(float dt);
     int nearLamp(float range, bool lit) const;
     float familyDamage(const Enemy& e) const;
@@ -657,7 +665,6 @@ private:
     float guardFlash_ = 0;    // destello de bloqueo (perfecto = más fuerte)
     bool perfectGuard_ = false;
     Spell pendingSpell_ = Spell::Fire;  // la que sale al llegar el impacto del Cast
-    bool pendingNova_ = false;          // el Cast en curso es la Supernova
     float novaFlash_ = 0;
     std::vector<LightPoint> lightPoints_;
     int lightTarget_ = -1;

@@ -66,11 +66,10 @@ Controls Game::filterControls(const Controls& in) const {
     if (!p.sprint) c.sprint = false;
     if (!shadowMode_) {
         if (!p.light) c.light = false;
-        if (!p.nova) c.nova = false;
     }
     if (!p.techniques) {
-        if (c.command >= 0 && c.command < 3) c.command = -1;
-        if (commandSel_ < 3) c.runCommand = false;
+        if (c.command >= 0 && c.command < kSpellSlots) c.command = -1;
+        if (commandSel_ < kSpellSlots) c.runCommand = false;
         c.summon = false;
     }
     return c;
@@ -253,7 +252,7 @@ void Game::updateCinema(float dt, const Controls& c) {
                         (a == "entrar" && inLight_) ||
                         (a == "salir" && !inLight_ && !travel_ && t.age > 0.5f) ||
                         (a == "saltar_luz" && travel_ && travelMode_ == 0 && t.age > 0.5f) || (a == "cambiar" && shadowMode_) ||
-                        (a == "fundirse" && diving_) || (a == "girar" && c.interact) || (a == "supernova" && c.nova) ||
+                        (a == "fundirse" && diving_) || (a == "girar" && c.interact) || (a == "supernova" && novaFlash_ > 0) ||
                         (a == "fijar" && lock_ >= 0) || t.age > 40.0f;
             if (done) t.doneTime = t.age;
         } else if (t.age - t.doneTime > 0.8f) {

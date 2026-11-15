@@ -6,8 +6,7 @@
 //   - Fundirse (Q en la oscuridad): el protagonista se hace sombra en el suelo y se mueve
 //     por toda la zona oscura, rápido e invisible; la luz no le deja pasar. Gasta Poder.
 //     Sale con Q o Espacio, o con el clic en emboscada sobre el enemigo más cercano.
-//   - Agujero negro (V, 60 de Poder): atrae a los enemigos y a sus proyectiles, los va
-//     deshaciendo y acaba en una implosión.
+//   - Técnicas de la sombra (combat.cpp): el agujero negro y la mina oscura se resuelven aquí.
 //   - Golpes cruzados: la sombra hiere más a los de luz; la luz, a los de sombra.
 
 #include "game/game.h"
@@ -18,7 +17,7 @@ namespace {
 constexpr float kSwapCooldown = 0.8f;
 constexpr float kDiveCost = 6.0f;          // Poder por segundo fundido en la sombra
 constexpr float kDiveSpeed = 1.7f;         // multiplicador de la carrera
-constexpr float kHoleCost = 60.0f, kHoleLife = 2.6f, kHolePull = 7.0f;
+constexpr float kHolePull = 7.0f, kBombPull = 4.0f;
 const uint32_t kShadowCol = rgba(150, 80, 255), kShadowDark = rgba(30, 16, 48);
 }  // namespace
 
@@ -272,10 +271,6 @@ void Game::updateShadow(float dt, const Controls& c) {
             lightHint_ = 2.5f;
         }
     }
-    if (c.nova) {
-        if (mp_ < kHoleCost) notify("El agujero negro necesita 60 de Poder", rgba(180, 160, 210));
-        else spawnBlackHole();
-    }
 }
 
 // Fundido con la sombra, la luz no deja pasar: si el movimiento le lleva a una zona
@@ -290,17 +285,6 @@ void Game::constrainDive() {
     }
 }
 
-void Game::spawnBlackHole() {
-    mp_ -= kHoleCost;
-    Vec3 at = hero_.body.pos + hero_.forward() * 3.5f + Vec3{0, 1.2f, 0};
-    Vec3 target;
-    if (lockTarget(target) && length(flat(target - hero_.body.pos)) < 12.0f) at = target + Vec3{0, 0.4f, 0};
-    holes_.push_back({at, kHoleLife, 0});
-    hero_.cast(hero_.yaw);
-    shake_ = std::max(shake_, 0.3f);
-    sound(Sfx::Echo, at, 1.0f, 0.45f);
-    sound(Sfx::WaveStart, at, 0.7f, 1.4f);
-}
 
 void Game::updateBlackHoles(float dt) {
     for (BlackHole& h : holes_) {
@@ -309,10 +293,10 @@ void Game::updateBlackHoles(float dt) {
             if (!e.targetable()) continue;
             Vec3 to = h.pos - e.center();
             float d = length(to);
-            if (d > kHolePull) continue;
-            float pull = (e.boss ? 0.4f : 1.0f) * std::min(6.0f, d * 2.5f);
+            if (d > (h.bomb ? kBombPull : kHolePull)) continue;
+            float pull = (e.boss ? 0.4f : 1.0f) * std::min(h.bomb ? 4.0f : 6.0f, d * 2.5f);
             e.knock = normalize(flat(to)) * pull;
-            if (d < 2.2f) {  // se van deshaciendo dentro
+            if (d < 2.2f && !h.bomb) {  // se van deshaciendo dentro
                 e.health -= 16.0f * dt * (e.def().shadow ? 0.8f : 1.5f);
                 if (!e.boss) {
                     e.state = AiState::Stagger;
@@ -333,17 +317,24 @@ void Game::updateBlackHoles(float dt) {
             particles_.push_back({from, (h.pos - from) * 2.2f, 0.45f, 0.45f, 0.07f, random01() < 0.5f ? kShadowCol : rgba(255, 230, 200),
                                   0, true});
         }
-        if (h.age >= h.life) {  // implosión
+        if (h.age >= h.life) {  // implosión (la mina, más fuerte y más ancha)
             const WeaponStats& w = inv_.weaponStats();
+            float radius = h.bomb ? 4.5f : 3.5f;
+            float damage = (w.power + inv_.powerBonus + levelPower()) * (h.bomb ? 3.5f : 3.0f) + w.magic;
             for (Enemy& e : enemies_) {
                 if (!e.targetable()) continue;
                 Vec3 to = flat(e.center() - h.pos);
-                if (length(to) > 3.5f + e.body.radius) continue;
-                hitEnemy(e, length(to) > 0.1f ? normalize(to) : Vec3{1, 0, 0}, (w.power + inv_.powerBonus) * 3.0f, 9.0f, 4.0f, true);
+                if (length(to) > radius + e.body.radius) continue;
+                hitEnemy(e, length(to) > 0.1f ? normalize(to) : Vec3{1, 0, 0}, damage, 9.0f, h.bomb ? 6.0f : 4.0f, true);
             }
-            spawnRing(Vec3{h.pos.x, groundHeight(h.pos) + 0.05f, h.pos.z}, 4.0f, 0.5f, kShadowCol);
+            for (Crate& cr : crates_)
+                if (!cr.broken && length(cr.box.center() - h.pos) < radius) breakCrate(cr);
+            Vec3 floor{h.pos.x, groundHeight(h.pos) + 0.05f, h.pos.z};
+            spawnRing(floor, radius + 0.5f, 0.5f, kShadowCol);
+            if (h.bomb) spawnRing(floor, radius * 0.6f, 0.35f, kShadowDark);
             spawnSparks(h.pos, {0, 1, 0}, 30, kShadowCol, 7.0f);
-            shake_ = std::max(shake_, 0.6f);
+            spawnSparks(h.pos, {0, 1, 0}, 16, kShadowDark, 5.0f, false);
+            shake_ = std::max(shake_, h.bomb ? 0.5f : 0.6f);
             hitStop_ = 0.1f;
             sound(Sfx::FireBoom, h.pos, 1.1f, 0.6f);
         }

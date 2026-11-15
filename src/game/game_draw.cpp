@@ -765,7 +765,7 @@ void Game::drawEffects(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Vi
     // Agujeros negros: una esfera de negrura con un borde violeta que gira y crece.
     for (const BlackHole& h : holes_) {
         float k = smoothstep01(h.age / 0.3f) * (1.0f - smoothstep01((h.age - h.life + 0.2f) / 0.2f));
-        float r = 0.65f * k;
+        float r = (h.bomb ? 0.35f + 0.15f * std::sin(h.age * 30.0f) : 0.65f) * k;
         if (!solid) {
             dd.circleXZ(h.pos, r + 0.3f, 20, rgba(150, 80, 255));
             continue;
@@ -923,6 +923,26 @@ void Game::drawEffects(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Vi
                 solid->ellipsoid(translate(p.pos) * basisY(d) * rotateY(time_ * 10.0f), {}, {0.06f, 0.2f, 0.06f}, col,
                                  Material::Glow);
                 glowDot(glow, view, p.pos, 0.2f, withAlpha(col, 0.4f));
+                break;
+            }
+            case ProjectileKind::Burst: {  // sol pequeño que gira, con su luz
+                solid->ellipsoid(translate(p.pos) * rotateY(time_ * 8.0f), {}, {0.26f, 0.26f, 0.26f}, rgba(255, 236, 190), Material::Glow);
+                solid->light(p.pos, Vec3{1.0f, 0.75f, 0.4f} * 4.0f, 6.0f);
+                glowDot(glow, view, p.pos, 0.8f, withAlpha(rgba(255, 190, 80), 0.6f));
+                glowStar(glow, view, p.pos, 0.7f, time_ * 5.0f, withAlpha(rgba(255, 240, 200), 0.7f));
+                break;
+            }
+            case ProjectileKind::Spikes: {  // un abanico de púas negras que salen del suelo
+                Vec3 d = normalize(flat(p.vel)), sd{-d.z, 0, d.x};
+                Vec3 ground = p.pos - Vec3{0, 0.9f, 0};
+                for (int k = -2; k <= 2; ++k) {
+                    float hgt = 0.6f + 0.35f * float(2 - std::abs(k)) + 0.1f * std::sin(time_ * 30.0f + float(k));
+                    Vec3 base = ground + sd * (0.35f * float(k)) - d * (0.25f * float(std::abs(k)));
+                    Vec3 tip = base + Vec3{0, hgt, 0} + d * 0.15f;
+                    solid->ellipsoid(translate((base + tip) * 0.5f) * basisY(normalize(tip - base)), {}, {0.09f, hgt * 0.55f, 0.09f},
+                                     rgba(26, 18, 40), Material::Stone);
+                    solid->ellipsoid(translate(tip), {}, {0.04f, 0.04f, 0.04f}, rgba(170, 100, 255), Material::Glow);
+                }
                 break;
             }
             case ProjectileKind::EnemyOrb:

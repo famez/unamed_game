@@ -326,9 +326,11 @@ void Game::updateProjectiles(float dt) {
         if (p.dead) continue;
         if ((p.life -= dt) <= 0) {
             if (p.kind == ProjectileKind::Fire) explodeFire(p.pos);
+            if (p.kind == ProjectileKind::Burst) explodeBurst(p.pos);
             p.dead = true;
             continue;
         }
+        if (p.kind == ProjectileKind::Burst) p.vel.y -= kGravity * dt;  // vuela en arco
         bool hostile = p.kind == ProjectileKind::EnemyOrb && !p.reflected;
         // Persecución suave del objetivo.
         float speed = length(p.vel);
@@ -345,6 +347,20 @@ void Game::updateProjectiles(float dt) {
         if (steer > 0) p.vel = normalize(p.vel + (normalize(goal - p.pos) * speed - p.vel) * std::min(1.0f, steer * dt)) * speed;
 
         Vec3 next = p.pos + p.vel * dt;
+        if (p.kind == ProjectileKind::Spikes) {  // púas: siguen el suelo y lanzan a cada Gris una vez
+            next.y = groundHeight(next + Vec3{0, 1.5f, 0}) + 0.9f;
+            const WeaponStats& w = inv_.weaponStats();
+            for (size_t i = 0; i < enemies_.size() && i < 32; ++i) {
+                Enemy& e = enemies_[i];
+                if (!e.targetable() || (p.hitMask & (1u << i)) || length(flat(e.body.pos - next)) > 1.3f + e.body.radius) continue;
+                p.hitMask |= 1u << i;
+                hitEnemy(e, normalize(flat(p.vel)), 8 + w.magic * 1.5f + (w.power + levelPower()) * 0.6f, 2.0f, 8.0f, true);
+            }
+            if (random01() < dt * 40.0f && particles_.size() < kMaxParticles)
+                particles_.push_back({next - Vec3{0, 0.85f, 0}, {0, 2.5f, 0}, 0.5f, 0.5f, 0.1f, rgba(30, 16, 48), 0, false});
+            p.pos = next;
+            continue;
+        }
         if (p.kind == ProjectileKind::Wave) {  // atraviesa: daña a cada Gris una sola vez
             for (size_t i = 0; i < enemies_.size() && i < 32; ++i) {
                 Enemy& e = enemies_[i];
@@ -383,6 +399,8 @@ void Game::updateProjectiles(float dt) {
                 float magic = inv_.weaponStats().magic;
                 if (p.kind == ProjectileKind::Fire) {
                     explodeFire(p.pos);
+                } else if (p.kind == ProjectileKind::Burst) {
+                    explodeBurst(p.pos);
                 } else if (p.kind == ProjectileKind::Ice) {
                     hit->freeze = 3.0f;
                     hitEnemy(*hit, dir, 6 + magic, 2.0f, 0.5f, false);
@@ -399,6 +417,8 @@ void Game::updateProjectiles(float dt) {
             Vec3 point = p.pos + (next - p.pos) * h.t;
             if (p.kind == ProjectileKind::Fire)
                 explodeFire(point + h.normal * 0.1f);
+            else if (p.kind == ProjectileKind::Burst)
+                explodeBurst(point + h.normal * 0.1f);
             else
                 spawnSparks(point, h.normal, 8, p.kind == ProjectileKind::Ice ? rgba(180, 240, 255) : rgba(255, 180, 240), 2.5f);
             p.dead = true;
@@ -408,6 +428,35 @@ void Game::updateProjectiles(float dt) {
     }
     projectiles_.erase(std::remove_if(projectiles_.begin(), projectiles_.end(), [](const Projectile& p) { return p.dead; }),
                        projectiles_.end());
+}
+
+// Estallido solar: una explosión grande que lanza a todos por los aires y deja una bola de
+// fuego volumétrico un instante.
+void Game::explodeBurst(Vec3 point) {
+    const float radius = 4.5f;
+    const WeaponStats& w = inv_.weaponStats();
+    Vec3 floor{point.x, groundHeight(point + Vec3{0, 0.5f, 0}) + 0.05f, point.z};
+    sound(Sfx::FireBoom, point, 1.1f, 0.85f);
+    spawnRing(floor, radius + 0.8f, 0.6f, rgba(255, 245, 210));
+    spawnRing(floor, radius * 0.6f, 0.45f, rgba(255, 170, 60));
+    spawnSparks(point, {0, 1, 0}, 40, rgba(255, 220, 140), 8.0f);
+    blasts_.push_back({point, 0, 1.8f, random01() * 10.0f});
+    shake_ = std::max(shake_, 0.45f);
+    hitStop_ = std::max(hitStop_, 0.06f);
+    for (Enemy& e : enemies_) {
+        if (!e.targetable()) continue;
+        Vec3 to = e.center() - point;
+        float d = length(to);
+        if (d > radius + e.body.radius) continue;
+        float falloff = 1.0f - 0.5f * clampf(d / radius, 0, 1);
+        Vec3 dir = normalize(flat(to));
+        if (length(dir) < 0.5f) dir = hero_.forward();
+        hitEnemy(e, dir, (14 + w.magic * 3.0f + (w.power + levelPower()) * 0.5f) * falloff, 9.0f, 6.0f, true);
+    }
+    for (Crate& c : crates_)
+        if (!c.broken && length(c.box.center() - point) < radius) breakCrate(c);
+    for (size_t i = 0; i < lamps_.size(); ++i)  // también revienta las farolas que pille
+        if (!lamps_[i].broken && length(lamps_[i].pos - point) < radius * 0.8f) hitLamp(int(i), 3.0f);
 }
 
 void Game::explodeFire(Vec3 point) {

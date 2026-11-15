@@ -38,10 +38,19 @@ const HitParams kHits[int(Move::Count)] = {
     {2.6f, 1.6f, -1.0f,  9.0f, 6.0f, true},   // Quake: salto y martillazo que agrieta el suelo
 };
 const SpellDef kSpells[int(Spell::Count)] = {
-    {"Lanza de luz", 20, rgba(255, 230, 150)},
-    {"Refracción", 15, rgba(120, 220, 255)},
-    {"Calidez", 35, rgba(255, 160, 200)},
+    {"Lanza de luz",       20, rgba(255, 230, 150)},
+    {"Refracción",         15, rgba(120, 220, 255)},
+    {"Calidez",            35, rgba(255, 160, 200)},
+    {"Estallido solar",    30, rgba(255, 190, 80)},
+    {"Supernova",         100, rgba(255, 250, 220)},
+    {"Púas de sombra",     20, rgba(170, 100, 255)},
+    {"Cadenas del vacío",  25, rgba(120, 90, 200)},
+    {"Drenar",             20, rgba(220, 70, 140)},
+    {"Mina oscura",        30, rgba(140, 60, 255)},
+    {"Agujero negro",      60, rgba(90, 40, 200)},
 };
+const Spell kLightSpells[kSpellSlots] = {Spell::Fire, Spell::Ice, Spell::Cure, Spell::Burst, Spell::Nova};
+const Spell kShadowSpells[kSpellSlots] = {Spell::Spikes, Spell::Chains, Spell::Drain, Spell::DarkBomb, Spell::Hole};
 // clang-format on
 
 constexpr float kInvulnAfterHit = 0.8f;
@@ -54,6 +63,7 @@ uint32_t enemyColor(EnemyKind k) { return enemyDef(k).shadow ? rgba(150, 80, 255
 }  // namespace
 
 const SpellDef& spellDef(Spell s) { return kSpells[int(s)]; }
+Spell modeSpell(bool shadow, int slot) { return (shadow ? kShadowSpells : kLightSpells)[slot]; }
 
 // Enemigo preferido en la dirección `dir`: cerca y por delante.
 int Game::pickTarget(Vec3 dir, float range) const {
@@ -147,11 +157,11 @@ bool Game::heroAttack(Vec3 moveInput) {
 }
 
 void Game::runCommand(int index) {
-    if (index < 3) {
-        castSpell(Spell(index));
+    if (index < kSpellSlots) {
+        castSpell(modeSpell(shadowMode_, index));
         return;
     }
-    ItemId id = inv_.quick[index - 3];
+    ItemId id = inv_.quick[index - kSpellSlots];
     if (inv_.count(id) <= 0) {
         notify(std::string("No te queda: ") + itemName(id), rgba(180, 180, 190));
         return;
@@ -161,21 +171,23 @@ void Game::runCommand(int index) {
 
 bool Game::castSpell(Spell s) {
     const SpellDef& d = spellDef(s);
-    if (mp_ < d.cost) {
-        notify("Falta Poder", rgba(190, 160, 255));
+    if (s == Spell::Nova && !powers_.nova) return false;
+    float cost = s == Spell::Nova ? maxMp_ : d.cost;  // la Supernova pide la barra llena
+    if (mp_ < cost) {
+        notify(s == Spell::Nova ? "La Supernova necesita el Poder lleno" : "Falta Poder", rgba(190, 160, 255));
         return false;
     }
     Vec3 dir = hero_.forward();
     int t = lock_ >= 0 ? lock_ : pickTarget(dir, 18.0f);
     float yaw = hero_.yaw;
-    if (t >= 0 && s != Spell::Cure) {
+    if (t >= 0 && s != Spell::Cure && s != Spell::Nova && s != Spell::Chains) {
         Vec3 to = flat(enemies_[size_t(t)].body.pos - hero_.body.pos);
         if (length(to) > 1e-3f) yaw = std::atan2(to.x, to.z);
     }
     if (!hero_.cast(yaw)) return false;
-    mp_ -= d.cost;
+    mp_ -= cost;
     pendingSpell_ = s;
-    pendingNova_ = false;
+    if (s == Spell::Nova || s == Spell::Hole) uiSound(Sfx::Echo, 1.0f, s == Spell::Nova ? 0.8f : 0.45f);
     return true;
 }
 
@@ -226,18 +238,106 @@ void Game::castImpact(Spell s) {
             }
             break;
         }
+        case Spell::Burst: {  // bola que vuela en arco y estalla al tocar algo
+            sound(Sfx::Fire, origin, 1.0f, 0.7f);
+            Vec3 to = spellSpot(20.0f) - origin;
+            float d = length(flat(to));
+            Vec3 v = flat(to) * (1.0f / std::max(d, 0.1f)) * 13.0f;
+            v.y = clampf(0.5f * kGravity * (d / 13.0f) + to.y / std::max(d / 13.0f, 0.2f), 2.0f, 9.0f);
+            Projectile p{ProjectileKind::Burst, origin, v, 2.5f, -1};
+            p.seed = random01() * 100.0f;
+            projectiles_.push_back(p);
+            spawnSparks(origin, fwd, 12, rgba(255, 200, 100), 3.0f);
+            break;
+        }
+        case Spell::Nova: supernova(); break;
+        case Spell::Spikes: {  // púas que salen del suelo en línea y lanzan por los aires
+            Vec3 start = hero_.body.pos + fwd * 0.8f;
+            start.y = groundHeight(start + Vec3{0, 1, 0});
+            Vec3 dir = normalize(flat(aim));
+            if (length(dir) < 0.5f) dir = fwd;
+            Projectile p{ProjectileKind::Spikes, start + Vec3{0, 0.9f, 0}, dir * 15.0f, 0.9f, -1};
+            projectiles_.push_back(p);
+            sound(Sfx::Hammer, start, 0.8f, 0.6f);
+            shake_ = std::max(shake_, 0.15f);
+            break;
+        }
+        case Spell::Chains: {  // cadenas desde el suelo: todos los de alrededor, quietos un rato
+            Vec3 base = hero_.body.pos;
+            int caught = 0;
+            for (Enemy& e : enemies_) {
+                if (!e.targetable() || length(flat(e.body.pos - base)) > 7.0f) continue;
+                hitEnemy(e, normalize(flat(e.body.pos - base)), 4 + w.magic * 0.5f, 0, 0, false);
+                if (!e.boss && e.alive()) {
+                    e.state = AiState::Stagger;
+                    e.stateTime = -2.2f;  // el aturdimiento dura ~2,6 s
+                }
+                Vec3 c = e.center();
+                for (int k = 0; k < 10 && particles_.size() < kMaxParticles; ++k) {  // eslabones del suelo al Gris
+                    float t = float(k) / 10.0f;
+                    Vec3 floor{c.x + std::cos(float(k)) * 0.8f, groundHeight(c), c.z + std::sin(float(k)) * 0.8f};
+                    particles_.push_back({floor + (c - floor) * t, {0, 0, 0}, 1.2f, 1.2f, 0.07f, k % 2 ? spellDef(s).color : rgba(30, 16, 48),
+                                          0, true});
+                }
+                ++caught;
+            }
+            spawnRing(base + Vec3{0, 0.05f, 0}, 7.0f, 0.6f, spellDef(s).color);
+            spawnRing(base + Vec3{0, 0.06f, 0}, 4.0f, 0.5f, rgba(30, 16, 48));
+            sound(Sfx::WaveStart, base, 0.8f, 0.6f);
+            if (caught == 0) notify("No hay nadie a quien encadenar", rgba(180, 160, 210));
+            break;
+        }
+        case Spell::Drain: {  // le roba vida al Gris señalado y se la queda
+            int target = t >= 0 ? t : pickTarget(fwd, 10.0f);
+            if (target < 0) {
+                notify("No hay nadie cerca a quien drenar", rgba(180, 160, 210));
+                break;
+            }
+            Enemy& e = enemies_[size_t(target)];
+            float dmg = 10 + w.magic * 2.0f + (w.power + levelPower()) * 0.8f;
+            Vec3 c = e.center(), chest = hero_.body.pos + Vec3{0, 1.0f, 0};
+            hitEnemy(e, normalize(flat(c - chest)), dmg, 1.0f, 0.5f, false);
+            heal(dmg * 0.6f, 0);
+            for (int k = 0; k < 30 && particles_.size() < kMaxParticles; ++k) {
+                Vec3 from = c + Vec3{randRange(-0.3f, 0.3f), randRange(-0.3f, 0.3f), randRange(-0.3f, 0.3f)};
+                particles_.push_back({from, (chest - from) * randRange(1.5f, 2.6f), 0.5f, 0.5f, 0.07f,
+                                      k % 3 ? spellDef(s).color : rgba(255, 200, 220), 0, true});
+            }
+            sound(Sfx::Cure, chest, 0.7f, 0.6f);
+            break;
+        }
+        case Spell::DarkBomb: {
+            Vec3 at = spellSpot(14.0f) + Vec3{0, 0.6f, 0};
+            holes_.push_back({at, 1.0f, 0, true});
+            sound(Sfx::WaveStart, at, 0.6f, 1.6f);
+            break;
+        }
+        case Spell::Hole: {
+            Vec3 at = spellSpot(12.0f) + Vec3{0, 1.2f, 0};
+            holes_.push_back({at, 2.6f, 0, false});
+            shake_ = std::max(shake_, 0.3f);
+            sound(Sfx::WaveStart, at, 0.7f, 1.4f);
+            break;
+        }
         case Spell::Count: break;
     }
 }
 
+// Dónde cae una técnica de área: en el objetivo (fijado o el que hay delante) o, si no hay
+// ninguno, unos metros delante, en el suelo.
+Vec3 Game::spellSpot(float range) const {
+    int t = lock_ >= 0 ? lock_ : pickTarget(hero_.forward(), range);
+    if (t >= 0) {
+        Vec3 c = enemies_[size_t(t)].body.pos;
+        return {c.x, groundHeight(c + Vec3{0, 1, 0}), c.z};
+    }
+    Vec3 p = hero_.body.pos + hero_.forward() * 4.0f;
+    return {p.x, groundHeight(p + Vec3{0, 1, 0}), p.z};
+}
+
 void Game::resolveImpact(Move m) {
     if (m == Move::Cast) {
-        if (pendingNova_) {
-            pendingNova_ = false;
-            supernova();
-        } else {
-            castImpact(pendingSpell_);
-        }
+        castImpact(pendingSpell_);
         return;
     }
     const WeaponStats& w = inv_.weaponStats();

@@ -46,7 +46,7 @@ struct OrbitCamera {
 struct PendingInput {
     bool jump = false, attack = false, dodge = false, lockOn = false, nextTarget = false, unlock = false, interact = false;
     bool advance = false;  // pasar la línea de diálogo
-    bool light = false, nova = false, transform = false, summon = false, swapMode = false;
+    bool light = false, transform = false, summon = false, swapMode = false;
     bool runCommand = false;
     int command = -1, scroll = 0;
 };
@@ -380,7 +380,6 @@ int main(int argc, char** argv) {
                 pending.unlock |= input.wasPressed(Key::X);
                 pending.interact |= input.wasPressed(Key::F);
                 pending.runCommand |= input.wasPressed(Key::E);
-                pending.nova |= input.wasPressed(Key::V);
                 pending.transform |= input.wasPressed(Key::G);
                 pending.summon |= input.wasPressed(Key::T);
                 pending.swapMode |= input.wasPressed(Key::Z);
@@ -388,7 +387,7 @@ int main(int argc, char** argv) {
                 pending.light |= input.wasPressed(Key::Q);
             }
             pending.scroll -= int(input.wheel);  // rueda arriba = entrada de arriba
-            const Key slotKeys[] = {Key::N1, Key::N2, Key::N3, Key::N4, Key::N5, Key::N6};
+            const Key slotKeys[] = {Key::N1, Key::N2, Key::N3, Key::N4, Key::N5, Key::N6, Key::N7, Key::N8};
             for (int i = 0; i < Game::kCommandCount; ++i)
                 if (input.wasPressed(slotKeys[i])) pending.command = i;
             guardHeld = captured && input.mouseRight;
@@ -429,7 +428,6 @@ int main(int argc, char** argv) {
                 c.advance = pending.advance;
                 c.sprint = playing && input.isDown(Key::Shift);
                 c.light = pending.light;
-                c.nova = pending.nova;
                 c.transform = pending.transform;
                 c.summon = pending.summon;
                 c.swapMode = pending.swapMode;
@@ -475,7 +473,7 @@ int main(int argc, char** argv) {
                     if (turnsBot || swapBot) {
                     } else if (game.testMode() != TestMode::None) {
                         c.swapMode = botStep == 30;
-                        c.nova = c.nova || botStep % 240 == 120;
+                        if (botStep % 240 == 120) c.command = 4;  // la técnica grande de cada mitad
                     }
                 }
                 game.update(float(kFixedDt), c);
