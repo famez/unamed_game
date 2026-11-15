@@ -5,6 +5,10 @@
 enum class Sfx {
     Slash, Whip, Hammer, Hit, HitHeavy, Jump, Dodge, Guard, PerfectGuard, HeroHurt, EnemyWindup, EnemyDie,
     Pickup, Coin, ItemGet, Fire, FireBoom, Ice, Cure, Chest, Crate, WaveStart, Echo, Blip, MenuMove, MenuOk,
+    // Voz de la protagonista (síntesis por formantes). Vela (luz): aguda, limpia, inocente;
+    // Hollín (sombra): grave, ronca, burlona.
+    VelaAttack1, VelaAttack2, VelaFinisher, VelaJump, VelaHurt, VelaDodge,
+    HollinAttack1, HollinAttack2, HollinFinisher, HollinJump, HollinHurt, HollinDodge, HollinLaugh,
     Count
 };
 

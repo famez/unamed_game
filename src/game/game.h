@@ -661,6 +661,10 @@ private:
     void updateStory(float dt);
     void updateBrizna(float dt);
     void sound(Sfx id, Vec3 pos, float gain = 1, float pitch = 1);
+    // Voz de la protagonista: la de Vela en la luz y la de Hollín en la sombra. `chance`: con
+    // qué probabilidad suena (los golpes normales no siempre gritan).
+    enum class VoiceLine { Attack, Finisher, Jump, Hurt, Dodge, Laugh };
+    void voice(VoiceLine line, float chance = 1);
     void uiSound(Sfx id, float gain = 1, float pitch = 1);
     void defeatHero();
     void respawnHero();
@@ -719,6 +723,8 @@ private:
     float heroFlash_ = 0;
     float guardFlash_ = 0;    // destello de bloqueo (perfecto = más fuerte)
     bool perfectGuard_ = false;
+    float voiceCooldown_ = 0;
+    Move voicedMove_ = Move::None;  // el último golpe que ya ha tenido su grito
     // Súper contraataque: tras un bloqueo perfecto el atacante queda aturdido y, si se ataca
     // a tiempo, el protagonista encadena solo una ráfaga de golpes con el doble de daño.
     float riposteWindow_ = 0;

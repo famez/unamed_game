@@ -42,6 +42,8 @@ bool Game::startForm(Form f) {
         return false;
     }
     mp_ -= kFormCost;
+    voiceCooldown_ = 0;
+    voice(VoiceLine::Finisher);
     form_ = f;
     formTime_ = kFormDuration;
     applyWeapon();

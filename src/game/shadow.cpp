@@ -96,6 +96,7 @@ void Game::hitLamp(int i, float damage) {
     sound(Sfx::Hit, l.pos, 0.6f, 1.4f);
     if (l.hp > 0) return;
     l.broken = true;
+    if (shadowMode_ && length(flat(l.pos - hero_.body.pos)) < 4.0f) voice(VoiceLine::Laugh, 0.7f);  // odia su zumbido
     l.on = false;
     l.energy = 0;
     if (hostLamp_ == i && inLight_) leaveLight(false);

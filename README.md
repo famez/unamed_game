@@ -31,9 +31,15 @@ instrumentos, y melodías generadas por frases a partir de la armonía); cada pi
 sincronizadas cuyo volumen decide el juego: el **colchón** siempre, la **melodía** cuando
 vuelve el color, el **pulso** (bajo y percusión) en combate y el **brillo** (arpegio) cuando
 la ciudad ya brilla. Se genera la primera vez en segundo plano (~2 s) y se guarda en
-`~/.cache/unamed_game/`. Los 26 efectos se generan al arrancar: golpes en capas (chasquido de
+`~/.cache/unamed_game/`. Los 39 efectos se generan al arrancar: golpes en capas (chasquido de
 impacto, cuerpo grave, crujido y timbre metálico, con saturación), guardia, explosiones,
 enemigos que gruñen al preparar el ataque y se deshacen al morir, sin campanitas.
+
+**La voz de la protagonista** también es síntesis, por formantes (pulso glotal + aliento por
+resonadores en las vocales de una voz femenina): grita al golpear («¡ha!», «¡hya!»), en los
+remates y las transformaciones, al saltar, al esquivar y al recibir daño. **Vela** (luz) suena
+aguda, limpia e inocente; **Hollín** (sombra), grave, ronca y saturada, y se ríe («je, je, je»)
+al reventar una farola o rematar el súper contraataque.
 
 La salida usa PulseAudio/PipeWire cargado con `dlopen` en tiempo de ejecución: no hace falta
 ninguna cabecera para compilar y, si no está, el juego va en silencio.
@@ -55,7 +61,7 @@ Dependencias del sistema: `libOpenGL`/`libGLX` (glvnd + Mesa), `libX11` y `libXi
 (`sudo apt install libxi-dev`). Incluidas en el repositorio: `stb_truetype.h` y las
 fuentes Orbitron y Exo 2.
 
-Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena id` (reproduce una escena del guion), `--autoplay` (un bot combate solo, sin capturar el ratón), `--vitrina` (guion que enseña ataques, técnicas, formas y mecánicas), `--video fichero.mp4 [seg]` (graba a velocidad real con ffmpeg),
+Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena id` (reproduce una escena del guion), `--autoplay` (un bot combate solo, sin capturar el ratón), `--sombra` (empezar en modo sombra), `--vitrina` (guion que enseña ataques, técnicas, formas y mecánicas), `--video fichero.mp4 [seg]` (graba a velocidad real con ffmpeg),
 `--screenshot fichero.ppm segundos [frames]` (guarda frames y sale) y `--camyaw radianes`.
 
 ## Controles
@@ -164,6 +170,18 @@ sector del último golpe, botín como cruces) y encima de cada enemigo su estado
 
 ## Render
 
+- **La protagonista** sale de modelos `.glb` (`assets/models/vela.glb` en la luz y
+  `hollin.glb` en la sombra) que el juego lee al arrancar con un lector propio de glTF
+  binario (`src/render/glb.cpp`). Para cambiarlos o hacer otros basta con exportar un `.glb`
+  con la jerarquía de la ficha (`assets/models/FICHA_VELA_HOLLIN.md`): grupos con nombre de
+  hueso (`Hips > Spine > Neck > Head`, `Shoulder_L > UpperArm_L > LowerArm_L > Hand_L`,
+  `UpperLeg_L > LowerLeg_L > Foot_L`…), el pivote en la articulación, pose A, metros y
+  mirando a +Z. Cada malla se pega al hueso de su grupo; el torso y el faldón se reparten
+  entre varios huesos; `Ponytail`/`Mane`, `Ahoge`, `Scarf_Tail_Front/Back` y `Lantern` se
+  mueven por inercia; `Prop_Sword`/`Prop_Hammer` es el arma (agarre en el origen, hoja hacia
+  +Y). Los materiales emisivos brillan, `Hair*` lleva el brillo del pelo e `Iron`/`Gold*`
+  son metal. El farol brilla según la vida, y el retrato del HUD es el mismo modelo en vivo.
+  Sin los `.glb`, se usa el modelo de primitivas de siempre.
 - **Cuerpos continuos**: cada personaje se define con elipsoides y cápsulas pegados al
   esqueleto; al arrancar se funden (unión suave de funciones de distancia), se convierten en
   malla (*surface nets*) con pesos de hueso y la GPU la deforma (skinning). Contorno por
@@ -216,6 +234,8 @@ src/
     gl_util.h                    Ayudas internas del render
     shaders/                     GLSL (.vert/.frag/.glsl), metidos en el binario por CMake
     models.h/.cpp                Cuerpos continuos: primitivas → malla con skinning
+    glb.h/.cpp                   Lector de glTF binario (.glb): nodos, mallas y materiales
+    hero_model.h/.cpp            La protagonista desde .glb: huesos, piezas con inercia, arma
     debug_draw.h/.cpp            Lote de líneas/triángulos/puntos + shader mínimo; colores
     text.h/.cpp                  Fuentes SDF (Orbitron, Exo 2) con stb_truetype
   audio/

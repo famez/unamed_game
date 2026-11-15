@@ -1134,6 +1134,25 @@ int main() {
         CHECK(g.hero_.downTimer < 0 && g.hp_ == 100 && length(g.hero_.body.pos - g.heroStart_) < 0.1f,
               "reaparece en el inicio con la vida llena");
     }
+    {  // Voz: el remate grita con la voz de la mitad activa (Vela en la luz, Hollín en la sombra)
+        auto shout = [](Game& g, Sfx want) {
+            g.takeSounds();
+            g.voiceCooldown_ = 0;
+            g.hero_.forceMove(Move::Finisher, 0, 0);
+            g.update(dt, {});
+            bool heard = false;
+            for (const SoundEvent& e : g.takeSounds()) heard |= e.id == want;
+            return heard;
+        };
+        Game g = fresh();
+        g.unlockShadow();
+        CHECK(shout(g, Sfx::VelaFinisher), "en la luz, el remate suena con la voz de Vela");
+        run(g, 1.5f);
+        g.freePlay_ = true;
+        g.update(dt, press(&Controls::swapMode));
+        run(g, 1.0f);
+        CHECK(g.shadowMode() && shout(g, Sfx::HollinFinisher), "en la sombra, con la de Hollín");
+    }
     {  // Modelos de la protagonista (.glb): se leen y tienen la jerarquía de la ficha
         for (const char* name : {"vela", "hollin"}) {
             GlbFile f;

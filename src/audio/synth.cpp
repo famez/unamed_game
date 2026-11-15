@@ -429,6 +429,106 @@ Music renderMusic(TrackId id) {
 
 // --- Efectos de sonido ------------------------------------------------------------------
 
+// --- Voz: síntesis por formantes -------------------------------------------------------------
+// Un pulso glotal (Rosenberg, derivado: la radiación de los labios) a la frecuencia de la voz
+// más aliento (ruido), por resonadores en paralelo en los formantes de cada vocal. Las
+// consonantes son eso mismo sin voz (h, j), con la voz cortada a golpes (r vibrante) o un
+// chasquido (t).
+
+struct Phone {
+    float f1, f2, f3;
+    float dur;
+    float voiced = 1;  // 0 = solo aliento
+    float breath = 0;  // aliento añadido
+    float roll = 0;    // r vibrante: la voz se corta ~28 veces por segundo
+    float gain = 1;
+};
+// Vocales de una voz femenina (Hz).
+const float kA[3] = {900, 1400, 2900}, kE[3] = {560, 2100, 2950}, kI[3] = {330, 2700, 3300}, kO[3] = {560, 960, 2800},
+            kU[3] = {390, 900, 2700}, kAh[3] = {720, 1300, 2800};
+Phone ph(const float* v, float dur, float voiced = 1, float breath = 0, float roll = 0, float gain = 1) {
+    return {v[0], v[1], v[2], dur, voiced, breath, roll, gain};
+}
+
+struct VoiceStyle {
+    float f0[4];        // entonación: inicio, 30 %, 70 %, final (Hz)
+    float breathy = 0.1f;
+    float fry = 0;      // carraspeo: periodos alternos más flojos (subarmónico) y algo de jitter
+    float drive = 1;    // saturación (más cañera)
+    float bright = 1;   // peso del tercer y cuarto formante
+    float pan = 0;
+};
+
+struct Resonator {
+    float y1 = 0, y2 = 0;
+    float process(float x, float f, float bw) {
+        float r = std::exp(-3.14159f * bw / kSampleRate);
+        float a1 = 2.0f * r * std::cos(kTau * f / kSampleRate), a2 = -r * r;
+        float y = (1.0f - r) * x + a1 * y1 + a2 * y2;
+        y2 = y1;
+        y1 = y;
+        return y;
+    }
+};
+
+void voice(Track& t, Noise& nz, float start, const std::vector<Phone>& phones, const VoiceStyle& st, float gain) {
+    float total = 0;
+    for (const Phone& p : phones) total += p.dur;
+    size_t s0 = at(start), n = at(total);
+    std::vector<float> out(n, 0.0f);
+    Resonator r1, r2, r3, r4;
+    LowPass hp;
+    float phase = 0, prevG = 0, jit = 1;
+    int period = 0;
+    for (size_t i = 0; i < n; ++i) {
+        float tt = float(i) / kSampleRate, u = tt / total;
+        // Fonema actual y el siguiente (los formantes se deslizan en el último 35 % del fonema).
+        float acc = 0;
+        size_t k = 0;
+        while (k + 1 < phones.size() && tt > acc + phones[k].dur) acc += phones[k++].dur;
+        const Phone& a = phones[k];
+        const Phone& b = k + 1 < phones.size() ? phones[k + 1] : a;
+        float local = (tt - acc) / a.dur, m = smoothstep01((local - 0.65f) / 0.35f);
+        float f1 = lerpf(a.f1, b.f1, m), f2 = lerpf(a.f2, b.f2, m), f3 = lerpf(a.f3, b.f3, m);
+        float voiced = lerpf(a.voiced, b.voiced, m * 0.5f), breath = a.breath + st.breathy;
+        float pg = lerpf(a.gain, b.gain, m);
+        // Entonación por tramos.
+        const float knots[4] = {0, 0.3f, 0.7f, 1};
+        int seg = u < 0.3f ? 0 : u < 0.7f ? 1 : 2;
+        float f0 = lerpf(st.f0[seg], st.f0[seg + 1], smoothstep01((u - knots[seg]) / (knots[seg + 1] - knots[seg])));
+        f0 *= 1.0f + 0.012f * std::sin(kTau * 5.5f * tt);  // un poco de vibrato
+        phase += f0 * jit / kSampleRate;
+        if (phase >= 1.0f) {
+            phase -= 1.0f;
+            ++period;
+            jit = 1.0f + st.fry * 0.06f * nz.next();
+        }
+        // Pulso de Rosenberg: abre (40 %), cierra (16 %), cerrado el resto.
+        float g = phase < 0.4f ? 0.5f * (1.0f - std::cos(3.14159f * phase / 0.4f))
+                  : phase < 0.56f ? std::cos(1.5708f * (phase - 0.4f) / 0.16f) : 0.0f;
+        float dg = (g - prevG) * 18.0f;
+        prevG = g;
+        if (st.fry > 0 && (period & 1)) dg *= 1.0f - 0.55f * st.fry;
+        if (a.roll > 0) dg *= 0.35f + 0.65f * (0.5f + 0.5f * std::sin(kTau * 28.0f * tt));
+        float noise = nz.next();
+        float x = dg * voiced + noise * breath * 0.6f;
+        float y = r1.process(x, f1, 90) * 1.0f + r2.process(x, f2, 110) * 0.7f + r3.process(x, f3, 160) * 0.35f * st.bright +
+                  r4.process(x, 3900, 250) * 0.18f * st.bright;
+        y -= hp.process(y, 120.0f);  // sin retumbe
+        // Envolvente: ataque rápido y caída al final de la palabra.
+        float env = std::min(1.0f, tt / 0.012f) * std::min(1.0f, (total - tt) / 0.05f);
+        out[i] = y * env * pg;
+    }
+    float peak = 1e-6f;
+    for (float v : out) peak = std::max(peak, std::fabs(v));
+    float norm = 1.0f / std::tanh(st.drive);
+    for (size_t i = 0; i < n; ++i) {
+        float v = out[i] / peak;
+        if (st.drive > 1.0f) v = std::tanh(v * st.drive) * norm;
+        t.add(s0 + i, v * gain, st.pan);
+    }
+}
+
 StereoBuffer renderSfx(Sfx id) {
     Noise nz;
     nz.s = 777u + uint32_t(id) * 131u;
@@ -624,6 +724,57 @@ StereoBuffer renderSfx(Sfx id) {
         case Sfx::Blip: click(0, 0.25f); break;
         case Sfx::MenuMove: click(0, 0.3f); break;
         case Sfx::MenuOk: click(0, 0.45f); thump(0, 200, 120, 0.03f, 0.3f); break;
+        // --- Vela: aguda (360-480 Hz), limpia, con una sonrisa ---
+        case Sfx::VelaAttack1:  // «¡ha!»
+            voice(t, nz, 0, {ph(kA, 0.04f, 0, 0.5f), ph(kA, 0.13f)}, {{380, 430, 400, 330}, 0.08f}, 0.5f);
+            break;
+        case Sfx::VelaAttack2:  // «¡hya!»
+            voice(t, nz, 0, {ph(kI, 0.035f, 0, 0.5f), ph(kI, 0.04f), ph(kA, 0.12f)}, {{400, 450, 420, 340}, 0.08f}, 0.5f);
+            break;
+        case Sfx::VelaFinisher:  // «¡ha-yaaah!»
+            voice(t, nz, 0, {ph(kA, 0.04f, 0, 0.5f), ph(kA, 0.08f), ph(kI, 0.05f, 1, 0, 0, 0.7f), ph(kA, 0.3f)},
+                  {{370, 400, 480, 380}, 0.07f}, 0.55f);
+            wet = 0.12f;
+            break;
+        case Sfx::VelaJump:  // «¡hup!»
+            voice(t, nz, 0, {ph(kU, 0.03f, 0, 0.6f), ph(kU, 0.07f)}, {{420, 450, 460, 440}, 0.1f}, 0.35f);
+            break;
+        case Sfx::VelaHurt:  // «¡ah!» que cae
+            voice(t, nz, 0, {ph(kAh, 0.04f, 0.6f, 0.3f), ph(kA, 0.17f, 1, 0.1f)}, {{500, 470, 360, 290}, 0.2f}, 0.5f);
+            break;
+        case Sfx::VelaDodge:  // resoplido corto
+            voice(t, nz, 0, {ph(kU, 0.07f, 0, 0.8f), ph(kU, 0.04f, 0.3f, 0.3f)}, {{400, 400, 380, 360}, 0.15f}, 0.25f);
+            break;
+        // --- Hollín: grave (220-300 Hz), ronca y con mala idea ---
+        case Sfx::HollinAttack1:  // «¡hah!»
+            voice(t, nz, 0, {ph(kAh, 0.05f, 0, 0.6f), ph(kA, 0.16f)}, {{260, 305, 280, 215}, 0.14f, 0.35f, 2.0f, 0.8f}, 0.55f);
+            break;
+        case Sfx::HollinAttack2:  // «¡rah!»
+            voice(t, nz, 0, {ph(kAh, 0.07f, 1, 0.1f, 1), ph(kA, 0.15f)}, {{250, 295, 270, 205}, 0.12f, 0.4f, 2.2f, 0.8f}, 0.55f);
+            break;
+        case Sfx::HollinFinisher:  // «¡raaagh!»
+            voice(t, nz, 0, {ph(kAh, 0.08f, 1, 0.1f, 1), ph(kA, 0.34f), ph(kAh, 0.07f, 0.3f, 0.6f)},
+                  {{230, 290, 280, 190}, 0.15f, 0.55f, 3.0f, 0.7f}, 0.6f);
+            wet = 0.12f;
+            break;
+        case Sfx::HollinJump:  // «¡heh!»
+            voice(t, nz, 0, {ph(kE, 0.035f, 0, 0.6f), ph(kE, 0.08f)}, {{290, 300, 270, 250}, 0.12f, 0.3f, 1.6f}, 0.4f);
+            break;
+        case Sfx::HollinHurt:  // «¡tch... gh!»
+            click(0, 0.4f);
+            voice(t, nz, 0.03f, {ph(kAh, 0.05f, 0.4f, 0.4f), ph(kAh, 0.13f, 1, 0.2f)}, {{250, 230, 190, 160}, 0.15f, 0.65f, 2.4f, 0.7f},
+                  0.5f);
+            break;
+        case Sfx::HollinDodge:  // risita por la nariz
+            voice(t, nz, 0, {ph(kE, 0.05f, 0, 0.7f), ph(kE, 0.04f, 0.4f, 0.4f)}, {{290, 300, 280, 260}, 0.15f, 0.3f}, 0.25f);
+            break;
+        case Sfx::HollinLaugh: {  // «je, je, je»
+            const float pitch[3] = {300, 315, 285};
+            for (int k = 0; k < 3; ++k)
+                voice(t, nz, 0.13f * float(k), {ph(kE, 0.04f, 0, 0.7f), ph(kE, 0.07f, 1, 0, 0, 1.0f - 0.2f * float(k))},
+                      {{pitch[k], pitch[k] + 15, pitch[k] - 5, pitch[k] - 30}, 0.12f, 0.35f, 1.6f}, 0.42f - 0.08f * float(k));
+            break;
+        }
         case Sfx::Count: break;
     }
     // Saturación suave (tanh normalizada): golpes con más mordida, sin recortar.

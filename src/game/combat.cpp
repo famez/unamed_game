@@ -434,6 +434,8 @@ void Game::resolveImpact(Move m) {
             spawnSparks(origin + Vec3{0, 0.5f, 0}, {0, 1, 0}, 40, rgba(30, 15, 45), 7.0f, false);
         }
         notify("¡SÚPER CONTRAATAQUE!", shadowMode_ ? rgba(190, 130, 255) : rgba(255, 220, 120));
+        voiceCooldown_ = 0;
+        voice(VoiceLine::Laugh);
     }
     // Formas: la Solar remata con ondas de luz; el lobo recupera vida con cada mordisco.
     if (form_ == Form::Solar && isFinisher(m)) {
@@ -611,6 +613,8 @@ void Game::hurtHero(Vec3 dir, float damage, float knock, Enemy* source) {
         knock *= 0.3f;
     }
     hp_ = std::max(0.0f, hp_ - damage);
+    voiceCooldown_ = 0;
+    voice(VoiceLine::Hurt, damage >= 4.0f ? 1.0f : 0.6f);
     if (sandbox() && infHp_) hp_ = maxHp_;  // modo prueba: vida infinita
     if (source) source->rlReward += damage / 10.0f;  // le ha hecho daño: buena táctica
     sound(Sfx::HeroHurt, chest);
@@ -699,4 +703,29 @@ void Game::updateRiposte(float dt) {
     ++riposteStep_;
     // Estela de imágenes: chispas a lo largo del acercamiento.
     spawnSparks(hero_.body.pos + Vec3{0, 1, 0}, normalize(to), 8, shadowMode_ ? kRiposteShadow : rgba(255, 230, 160), 3.0f);
+}
+
+// --- Voz ------------------------------------------------------------------------------------
+
+void Game::voice(VoiceLine line, float chance) {
+    if (voiceCooldown_ > 0 || random01() > chance) return;
+    bool dark = shadowMode_;
+    Sfx id;
+    switch (line) {
+        case VoiceLine::Attack:
+            id = dark ? (random01() < 0.5f ? Sfx::HollinAttack1 : Sfx::HollinAttack2)
+                      : (random01() < 0.5f ? Sfx::VelaAttack1 : Sfx::VelaAttack2);
+            break;
+        case VoiceLine::Finisher: id = dark ? Sfx::HollinFinisher : Sfx::VelaFinisher; break;
+        case VoiceLine::Jump: id = dark ? Sfx::HollinJump : Sfx::VelaJump; break;
+        case VoiceLine::Hurt: id = dark ? Sfx::HollinHurt : Sfx::VelaHurt; break;
+        case VoiceLine::Dodge: id = dark ? Sfx::HollinDodge : Sfx::VelaDodge; break;
+        case VoiceLine::Laugh:
+            if (!dark) return;  // Vela no se ríe de nadie
+            id = Sfx::HollinLaugh;
+            break;
+        default: return;
+    }
+    sound(id, hero_.body.pos, 0.9f, randRange(0.96f, 1.05f));
+    voiceCooldown_ = line == VoiceLine::Attack ? 0.22f : 0.35f;
 }

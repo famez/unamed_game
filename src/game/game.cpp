@@ -142,6 +142,7 @@ void Game::update(float dt, const Controls& input) {
         if (c.dodge || c.attack) bufferedMove_ = c.move;
         if (dodgeBuffer_ > 0 && hero_.dodge(length(bufferedMove_) > 0.1f ? bufferedMove_ : hero_.forward())) {
             sound(Sfx::Dodge, hero_.body.pos);
+            voice(VoiceLine::Dodge, 0.5f);
             dodgeBuffer_ = 0;
             attackBuffer_ = 0;
         }
@@ -189,7 +190,10 @@ void Game::update(float dt, const Controls& input) {
         hero_.update(dt, down || light ? Vec3{} : c.move, !down && !light && !diving_ && c.jump, world_,
                      std::atan2(c.camForward.x, c.camForward.z));
     updateWolf(dt);
-    if (c.jump && wasGrounded && hero_.body.vel.y > 1.0f) sound(Sfx::Jump, hero_.body.pos, 0.7f);
+    if (c.jump && wasGrounded && hero_.body.vel.y > 1.0f) {
+        sound(Sfx::Jump, hero_.body.pos, 0.7f);
+        voice(VoiceLine::Jump, 0.45f);
+    }
     updateTravel(dt);
     constrainDive();
     updateBrizna(dt);
@@ -254,6 +258,18 @@ void Game::update(float dt, const Controls& input) {
     for (TreasureChest& ch : chests_)
         if (ch.open) ch.openTime += dt;
 
+    // Grito al empezar cada golpe: los remates y especiales siempre; los normales, a veces.
+    voiceCooldown_ = std::max(0.0f, voiceCooldown_ - dt);
+    {
+        Move mv = hero_.move();
+        if (mv != voicedMove_ && mv != Move::None) {
+            if (isFinisher(mv) || mv == Move::Rush || mv == Move::Counter || mv == Move::Launcher)
+                voice(VoiceLine::Finisher);
+            else
+                voice(VoiceLine::Attack, mv == Move::Cast ? 0.8f : 0.6f);
+        }
+        voicedMove_ = mv;
+    }
     cromaShown_ = moveTowards(cromaShown_, croma_, 0.25f * dt);
     for (ColorSplash& sp : splashes_) sp.age += dt;
     updateLevel(dt);
