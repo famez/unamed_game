@@ -62,7 +62,7 @@ Dependencias del sistema: `libOpenGL`/`libGLX` (glvnd + Mesa), `libX11` y `libXi
 (`sudo apt install libxi-dev`). Incluidas en el repositorio: `stb_truetype.h` y las
 fuentes Orbitron y Exo 2.
 
-Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena id` (reproduce una escena del guion), `--autoplay` (un bot combate solo, sin capturar el ratón), `--sombra` (empezar en modo sombra), `--exportar-modelos [carpeta]` (escribe los personajes a .glb), `--visor fichero.glb` (visor de modelos), `--vitrina` (guion que enseña ataques, técnicas, formas y mecánicas), `--video fichero.mp4 [seg]` (graba a velocidad real con ffmpeg),
+Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena id` (reproduce una escena del guion), `--autoplay` (un bot combate solo, sin capturar el ratón), `--sombra` (empezar en modo sombra), `--exportar-modelos [carpeta]` (escribe a .glb los personajes que falten; `--forzar` los sustituye), `--visor fichero.glb` (visor de modelos), `--vitrina` (guion que enseña ataques, técnicas, formas y mecánicas), `--video fichero.mp4 [seg]` (graba a velocidad real con ffmpeg),
 `--screenshot fichero.ppm segundos [frames]` (guarda frames y sale) y `--camyaw radianes`.
 
 ## Controles
@@ -191,7 +191,9 @@ sector del último golpe, botín como cruces) y encima de cada enemigo su estado
   con mantener los nombres de los huesos de la armadura y exportar a `.glb` con piel; los
   materiales se leen por el nombre (`Glow…` o con emisión brilla, `Metal`, `Hair…`, `Stone`,
   el resto tela). Si se borra un `.glb`, vuelve el modelo generado, y
-  `./build/game --exportar-modelos` los vuelve a escribir desde las primitivas.
+  `./build/game --exportar-modelos` escribe los que falten desde las primitivas (con
+  `--forzar`, también sustituye los que hay). Los de ahora son el reparto rediseñado
+  (`assets/models/FICHA_REPARTO.md`).
 - **Visor de modelos**: `./build/game --visor fichero.glb` enseña un `.glb` como lo pinta el
   juego (mismo render, contorno y brillos), animado con el motor (la protagonista y los
   humanoides: quieta, andar, correr, combo, saltar, esquivar, guardia; los enemigos: quieto,

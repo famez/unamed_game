@@ -78,10 +78,11 @@ void buildModels(Renderer& r);
 const BuiltModel& model(ModelId id);
 
 // Personajes en .glb (assets/models): los enemigos, Ilse y el lobo de sombra (la forma de la
-// sombra). `exportCharacterGlbs` los escribe desde sus primitivas (--exportar-modelos);
+// sombra). `exportCharacterGlbs` escribe los que falten desde sus primitivas (todos, con
+// `overwrite`: --exportar-modelos --forzar);
 // `loadCharacterGlbs` los lee al arrancar y, si están, sustituyen al modelo generado (con sus
 // piezas brillantes dentro de la malla). Devuelve cuántos ha escrito o cargado.
-int exportCharacterGlbs(const std::string& dir);
+int exportCharacterGlbs(const std::string& dir, bool overwrite = false);
 int loadCharacterGlbs(Renderer& r, const std::string& dir);
 // El personaje de assets/models que se llama así (sin «.glb»); falso si no es ninguno.
 bool glbCharacterId(const std::string& stem, ModelId& id, bool& wolf);

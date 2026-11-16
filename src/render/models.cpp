@@ -622,10 +622,16 @@ std::string materialName(const SkinVertex& v) {
 
 }  // namespace
 
-int exportCharacterGlbs(const std::string& dir) {
+int exportCharacterGlbs(const std::string& dir, bool overwrite) {
     defineEnemyModels();
     int written = 0;
     for (const GlbCharacter& ch : kGlbCharacters) {
+        if (!overwrite)
+            if (FILE* f = std::fopen((dir + "/" + ch.file + ".glb").c_str(), "rb")) {  // ya hay uno (quizá rediseñado): se respeta
+                std::fclose(f);
+                std::printf("%s/%s.glb ya existe (con --forzar se sustituye por el generado)\n", dir.c_str(), ch.file);
+                continue;
+            }
         const ModelDef& def = kModels[int(ch.id)];
         std::vector<SkinVertex> verts;
         std::vector<uint32_t> idx;
@@ -740,6 +746,7 @@ bool loadCharacterGlb(Renderer& r, const std::string& path, const JointDef* rig,
             SkinVertex v{};
             v.pos[0] = p.positions[i].x, v.pos[1] = p.positions[i].y, v.pos[2] = p.positions[i].z;
             Vec3 n = i < p.normals.size() ? p.normals[i] : Vec3{0, 1, 0};
+            if (length(n) < 1e-4f) n = {0, 1, 0};  // triángulos degenerados: normal nula (el shader daría NaN)
             v.normal[0] = n.x, v.normal[1] = n.y, v.normal[2] = n.z;
             float c[3];
             for (int k = 0; k < 3; ++k)

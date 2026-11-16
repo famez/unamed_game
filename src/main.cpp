@@ -109,7 +109,8 @@ const char kHelp[] =
     "  --camyaw RADIANES             orientación inicial de la cámara\n"
     "  --visor FICHERO.glb [--anim N] ver un modelo como lo pinta el juego, animado; se recarga\n"
     "                                al volver a exportarlo (o con R)\n"
-    "  --exportar-modelos [CARPETA]  escribe los enemigos, Ilse y el lobo de sombra en .glb y sale\n"
+    "  --exportar-modelos [CARPETA]  escribe en .glb los enemigos, Ilse y el lobo de sombra que falten\n"
+    "                                y sale (--forzar: también sustituye los que ya hay)\n"
     "  --sombra                      empezar en modo sombra\n"
     "  --vitrina                     guion que enseña ataques, técnicas, formas y mecánicas (en el patio)\n"
     "  --video FICHERO.mp4 [SEG]     graba a velocidad real (30 fps, con ffmpeg); sale a los SEG segundos\n"
@@ -126,7 +127,10 @@ int main(int argc, char** argv) {
     for (int i = 1; i < argc; ++i)  // --exportar-modelos [carpeta]: los personajes generados a .glb (sin ventana)
         if (std::strcmp(argv[i], "--exportar-modelos") == 0) {
             std::string dir = i + 1 < argc && argv[i + 1][0] != '-' ? argv[i + 1] : std::string(GAME_ASSET_DIR) + "/models";
-            return exportCharacterGlbs(dir) > 0 ? 0 : 1;
+            bool force = false;
+            for (int k = 1; k < argc; ++k) force |= std::strcmp(argv[k], "--forzar") == 0;
+            exportCharacterGlbs(dir, force);
+            return 0;
         }
     WindowDesc desc;
     desc.title = "unamed_game";
