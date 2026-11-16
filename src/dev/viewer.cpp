@@ -250,13 +250,14 @@ long long newestNs(const std::string& path) {
 int runViewer(const char* pathArg, Renderer& renderer, DebugDraw& lines, UiLayer& ui, int argc, char** argv) {
     const std::string path = pathArg;
     int anim = 0;
-    bool startNight = false;
+    bool startNight = false, closeUp = false;  // --cerca: la cámara en la cara
     const char* shotPath = nullptr;
     float shotTime = 0;
     int shotCount = 1, shotIndex = 0;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--anim") == 0 && i + 1 < argc) anim = std::max(0, std::atoi(argv[i + 1]) - 1);
         if (std::strcmp(argv[i], "--noche") == 0) startNight = true;
+        if (std::strcmp(argv[i], "--cerca") == 0) closeUp = true;
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 2 < argc) {
             shotPath = argv[i + 1];
             shotTime = float(std::atof(argv[i + 2]));
@@ -313,6 +314,7 @@ int runViewer(const char* pathArg, Renderer& renderer, DebugDraw& lines, UiLayer
     };
     Orbit cam;
     frame(cam);
+    if (closeUp && model.humanoid) cam.height = 1.55f, cam.distance = 0.9f, cam.pitch = 0.05f;
     Vec3 focus{0, 0, 0}, pan{};
     bool paused = false, skeleton = false, night = startNight;
     float lastMouseX = 0, lastMouseY = 0;
