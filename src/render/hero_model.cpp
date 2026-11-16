@@ -296,3 +296,32 @@ const HeroGlbModel* heroGlb(HeroLook look) {
     const HeroGlbModel& m = look == HeroLook::Shadow ? gHollin : gVela;
     return m.loaded ? &m : nullptr;
 }
+
+void drawHeroGlb(Renderer& r, const HeroGlbModel& m, const Mat4* j, Vec3 lag, float run, float time, float flash,
+                 uint32_t line, float life) {
+    Mat4 skin[kMaxJoints];
+    skinMatrices(m.body, j, skin);
+    r.skinned(m.body.mesh, skin, JointCount, flash, line);
+    if (m.detail.mesh >= 0) r.skinned(m.detail.mesh, skin, JointCount, flash, 0);
+    for (const HeroPart& part : m.parts) {
+        float ax = -lag.z * 3.0f, az = lag.x * 3.0f;  // la punta se va hacia donde se queda atrás
+        switch (part.kind) {
+            case HeroPartKind::Hair: ax -= 0.25f * run; break;
+            case HeroPartKind::Ahoge: ax = 0.6f * ax + 0.1f * std::sin(time * 7.0f); az *= 0.6f; break;
+            case HeroPartKind::ScarfBack: ax = 1.3f * ax - 1.0f * run - 0.08f * run * std::sin(time * 11.0f); break;
+            case HeroPartKind::ScarfFront: ax = 0.5f * ax - 0.3f * run; az *= 0.5f; break;
+            case HeroPartKind::Lantern: ax = 1.4f * ax + 0.12f * run * std::sin(time * 9.0f); az *= 1.4f; break;
+        }
+        Mat4 swing = translate(part.pivot) * rotateX(clampf(ax, -1.2f, 0.7f)) * rotateZ(clampf(az, -0.7f, 0.7f)) *
+                     translate(-part.pivot);
+        Mat4 bones[kMaxJoints];
+        bones[part.joint] = j[part.joint] * swing * part.inverseBind;
+        r.skinned(part.mesh, bones, part.joint + 1, flash, part.kind == HeroPartKind::Lantern ? 0 : line);
+        if (part.hasGlow) {  // el farol: su brillo es la vida que le queda
+            if (life < 0.3f) life *= 0.6f + 0.4f * float(std::fmod(time * 7.3f, 1.0f) > 0.3f);  // titila
+            uint32_t c = m.glowColor ? m.glowColor : rgba(255, 210, 120);
+            Vec3 col{float(c & 0xFF) / 255.0f, float((c >> 8) & 0xFF) / 255.0f, float((c >> 16) & 0xFF) / 255.0f};
+            r.light(transformPoint(j[part.joint] * swing, part.glow), col * (0.4f + 1.6f * life), 2.5f);
+        }
+    }
+}

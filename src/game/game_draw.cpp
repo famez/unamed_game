@@ -687,32 +687,8 @@ void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float al
     Mat4 skin[kMaxJoints];
     if (glb) {  // Vela o Hollín (.glb): cuerpo con contorno, cara y brillos sin él, piezas con inercia
         uint32_t line = form_ != Form::None ? formColor(form_) : outline;
-        skinMatrices(glb->body, j, skin);
-        solid->skinned(glb->body.mesh, skin, JointCount, flash, line);
-        if (glb->detail.mesh >= 0) solid->skinned(glb->detail.mesh, skin, JointCount, flash, 0);
         float run = clampf(hero_.speed / Character::kSprintSpeed, 0, 1);
-        for (const HeroPart& part : glb->parts) {
-            float ax = -lag.z * 3.0f, az = lag.x * 3.0f;  // la punta se va hacia donde se queda atrás
-            switch (part.kind) {
-                case HeroPartKind::Hair: ax -= 0.25f * run; break;
-                case HeroPartKind::Ahoge: ax = 0.6f * ax + 0.1f * std::sin(time_ * 7.0f); az *= 0.6f; break;
-                case HeroPartKind::ScarfBack: ax = 1.3f * ax - 1.0f * run - 0.08f * run * std::sin(time_ * 11.0f); break;
-                case HeroPartKind::ScarfFront: ax = 0.5f * ax - 0.3f * run; az *= 0.5f; break;
-                case HeroPartKind::Lantern: ax = 1.4f * ax + 0.12f * run * std::sin(time_ * 9.0f); az *= 1.4f; break;
-            }
-            Mat4 swing = translate(part.pivot) * rotateX(clampf(ax, -1.2f, 0.7f)) * rotateZ(clampf(az, -0.7f, 0.7f)) *
-                         translate(-part.pivot);
-            Mat4 bones[kMaxJoints];
-            bones[part.joint] = j[part.joint] * swing * part.inverseBind;
-            solid->skinned(part.mesh, bones, part.joint + 1, flash, part.kind == HeroPartKind::Lantern ? 0 : line);
-            if (part.hasGlow) {  // el farol: su brillo es la vida que le queda
-                float life = clampf(hp_ / maxHp_, 0, 1);
-                if (life < 0.3f) life *= 0.6f + 0.4f * float(std::fmod(time_ * 7.3f, 1.0f) > 0.3f);  // titila
-                uint32_t c = glb->glowColor ? glb->glowColor : rgba(255, 210, 120);
-                Vec3 col{float(c & 0xFF) / 255.0f, float((c >> 8) & 0xFF) / 255.0f, float((c >> 16) & 0xFF) / 255.0f};
-                solid->light(transformPoint(j[part.joint] * swing, part.glow), col * (0.4f + 1.6f * life), 2.5f);
-            }
-        }
+        drawHeroGlb(*solid, *glb, j, lag, run, time_, flash, line, clampf(hp_ / maxHp_, 0, 1));
     } else {
         // Cuerpo continuo (malla con skinning) con contorno, y los detalles rígidos encima.
         const BuiltModel& body = heroModel(look, false);

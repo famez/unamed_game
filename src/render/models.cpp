@@ -802,5 +802,11 @@ int loadCharacterGlbs(Renderer& r, const std::string& dir) {
     return loaded;
 }
 
+bool glbCharacterId(const std::string& stem, ModelId& id, bool& wolf) {
+    for (const GlbCharacter& ch : kGlbCharacters)
+        if (stem == ch.file) return id = ch.id, wolf = ch.wolf, true;
+    return false;
+}
+
 bool modelFromGlb(ModelId id) { return gFromGlb[int(id)]; }
 const BuiltModel* wolfModel() { return gWolfLoaded ? &gWolf : nullptr; }

@@ -42,5 +42,10 @@ struct HeroGlbModel {
 bool loadHeroGlb(Renderer& r, const std::string& path, HeroGlbModel& out, std::string& error);
 // Carga assets/models/vela.glb y hollin.glb (si no están, se usa el modelo de siempre).
 void loadHeroModels(Renderer& r, const std::string& assetDir);
+// Lo dibuja con la postura `j` (matrices mundo de los huesos): el cuerpo con contorno `line`,
+// la cara y lo que brilla sin él, y las piezas con inercia. `lag`: retraso del muelle del pelo
+// en el espacio de la cabeza; `run`: 0..1 de la carrera; `life`: 0..1, el brillo del farol.
+void drawHeroGlb(Renderer& r, const HeroGlbModel& m, const Mat4* j, Vec3 lag, float run, float time, float flash,
+                 uint32_t line, float life);
 // El modelo de ese aspecto, o nullptr si no se cargó.
 const HeroGlbModel* heroGlb(HeroLook look);

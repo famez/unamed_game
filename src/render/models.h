@@ -83,6 +83,8 @@ const BuiltModel& model(ModelId id);
 // piezas brillantes dentro de la malla). Devuelve cuántos ha escrito o cargado.
 int exportCharacterGlbs(const std::string& dir);
 int loadCharacterGlbs(Renderer& r, const std::string& dir);
+// El personaje de assets/models que se llama así (sin «.glb»); falso si no es ninguno.
+bool glbCharacterId(const std::string& stem, ModelId& id, bool& wolf);
 bool modelFromGlb(ModelId id);        // el modelo viene de un .glb (ya lleva ojos y brillos)
 const BuiltModel* wolfModel();        // el lobo de sombra (.glb), o nullptr
 // Lee un personaje con esqueleto (malla con skinning) de un .glb y lo sube. Los huesos se

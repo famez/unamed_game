@@ -62,7 +62,7 @@ Dependencias del sistema: `libOpenGL`/`libGLX` (glvnd + Mesa), `libX11` y `libXi
 (`sudo apt install libxi-dev`). Incluidas en el repositorio: `stb_truetype.h` y las
 fuentes Orbitron y Exo 2.
 
-Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena id` (reproduce una escena del guion), `--autoplay` (un bot combate solo, sin capturar el ratón), `--sombra` (empezar en modo sombra), `--exportar-modelos [carpeta]` (escribe los personajes a .glb), `--vitrina` (guion que enseña ataques, técnicas, formas y mecánicas), `--video fichero.mp4 [seg]` (graba a velocidad real con ffmpeg),
+Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena id` (reproduce una escena del guion), `--autoplay` (un bot combate solo, sin capturar el ratón), `--sombra` (empezar en modo sombra), `--exportar-modelos [carpeta]` (escribe los personajes a .glb), `--visor fichero.glb` (visor de modelos), `--vitrina` (guion que enseña ataques, técnicas, formas y mecánicas), `--video fichero.mp4 [seg]` (graba a velocidad real con ffmpeg),
 `--screenshot fichero.ppm segundos [frames]` (guarda frames y sale) y `--camyaw radianes`.
 
 ## Controles
@@ -192,6 +192,14 @@ sector del último golpe, botín como cruces) y encima de cada enemigo su estado
   materiales se leen por el nombre (`Glow…` o con emisión brilla, `Metal`, `Hair…`, `Stone`,
   el resto tela). Si se borra un `.glb`, vuelve el modelo generado, y
   `./build/game --exportar-modelos` los vuelve a escribir desde las primitivas.
+- **Visor de modelos**: `./build/game --visor fichero.glb` enseña un `.glb` como lo pinta el
+  juego (mismo render, contorno y brillos), animado con el motor (la protagonista y los
+  humanoides: quieta, andar, correr, combo, saltar, esquivar, guardia; los enemigos: quieto,
+  persigue, ataque, aturdido, aparece, muere). Reconoce el tipo por el nombre del fichero o
+  por sus huesos, lista los materiales y cómo los entiende el juego, y **se recarga solo al
+  volver a exportar** desde Blender (o con R); si el fichero nuevo tiene un error, lo dice y
+  deja el anterior. Ratón para girar, rueda para acercar, 1-7 o Tab para la animación,
+  Espacio pausa, F enseña los huesos, V la noche (para ver los brillos).
 - **Cuerpos continuos**: cada personaje se define con elipsoides y cápsulas pegados al
   esqueleto; al arrancar se funden (unión suave de funciones de distancia), se convierten en
   malla (*surface nets*) con pesos de hueso y la GPU la deforma (skinning). Contorno por

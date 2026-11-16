@@ -5,6 +5,7 @@
 #include "core/gl.h"
 #include "ui/inventory_menu.h"
 #include "dev/showcase.h"
+#include "dev/viewer.h"
 #include "ui/level_select.h"
 #include "ui/menu.h"
 #include "render/hero_model.h"
@@ -106,6 +107,8 @@ const char kHelp[] =
     "  --demo                        el bot enseña técnicas, formas y armas de luz y de sombra\n"
     "  --retrato | --cuerpo          cámara frente a la cara o al cuerpo del protagonista\n"
     "  --camyaw RADIANES             orientación inicial de la cámara\n"
+    "  --visor FICHERO.glb [--anim N] ver un modelo como lo pinta el juego, animado; se recarga\n"
+    "                                al volver a exportarlo (o con R)\n"
     "  --exportar-modelos [CARPETA]  escribe los enemigos, Ilse y el lobo de sombra en .glb y sale\n"
     "  --sombra                      empezar en modo sombra\n"
     "  --vitrina                     guion que enseña ataques, técnicas, formas y mecánicas (en el patio)\n"
@@ -173,7 +176,7 @@ int main(int argc, char** argv) {
         // --silencio: sin audio (pruebas de noche); --volumen 0..1: volumen general.
         bool silent = false;
         for (int i = 1; i < argc; ++i) {
-            if (std::strcmp(argv[i], "--silencio") == 0) silent = true;
+            if (std::strcmp(argv[i], "--silencio") == 0 || std::strcmp(argv[i], "--visor") == 0) silent = true;
             if (std::strcmp(argv[i], "--volumen") == 0 && i + 1 < argc) masterVolume = clampf(float(std::atof(argv[i + 1])), 0, 1);
         }
         if (!silent) audio.init(cache + "/unamed_game", std::string(assetDir) + "/audio/voces");
@@ -183,6 +186,19 @@ int main(int argc, char** argv) {
     loadHeroModels(renderer, assetDir);  // Vela y Hollín (.glb); sin ellos, el modelo de siempre
     loadCharacterGlbs(renderer, std::string(assetDir) + "/models");  // enemigos, Ilse y el lobo
     std::printf("modelos generados en %.0f ms\n", 1000.0 * (platform::timeSeconds() - modelStart));
+    for (int i = 1; i + 1 < argc; ++i)  // --visor FICHERO.glb: solo el modelo, sin partida
+        if (std::strcmp(argv[i], "--visor") == 0) {
+            int code = runViewer(argv[i + 1], renderer, dd, overlay, argc, argv);
+            audio.shutdown();
+            unloadFonts();
+            overlay.shutdown();
+            renderer.shutdown();
+            hud.shutdown();
+            glow.shutdown();
+            dd.shutdown();
+            platform::shutdown();
+            return code;
+        }
 
     glEnable(GL_PROGRAM_POINT_SIZE);
     if (platform::msaaEnabled()) glEnable(GL_MULTISAMPLE);
