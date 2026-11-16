@@ -686,6 +686,7 @@ int main(int argc, char** argv) {
         if (flyover) {  // --vuelo: vueltas alrededor del centro, acercándose y alejándose
             float tt = game.time();
             float r = 95.0f + 55.0f * std::sin(tt * 0.09f), hgt = 22.0f + 16.0f * std::sin(tt * 0.13f + 1.0f), a = tt * 0.11f;
+            if (game.level() == LevelId::Neon) hgt += 34;  // por encima de las torres
             look = {0, 6.0f, 0};
             eye = look + Vec3{std::cos(a) * r, hgt, std::sin(a) * r};
         }
