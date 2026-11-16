@@ -32,6 +32,7 @@ set(LOGIC_SOURCES
     src/game/levels.cpp
     src/game/levels_night.cpp
     src/game/levels_open.cpp
+    src/game/levels_rio.cpp
     src/game/light.cpp
     src/game/test_mode.cpp
     src/game/shadow.cpp

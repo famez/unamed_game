@@ -145,7 +145,7 @@ vuelve al selector.
 ```bash
 ./build/game                    # selector de niveles
 ./build/game --nivel selva      # directamente un nivel (plaza, mercado, puente, selva, cueva, callejones,
-                                # o los mapas grandes: campo, neon, cafetero)
+                                # o los mapas grandes: campo, neon, cafetero, rio)
 ./build/game --prueba 1234      # patio de combate; con semilla, siempre el mismo
 ./build/game --historia         # la historia (capítulo 1)
 ```
@@ -173,6 +173,12 @@ vuelve al selector.
     alto de una loma, plaza empedrada con iglesia, kiosco, bancas, palmas y yipaos; calles de
     casas de bahareque con zócalos, puertas y balcones de colores; alrededor, cafetales con
     plataneras de sombrío, un guadual en la cañada y palmas de cera en los cerros.
+  - **Ciudad de la Bahía** (`--nivel rio`, de día; al estilo de Río de Janeiro): playa en
+    media luna con el paseo de ondas blancas y negras, cocoteros, quioscos, sombrillas y
+    puestos de socorrista; la avenida con los edificios frente al mar y manzanas detrás; los
+    arcos con el tranvía amarillo; la favela de casas de colores con su depósito de agua en el
+    morro, con escaleras de azulejos; la estatua de brazos abiertos en lo alto del cerro; y en
+    la bahía, el Pan de Azúcar y el morro de Urca unidos por el teleférico.
   - De día la **sombra es la del sol** (la que hacen tejados, muros y árboles con colisión);
     de noche, como en los demás niveles, donde no alumbra ninguna farola.
   - `--vuelo` sobrevuela el mapa y `--medir` escribe los fps reales por la consola.
@@ -195,7 +201,7 @@ que valen igual desde Blender:
   romper y apagar). `LUZ_RRGGBB` le da color.
 
 Las piezas de ahora las genera `python3 tools/props/generar.py` (solo la biblioteca estándar;
-`campo.py`, `ciudad.py` y `cafetero.py` describen cada pieza con cajas, cilindros, esferas,
+`campo.py`, `ciudad.py`, `cafetero.py` y `rio.py` describen cada pieza con cajas, cilindros, esferas,
 tejados y vigas). Volver a generar **sobrescribe** los ficheros: una pieza rehecha a mano
 conviene guardarla con otro nombre o regenerar el resto con `--solo nombre1,nombre2`.
 `./build/game --visor assets/props` enseña todas en una galería (WASD para moverse, F las

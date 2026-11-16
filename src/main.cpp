@@ -94,7 +94,7 @@ const char kHelp[] =
     "\n"
     "Niveles (sin opciones, se elige en el selector del principio)\n"
     "  --nivel NOMBRE                entra directamente en ese nivel: plaza, mercado, puente,\n"
-    "                                selva, cueva, callejones o los mapas grandes: campo, neon, cafetero\n"
+    "                                selva, cueva, callejones o los mapas grandes: campo, neon, cafetero, rio\n"
     "  --prueba [semilla]            patio de combate: enemigos sin fin; F1 y F2 hacen infinitos\n"
     "                                la vida y el Poder; Z cambia de modo\n"
     "  --historia                    la historia (capítulo 1), aparcada por ahora\n"
@@ -246,6 +246,7 @@ int main(int argc, char** argv) {
                         : std::strcmp(n, "campo") == 0      ? LevelId::Campo
                         : std::strcmp(n, "neon") == 0       ? LevelId::Neon
                         : std::strcmp(n, "cafetero") == 0   ? LevelId::Cafetero
+                        : std::strcmp(n, "rio") == 0        ? LevelId::Rio
                                                             : LevelId::Plaza;
             levelGiven = true;
         }
@@ -286,6 +287,7 @@ int main(int argc, char** argv) {
     // Opciones de desarrollo: --autoplay (un bot juega solo, sin capturar el ratón) y
     // --screenshot fichero.ppm segundos (guarda un frame en ese instante y sale).
     bool autoplay = false;
+    float flyFloor = -1;    // altura del relieve bajo el vuelo (suavizada)
     bool flyover = false;   // --vuelo: la cámara sobrevuela el mapa (para ver los mapas grandes)
     for (int i = 1; i < argc; ++i) flyover |= std::strcmp(argv[i], "--vuelo") == 0;
     bool portrait = false;  // --retrato: cámara frente a la cara del protagonista (para modelarlo)
@@ -686,9 +688,18 @@ int main(int argc, char** argv) {
         if (flyover) {  // --vuelo: vueltas alrededor del centro, acercándose y alejándose
             float tt = game.time();
             float r = 95.0f + 55.0f * std::sin(tt * 0.09f), hgt = 22.0f + 16.0f * std::sin(tt * 0.13f + 1.0f), a = tt * 0.11f;
-            if (game.level() == LevelId::Neon) hgt += 34;  // por encima de las torres
+            if (game.level() == LevelId::Neon || game.level() == LevelId::Rio) hgt += 34;  // por encima de las torres
             look = {0, 6.0f, 0};
             eye = look + Vec3{std::cos(a) * r, hgt, std::sin(a) * r};
+            // Siempre por encima del relieve (los morros pasan de 80 m), con la transición suave.
+            float floor = 0;
+            for (float k : {0.0f, 6.0f, 12.0f, 18.0f}) {
+                float ak = (tt + k * 0.25f) * 0.11f;
+                Vec3 ahead = look + Vec3{std::cos(ak) * r, 0, std::sin(ak) * r};
+                floor = std::max(floor, game.world().groundAt(ahead.x, ahead.z));
+            }
+            flyFloor = flyFloor < 0 ? floor : flyFloor + (floor - flyFloor) * std::min(1.0f, fd * 1.5f);
+            eye.y = std::max(eye.y, flyFloor + 18.0f);
         }
         rc.view = lookAt(eye, look, {0, 1, 0});
         rc.zFar = game.viewDistance();

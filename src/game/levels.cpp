@@ -582,6 +582,7 @@ void Game::loadLevel(LevelId id) {
         case LevelId::Campo: buildCampo(); break;
         case LevelId::Neon: buildNeon(); break;
         case LevelId::Cafetero: buildCafetero(); break;
+        case LevelId::Rio: buildRio(); break;
         case LevelId::Count: break;
     }
     if (world_.terrain || id == LevelId::Neon) croma_ = cromaShown_ = 1.0f;  // los mapas grandes, a todo color

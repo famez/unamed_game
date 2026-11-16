@@ -2,7 +2,7 @@
 
 namespace {
 
-constexpr float kPanelW = 760, kItemH = 48, kItemGap = 5, kTop = 126;
+constexpr float kPanelW = 760, kItemH = 44, kItemGap = 4, kTop = 120;
 
 const LevelSelect::Entry kEntries[] = {
     {"Patio de combate", "Grises sin fin de las dos familias, farolas, portales y oscuridad", true, LevelId::Prueba},
@@ -15,6 +15,7 @@ const LevelSelect::Entry kEntries[] = {
     {"Mapa · Campo abierto", "Valle de día: colinas, río, granja, molinos y un pinar", false, LevelId::Campo},
     {"Mapa · Ciudad Neón", "De noche: torres, letreros, vía elevada y un santuario", false, LevelId::Neon},
     {"Mapa · Pueblo cafetero", "Plaza, casas de bahareque de colores y cafetales en la loma", false, LevelId::Cafetero},
+    {"Mapa · Ciudad de la Bahía", "Al estilo de Río: playa, favela en el morro, la estatua del cerro", false, LevelId::Rio},
 };
 constexpr int kCount = int(sizeof(kEntries) / sizeof(kEntries[0]));
 
@@ -71,8 +72,8 @@ void LevelSelect::draw(UiLayer& ui, int width, int height) const {
         bool sel = i == selected_;
         fillRect(d, r.x0, r.y0, r.x1, r.y1, sel ? rgba(222, 214, 198, 36) : rgba(16, 16, 20, 220));
         if (sel) fillRect(d, r.x0, r.y0, r.x0 + 6, r.y1, accent);
-        drawText(ui, r.x0 + 28, r.y0 + 4, 22, kEntries[i].name, sel ? accent : ink);
-        drawText(ui, r.x0 + 28, r.y0 + 29, 15, kEntries[i].about, dim);
+        drawText(ui, r.x0 + 28, r.y0 + 3, 21, kEntries[i].name, sel ? accent : ink);
+        drawText(ui, r.x0 + 28, r.y0 + 26, 15, kEntries[i].about, dim);
     }
     drawText(ui, float(width) * 0.5f, float(height) - 46, 15,
              "W/S elegir · Enter jugar · Esc salir · En el juego: Z luz/sombra, F1 vida y F2 Poder infinitos", dim, sub);

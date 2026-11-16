@@ -187,8 +187,8 @@ struct Companion {
 // encender faroles, usar algo, llegar a un sitio, salir). Al cumplirlo se abren puertas,
 // suena su escena y empieza la siguiente.
 
-// Campo, Neon y Cafetero: mapas grandes (terreno con relieve y piezas .glb de assets/props).
-enum class LevelId { Plaza, Mercado, Puente, Prueba, Selva, Cueva, Callejones, Campo, Neon, Cafetero, Count };
+// Campo, Neon, Cafetero y Rio: mapas grandes (terreno con relieve y piezas .glb de assets/props).
+enum class LevelId { Plaza, Mercado, Puente, Prueba, Selva, Cueva, Callejones, Campo, Neon, Cafetero, Rio, Count };
 
 // Modos de prueba (sin historia, con vida, Luz y Sombra infinitas): un escenario aleatorio
 // con Grises sin fin, un archipiélago de islas flotantes para practicar el viaje por la luz,
@@ -561,6 +561,7 @@ private:
     void buildCampo();
     void buildNeon();
     void buildCafetero();
+    void buildRio();
     // Mapas grandes: terreno de `size` m de lado con puntos cada `cell` m (alturas a cero).
     void makeTerrain(float size, float cell);
     // Pinta un punto del terreno (color y material del suelo).
