@@ -301,6 +301,7 @@ void Game::draw(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const DrawFlags
     drawLevel(dd, solid, f, view, alpha);
     drawHero(dd, solid, f, alpha);
     drawGhosts(solid, dd, alpha);
+    if (solid) drawNpcs(*solid, view, alpha);
     drawEnemies(dd, glow, solid, f, view, alpha);
     drawEffects(dd, glow, solid, view);
     drawStory(dd, glow, solid, view);
@@ -662,6 +663,25 @@ void Game::drawProps(Renderer& r, const ViewInfo& view) const {
         float dh = length(flat(p.center - hero)) - p.radius;
         bool shadow = dh < 34.0f && p.radius > 0.5f;
         r.prop(lib[size_t(p.def)].mesh, p.transform, shadow);
+    }
+}
+
+// Habitantes cercanos y a la vista, con su contorno (como los demás personajes).
+void Game::drawNpcs(Renderer& r, const ViewInfo& view, float alpha) const {
+    const float* m = view.viewProj.m;
+    for (const Npc& n : npcs_) {
+        Vec3 c = n.body.body.pos + Vec3{0, 0.9f, 0};
+        float d = length(c - view.eye);
+        if (d > 75.0f) continue;
+        float x = m[0] * c.x + m[4] * c.y + m[8] * c.z + m[12], y = m[1] * c.x + m[5] * c.y + m[9] * c.z + m[13];
+        float w = m[3] * c.x + m[7] * c.y + m[11] * c.z + m[15];
+        if (d > 4 && (w <= 0 || std::fabs(x / w) > 1.3f || std::fabs(y / w) > 1.6f)) continue;
+        const BuiltModel* model = inhabitantModel(n.model);
+        if (!model) continue;
+        Mat4 j[JointCount], skin[kMaxJoints];
+        n.body.interpolatedJoints(alpha, j);
+        skinMatrices(*model, j, skin);
+        r.skinned(model->mesh, skin, model->jointCount, 0, rgba(30, 26, 30));
     }
 }
 

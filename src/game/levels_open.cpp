@@ -223,6 +223,13 @@ void Game::buildCampo() {
         float r = rng.next();
         addProp(r < 0.8f ? "hierba" : r < 0.9f ? "flores_amarillas" : "flores_lila", p, rng.range(0, 6.28f), rng.range(0.8f, 1.4f));
     }
+    // Habitantes: la granja y la loma.
+    addNpc("granjera", village + Vec3{22, 0, 11}, 4);
+    addNpc("granjera", village + Vec3{-6, 0, -4}, 9);
+    addNpc("abuelo", village + Vec3{2, 0, 5}, 4);
+    addNpc("abuelo", {30, 0, -22}, 5);
+    addNpc("granjera", hill + Vec3{8, 0, -12}, 12);
+    addNpc("abuelo", hill + Vec3{-6, 0, -16}, 6);
     // Dos portales para cambiar de luz a sombra.
     addPortal({12, ground(12, -128), -128});
     addPortal({46, ground(46, 30), 30});
@@ -329,6 +336,17 @@ void Game::buildNeon() {
         for (Vec3 p : {Vec3{s, 0, half + 8}, Vec3{s, 0, -half - 8}, Vec3{half + 8, 0, s}, Vec3{-half - 8, 0, s}})
             addProp(towers[rng.pick(4)], p, float(rng.pick(4)) * kPi * 0.5f, 1.0f, false);
     }
+    // Habitantes por las aceras y en el santuario.
+    for (int i = 0; i < 22; ++i) {
+        int bx = rng.pick(2 * kN + 1) - kN, bz = rng.pick(2 * kN + 1) - kN, side = rng.pick(4);
+        float yaw = float(side) * kPi * 0.5f;
+        Vec3 out{std::sin(yaw), 0, std::cos(yaw)}, along{out.z, 0, -out.x};
+        Vec3 p = Vec3{float(bx) * kBlock, 0, float(bz) * kBlock} + out * ((kBlock - kRoad) * 0.5f - 1.5f) + along * rng.range(-12, 12);
+        addNpc(i % 3 == 0 ? "chica_neon" : "oficinista", p, 9);
+    }
+    for (int k = 0; k < 3; ++k) addNpc("cocinero", {-8.0f + float(k) * 8, 0, -(kBlock - kRoad) * 0.5f + 6.5f}, 1.5f);
+    addNpc("chica_neon", {3, 0, 6}, 6);
+    addNpc("oficinista", {-4, 0, 9}, 6);
     heroStart_ = {-kBlock * 0.5f, 0, -12};
     heroStartYaw_ = 0;
     addPortal({-kBlock * 0.5f + 3, 0, 6});
@@ -464,6 +482,16 @@ void Game::buildCafetero() {
         float a = rng.range(0, 6.28f), r = rng.range(84, 160);
         addProp("hierba", {std::cos(a) * r, 0, std::sin(a) * r}, rng.range(0, 6.28f), rng.range(0.9f, 1.5f));
     }
+    // Habitantes: la plaza y el cafetal.
+    for (int i = 0; i < 9; ++i) {
+        float a = float(i) * 0.7f, r = 6.0f + float(i % 3) * 4.5f;
+        addNpc(i % 3 == 2 ? "recolectora" : i % 4 == 3 ? "abuelo" : "cafetero", {std::cos(a) * r, 0, std::sin(a) * r}, 7);
+    }
+    for (int i = 0; i < 6; ++i) {
+        float a = rng.range(0, 6.28f), r = rng.range(98, 140);
+        addNpc(i % 2 ? "recolectora" : "cafetero", {std::cos(a) * r, 0, std::sin(a) * r}, 6);
+    }
+    for (Vec3 p : {Vec3{0, 0, -40}, Vec3{-40, 0, 0}, Vec3{40, 0, 0}}) addNpc("cafetero", p, 10);
     addPortal({-8, ground(-8, -14), -14});
     addPortal({60, ground(60, 0), 0});
     heroStart_ = {0, ground(0, -12), -12};

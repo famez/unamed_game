@@ -179,6 +179,11 @@ vuelve al selector.
     arcos con el tranvía amarillo; la favela de casas de colores con su depósito de agua en el
     morro, con escaleras de azulejos; la estatua de brazos abiertos en lo alto del cerro; y en
     la bahía, el Pan de Azúcar y el morro de Urca unidos por el teleférico.
+  - **Habitantes** (`assets/models/habitantes`, ver su `FICHA_HABITANTES.md`): nueve
+    personajes con el esqueleto de la protagonista que pasean por su zona de cada mapa, se
+    paran a descansar y miran a la protagonista si se acerca (cafeteros y recolectoras en el
+    pueblo, oficinistas, chicas neón y cocineros en la ciudad, surfistas y vendedoras en la
+    playa, granjeras y abuelos en el campo). Los genera `python3 tools/personajes/habitantes.py`.
   - De día la **sombra es la del sol** (la que hacen tejados, muros y árboles con colisión);
     de noche, como en los demás niveles, donde no alumbra ninguna farola.
   - `--vuelo` sobrevuela el mapa y `--medir` escribe los fps reales por la consola.

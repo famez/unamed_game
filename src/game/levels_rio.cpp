@@ -196,6 +196,16 @@ void Game::buildRio() {
     addProp("teleferico", mid1 + Vec3{1.6f, 9 - 3.7f, 0}, yaw1, 1.0f, false);
     addProp("teleferico", mid2 + Vec3{-1.6f, 9 - 3.7f, 0}, yaw2, 1.0f, false);
 
+    // Habitantes: surfistas y vendedoras en la playa, alguno por el paseo.
+    for (int i = 0; i < 14; ++i) {
+        float x = rng.range(-160, 160);
+        auto [p, yaw] = along(x, i % 2 ? rng.range(8, 20) : rng.range(24, kSand - 6));
+        addNpc(i % 2 ? "surfista" : "vendedora", p, 10);
+    }
+    for (int i = 0; i < 5; ++i) {
+        auto [p, yaw] = along(rng.range(-150, 150), kSand + kWalk * 0.5f);
+        addNpc(i % 2 ? "oficinista" : "chica_neon", p, 14);
+    }
     // Portales y llegada: en el paseo, mirando al mar y al Pan de Azúcar.
     auto [start, startYaw] = along(-10, kSand + kWalk * 0.5f);
     start.y = ground(start.x, start.z);

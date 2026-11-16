@@ -93,6 +93,11 @@ const BuiltModel* wolfModel();        // el lobo de sombra (.glb), o nullptr
 bool loadCharacterGlb(Renderer& r, const std::string& path, const JointDef* rig, int jointCount, BuiltModel& out,
                       std::string& error);
 
+// Habitantes (assets/models/habitantes/*.glb, con el esqueleto de la protagonista): los carga
+// al arrancar y los busca por el nombre del fichero (nullptr si no está).
+int loadInhabitants(Renderer& r, const std::string& dir);
+const BuiltModel* inhabitantModel(const std::string& name);
+
 // Sube a la GPU las mallas de las piezas del escenario (game/props.h) que aún no lo estén.
 void uploadPropMeshes(Renderer& r);
 

@@ -276,6 +276,7 @@ void Game::update(float dt, const Controls& input) {
     cromaShown_ = moveTowards(cromaShown_, croma_, 0.25f * dt);
     for (ColorSplash& sp : splashes_) sp.age += dt;
     updateLevel(dt);
+    updateNpcs(dt);
     updateEffects(dt);
     if (sandbox()) {  // sin historia: lo que esté marcado como infinito
         if (infHp_) hp_ = maxHp_;

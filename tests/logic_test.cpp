@@ -139,6 +139,24 @@ int main() {
                   "%s: %zu piezas, %zu farolas de piezas, la protagonista en el suelo (y=%.2f, suelo %.2f)", g.levelName_.c_str(),
                   g.props_.size(), propLamps, b.pos.y, floor);
         }
+        {  // Habitantes: pasean por su zona, sin hundirse ni salir volando
+            Game h = fresh();
+            h.loadLevel(LevelId::Cafetero);
+            h.hero_.body.pos = {0, h.world_.groundAt(0, 30), 30};
+            std::vector<Vec3> start;
+            for (const Npc& n : h.npcs_) start.push_back(n.body.body.pos);
+            run(h, 15.0f);
+            int moved = 0, grounded = 0, home = 0;
+            for (size_t i = 0; i < h.npcs_.size(); ++i) {
+                const Npc& n = h.npcs_[i];
+                moved += length(flat(n.body.body.pos - start[i])) > 0.5f;
+                grounded += std::fabs(n.body.body.pos.y - h.groundHeight(n.body.body.pos + Vec3{0, 2, 0})) < 0.2f;
+                home += length(flat(n.body.body.pos - n.home)) < n.radius + 3.0f;
+            }
+            int total = int(h.npcs_.size());
+            CHECK(total >= 15 && moved >= total / 2 && grounded == total && home == total,
+                  "habitantes del pueblo: %d, %d han paseado, %d en el suelo, %d en su zona", total, moved, grounded, home);
+        }
         Game g = fresh();  // contra la casa del pueblo del campo: la pared la para
         g.loadLevel(LevelId::Campo);
         const AABB* wall = nullptr;

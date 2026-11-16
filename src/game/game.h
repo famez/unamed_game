@@ -381,6 +381,18 @@ struct Block {
 };
 
 // Decoración sin colisión (copas de árboles, flores, tejados...): se calcula una vez.
+// Habitante de un mapa grande: pasea por su zona (en torno a `home`), se para de vez en
+// cuando y mira a la protagonista si se le acerca. `model`: su .glb de assets/models/habitantes.
+struct Npc {
+    std::string model;
+    Character body;
+    Vec3 home, target;
+    float radius = 8;  // hasta dónde pasea
+    float wait = 0;    // segundos parado antes de echar a andar
+    float walked = 0;  // segundos hacia el destino actual (si se atasca, cambia)
+    uint32_t seed = 1;
+};
+
 // Pieza .glb colocada en el escenario (game/props.h).
 struct PropInstance {
     int def;
@@ -511,6 +523,7 @@ public:
     LevelId level() const { return level_; }
     float viewDistance() const { return viewDistance_; }
     const std::vector<PropInstance>& placedProps() const { return props_; }
+    const std::vector<Npc>& npcs() const { return npcs_; }
     const std::string& levelName() const { return levelName_; }
     int partIndex() const { return int(part_); }
     int partCount() const { return int(parts_.size()); }
@@ -570,6 +583,10 @@ private:
     // punto más bajo, para que no flote en las cuestas); si no, a la altura de `pos`.
     // Devuelve falso si la pieza no existe.
     bool addProp(const std::string& name, Vec3 pos, float yaw = 0, float scale = 1, bool onGround = true);
+    // Pone un habitante (por el nombre de su .glb) que pasea a `radius` m de `pos`.
+    void addNpc(const std::string& model, Vec3 pos, float radius = 8);
+    void updateNpcs(float dt);
+    void drawNpcs(Renderer& r, const ViewInfo& view, float alpha) const;
     void addTorch(Vec3 base);
     void addCrystal(Vec3 base, uint32_t color);
     void addPaperLantern(Vec3 a, Vec3 b, float y, uint32_t color);
@@ -709,6 +726,7 @@ private:
     std::vector<Block> blocks_;  // escenario fijo (world_ = esto + cajas + cofres)
     std::vector<Decor> decor_;
     std::vector<PropInstance> props_;
+    std::vector<Npc> npcs_;
     std::vector<AABB> propSolids_;  // colisiones de las piezas (entran en world_)
     std::vector<uint32_t> terrainColor_;  // por punto del terreno
     std::vector<uint8_t> terrainMaterial_;

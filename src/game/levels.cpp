@@ -553,6 +553,7 @@ void Game::loadLevel(LevelId id) {
     ghosts_.clear();
     portals_.clear();
     props_.clear();
+    npcs_.clear();
     propSolids_.clear();
     world_.terrain.reset();
     terrainColor_.clear();

@@ -196,6 +196,7 @@ int main(int argc, char** argv) {
     loadHeroModels(renderer, assetDir);  // Vela y Hollín (.glb); sin ellos, el modelo de siempre
     loadCharacterGlbs(renderer, std::string(assetDir) + "/models");  // enemigos, Ilse y el lobo
     propLibrary().loadDir(std::string(assetDir) + "/props");          // piezas del escenario
+    loadInhabitants(renderer, std::string(assetDir) + "/models/habitantes");
     uploadPropMeshes(renderer);
     std::printf("modelos generados en %.0f ms\n", 1000.0 * (platform::timeSeconds() - modelStart));
     for (int i = 1; i + 1 < argc; ++i)  // --visor FICHERO.glb: solo el modelo, sin partida

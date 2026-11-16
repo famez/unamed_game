@@ -2,6 +2,8 @@
 
 #include "game/props.h"
 
+#include <dirent.h>
+
 #include "render/debug_draw.h"
 #include "render/glb.h"
 #include "render/glb_write.h"
@@ -824,4 +826,34 @@ void uploadPropMeshes(Renderer& r) {
     PropLibrary& lib = propLibrary();
     for (size_t i = 0; i < lib.size(); ++i)
         if (lib[i].mesh < 0) lib[i].mesh = r.createSkinnedMesh(lib[i].verts, lib[i].indices);
+}
+
+namespace {
+std::vector<std::pair<std::string, BuiltModel>> gInhabitants;
+}
+
+int loadInhabitants(Renderer& r, const std::string& dir) {
+    DIR* dp = opendir(dir.c_str());
+    if (!dp) return 0;
+    std::vector<std::string> files;
+    while (dirent* e = readdir(dp)) {
+        std::string f = e->d_name;
+        if (f.size() > 4 && f.compare(f.size() - 4, 4, ".glb") == 0) files.push_back(f);
+    }
+    closedir(dp);
+    for (const std::string& f : files) {
+        BuiltModel m;
+        std::string error;
+        if (loadCharacterGlb(r, dir + "/" + f, kSkeleton, JointCount, m, error))
+            gInhabitants.push_back({f.substr(0, f.size() - 4), m});
+        else
+            std::fprintf(stderr, "%s\n", error.c_str());
+    }
+    return int(gInhabitants.size());
+}
+
+const BuiltModel* inhabitantModel(const std::string& name) {
+    for (const auto& [n, m] : gInhabitants)
+        if (n == name) return &m;
+    return nullptr;
 }
