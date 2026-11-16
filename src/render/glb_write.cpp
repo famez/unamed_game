@@ -14,9 +14,10 @@ float srgbToLinear(uint8_t c) {
     return s <= 0.04045f ? s / 12.92f : std::pow((s + 0.055f) / 1.055f, 2.4f);
 }
 
+// 9 cifras: el float vuelve exacto (glTF exige que min/max coincidan con los datos).
 std::string num(float v) {
     char b[32];
-    std::snprintf(b, sizeof(b), "%.6g", double(v));
+    std::snprintf(b, sizeof(b), "%.9g", double(v));
     return b;
 }
 
@@ -105,15 +106,21 @@ bool writeSkinnedGlb(const std::string& path, const std::string& name, const std
     }
     int aIbm = b.accessor(b.view(ibm.data(), ibm.size() * 4, 0), 5126, joints.size(), "MAT4");
 
-    // Nodos: 0 = raíz del personaje, 1 = la malla, 2.. = los huesos.
-    std::string nodes = "{\"name\":\"" + escape(name) + "\",\"children\":[1";
+    // Nodos: 0 = raíz de la armadura, 1 = la malla (en la raíz de la escena, como pide glTF
+    // para una malla con piel), 2.. = los huesos.
+    std::string rootKids;
     for (size_t i = 0; i < joints.size(); ++i)
-        if (joints[i].parent < 0) nodes += "," + std::to_string(2 + i);
+        if (joints[i].parent < 0) rootKids += (rootKids.empty() ? "" : ",") + std::to_string(2 + i);
+    std::string nodes = "{\"name\":\"" + escape(name) + "_Armature\",\"children\":[" + rootKids;
     nodes += "]},{\"name\":\"" + escape(name) + "_Mesh\",\"mesh\":0,\"skin\":0}";
     for (size_t i = 0; i < joints.size(); ++i) {
-        nodes += ",{\"name\":\"" + escape(joints[i].name) + "\",\"matrix\":[";
-        for (int k = 0; k < 16; ++k) nodes += (k ? "," : "") + num(joints[i].local.m[k]);
-        nodes += "]";
+        nodes += ",{\"name\":\"" + escape(joints[i].name) + "\"";
+        // La identidad no se escribe (glTF la da por defecto).
+        if (std::memcmp(joints[i].local.m, Mat4::identity().m, 64) != 0) {
+            nodes += ",\"matrix\":[";
+            for (int k = 0; k < 16; ++k) nodes += (k ? "," : "") + num(joints[i].local.m[k]);
+            nodes += "]";
+        }
         std::string kids;
         for (size_t c = 0; c < joints.size(); ++c)
             if (joints[c].parent == int(i)) kids += (kids.empty() ? "" : ",") + std::to_string(2 + c);
@@ -133,7 +140,7 @@ bool writeSkinnedGlb(const std::string& path, const std::string& name, const std
         mats += "}";
     }
     while (b.bin.size() % 4) b.bin.push_back(0);
-    std::string json = "{\"asset\":{\"version\":\"2.0\",\"generator\":\"unamed_game\"},\"scene\":0,\"scenes\":[{\"nodes\":[0]}],"
+    std::string json = "{\"asset\":{\"version\":\"2.0\",\"generator\":\"unamed_game\"},\"scene\":0,\"scenes\":[{\"nodes\":[0,1]}],"
                        "\"nodes\":[" + nodes + "],\"meshes\":[{\"name\":\"" + escape(name) + "\",\"primitives\":[" + primsJson +
                        "]}],\"skins\":[{\"name\":\"" + escape(name) + "_Armature\",\"inverseBindMatrices\":" +
                        std::to_string(aIbm) + ",\"joints\":[" + skinJoints + "]}],\"materials\":[" + mats +
