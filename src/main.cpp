@@ -94,7 +94,7 @@ const char kHelp[] =
     "\n"
     "Niveles (sin opciones, se elige en el selector del principio)\n"
     "  --nivel NOMBRE                entra directamente en ese nivel: plaza, mercado, puente,\n"
-    "                                selva, cueva o callejones\n"
+    "                                selva, cueva, callejones o los mapas grandes: campo, neon, cafetero\n"
     "  --prueba [semilla]            patio de combate: enemigos sin fin; F1 y F2 hacen infinitos\n"
     "                                la vida y el Poder; Z cambia de modo\n"
     "  --historia                    la historia (capítulo 1), aparcada por ahora\n"
@@ -113,6 +113,8 @@ const char kHelp[] =
     "  --exportar-modelos [CARPETA]  escribe en .glb los enemigos, Ilse y el lobo de sombra que falten\n"
     "                                y sale (--forzar: también sustituye los que ya hay)\n"
     "  --sombra                      empezar en modo sombra\n"
+    "  --medir                       sin vsync: escribe los fps reales por la consola\n"
+    "  --vuelo                       la cámara sobrevuela el escenario (para ver los mapas grandes)\n"
     "  --vitrina                     guion que enseña ataques, técnicas, formas y mecánicas (en el patio)\n"
     "  --video FICHERO.mp4 [SEG]     graba a velocidad real (30 fps, con ffmpeg); sale a los SEG segundos\n"
     "  --screenshot FICHERO SEG [N]  guarda N fotogramas (.ppm) desde SEG segundos y sale\n"
@@ -145,8 +147,11 @@ int main(int argc, char** argv) {
             quality = std::strcmp(argv[i + 1], "baja") == 0   ? Quality::Low
                       : std::strcmp(argv[i + 1], "alta") == 0 ? Quality::High
                                                               : Quality::Medium;
-    for (int i = 1; i < argc; ++i)  // grabando no se espera al monitor (con la pantalla apagada se para)
+    bool measure = false;  // --medir: sin vsync ni límite, y los fps por la consola
+    for (int i = 1; i < argc; ++i) {  // grabando no se espera al monitor (con la pantalla apagada se para)
         if (std::strcmp(argv[i], "--video") == 0) desc.vsync = false;
+        if (std::strcmp(argv[i], "--medir") == 0) desc.vsync = false, measure = true;
+    }
 #ifdef GAME_DEBUG_GL
     desc.debugContext = true;
 #endif
@@ -238,6 +243,9 @@ int main(int argc, char** argv) {
                         : std::strcmp(n, "selva") == 0      ? LevelId::Selva
                         : std::strcmp(n, "cueva") == 0      ? LevelId::Cueva
                         : std::strcmp(n, "callejones") == 0 ? LevelId::Callejones
+                        : std::strcmp(n, "campo") == 0      ? LevelId::Campo
+                        : std::strcmp(n, "neon") == 0       ? LevelId::Neon
+                        : std::strcmp(n, "cafetero") == 0   ? LevelId::Cafetero
                                                             : LevelId::Plaza;
             levelGiven = true;
         }
@@ -278,6 +286,8 @@ int main(int argc, char** argv) {
     // Opciones de desarrollo: --autoplay (un bot juega solo, sin capturar el ratón) y
     // --screenshot fichero.ppm segundos (guarda un frame en ese instante y sale).
     bool autoplay = false;
+    bool flyover = false;   // --vuelo: la cámara sobrevuela el mapa (para ver los mapas grandes)
+    for (int i = 1; i < argc; ++i) flyover |= std::strcmp(argv[i], "--vuelo") == 0;
     bool portrait = false;  // --retrato: cámara frente a la cara del protagonista (para modelarlo)
     bool bodyShot = false;  // --cuerpo: lo mismo, con el cuerpo entero
     bool turnsBot = false;  // --giros: el bot solo corre haciendo curvas y medias vueltas
@@ -673,7 +683,14 @@ int main(int argc, char** argv) {
                 eye = look + f * 3.4f + side * (turn * 2.5f) + Vec3{0, 0.3f, 0};
             }
         }
+        if (flyover) {  // --vuelo: vueltas alrededor del centro, acercándose y alejándose
+            float tt = game.time();
+            float r = 95.0f + 55.0f * std::sin(tt * 0.09f), hgt = 22.0f + 16.0f * std::sin(tt * 0.13f + 1.0f), a = tt * 0.11f;
+            look = {0, 6.0f, 0};
+            eye = look + Vec3{std::cos(a) * r, hgt, std::sin(a) * r};
+        }
         rc.view = lookAt(eye, look, {0, 1, 0});
+        rc.zFar = game.viewDistance();
         rc.proj = perspective(rc.fovY, rc.aspect, rc.zNear, rc.zFar);
         rc.position = eye;
         rc.forward = normalize(look - rc.position);
@@ -693,7 +710,7 @@ int main(int argc, char** argv) {
         ViewInfo uiView = vi;
         uiView.width = uw;
         uiView.height = uh;
-        if (!portrait && !selector.open) game.drawHud(hud, uiView, debugView);
+        if (!portrait && !flyover && !selector.open) game.drawHud(hud, uiView, debugView);
         if (menu.open) menu.draw(overlay, uw, uh);
         if (selector.open) selector.draw(overlay, uw, uh);
         if (inventory.open) inventory.draw(overlay, game, uw, uh);
@@ -711,7 +728,7 @@ int main(int argc, char** argv) {
             drawText(overlay, float(uw) * 0.5f, y + 50, 20, vitrina.subtitle(), rgba(200, 196, 190, uint8_t(255 * a)), st);
         }
         size_t verts = dd.vertexCount() + glow.vertexCount() + hud.vertexCount() + overlay.vertexCount();
-        size_t instances = renderer.instanceCount();
+        size_t instances = renderer.instanceCount(), propsDrawn = renderer.propCount();
         double cpuTime = platform::timeSeconds() - frameStart;
 
         glViewport(0, 0, w, h);
@@ -741,7 +758,7 @@ int main(int argc, char** argv) {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         Mat4 pixels = ortho(0, float(uw), float(uh), 0, -1, 1);
         hud.flush(pixels);
-        if (!debugView && !portrait && !selector.open) {  // la cara de la protagonista en el hexágono del HUD
+        if (!debugView && !portrait && !flyover && !selector.open) {  // la cara de la protagonista en el hexágono del HUD
             float k = float(w) / float(uw);
             float cxp = (float(uw) - Game::kPortraitInset) * k, cyp = Game::kPortraitInset * k;  // desde abajo
             int hw = int(31.0f * k), hh = int(29.0f * k);
@@ -783,7 +800,7 @@ int main(int argc, char** argv) {
             }
         }
         platform::swapBuffers();
-        if (videoPath) {
+        if (videoPath || measure) {
         } else if (!platform::vsyncEnabled())  // sin vsync, limitamos a ~60 fps para no quemar CPU/GPU
             platform::sleepSeconds(kFixedDt - (platform::timeSeconds() - frameStart));
 
@@ -839,6 +856,9 @@ int main(int argc, char** argv) {
                           instances, verts, game.levelName().c_str(), game.enemyCount(), game.pickupCount(),
                           paused ? " | PAUSA" : "");
             platform::setTitle(title);
+            if (measure)
+                std::printf("%.0f fps (%.2f ms) | cpu %.2f ms | %zu piezas | %s\n", statsFrames / statsTimer, 1000.0 * statsTimer / statsFrames,
+                            1000.0 * cpuTimeSum / statsFrames, propsDrawn, game.levelName().c_str());
             statsTimer = cpuTimeSum = 0;
             statsFrames = 0;
         }

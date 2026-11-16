@@ -18,6 +18,7 @@ void Game::rebuildSolids() {
     for (const Block& b : blocks_) world_.solids.push_back(b.box);
     for (const Crate& c : crates_)
         if (!c.broken) world_.solids.push_back(c.box);
+    world_.solids.insert(world_.solids.end(), propSolids_.begin(), propSolids_.end());
     for (const TreasureChest& c : chests_) world_.solids.push_back(boxFromCenter(c.pos + Vec3{0, 0.35f, 0}, {0.45f, 0.35f, 0.45f}));
     // La cámara choca con lo opaco, no con las barreras de energía (son translúcidas: si la
     // cámara se apartara de ellas, saltaría de un fotograma a otro al moverse cerca).
@@ -91,7 +92,7 @@ void Game::update(float dt, const Controls& input) {
     modeFlash_ = std::max(0.0f, modeFlash_ - dt);
     levelFlash_ = std::max(0.0f, levelFlash_ - dt);
     {
-        float want = shadowUnlocked_ ? (shadowMode_ ? 1.0f : 0.8f) : 0.0f;
+        float want = shadowUnlocked_ && !daylight_ ? (shadowMode_ ? 1.0f : 0.8f) : 0.0f;  // de día la sombra es la del sol
         darkShown_ = moveTowards(darkShown_, want, 1.5f * dt);
     }
     lightHint_ = std::max(0.0f, lightHint_ - dt);
@@ -339,8 +340,8 @@ void Game::updateEffects(float dt) {
     }
     particles_.erase(std::remove_if(particles_.begin(), particles_.end(), [](const Particle& p) { return p.life <= 0; }),
                      particles_.end());
-    // Surtidor de la fuente.
-    if (random01() < dt * 40.0f && particles_.size() < kMaxParticles) {
+    // Surtidor de la fuente (la de los escenarios de la ciudad parada, en el centro).
+    if (!world_.terrain && level_ != LevelId::Neon && random01() < dt * 40.0f && particles_.size() < kMaxParticles) {
         float a = random01() * 2.0f * kPi, r = randRange(1.2f, 2.0f);
         particles_.push_back({{0, 2.3f, 0}, {std::cos(a) * r, randRange(2.5f, 3.5f), std::sin(a) * r}, 0.9f, 0.9f,
                               0.05f, rgba(170, 225, 255), 9.8f, false});

@@ -5,6 +5,7 @@
 #include "game/game.h"
 #undef private
 #include "audio/synth.h"
+#include "game/props.h"
 #include "render/glb.h"
 #include <algorithm>
 #include <cstdio>
@@ -118,6 +119,61 @@ int main() {
             }
         }
         CHECK(!boxes.grid.cells.empty() && missing == 0, "rejilla de cajas: no se pierde ninguna (%d perdidas)", missing);
+    }
+    {  // Mapas grandes: cargan con sus piezas y su relieve, se anda sobre el terreno, las piezas
+        // con COL_ chocan y las de LUZ_ son farolas del juego
+        int pieces = propLibrary().loadDir(std::string(GAME_ASSET_DIR) + "/props");
+        CHECK(pieces >= 60, "piezas del escenario: %d leídas de assets/props", pieces);
+        int casa = propLibrary().find("casa_campo");
+        CHECK(casa >= 0 && !propLibrary()[size_t(casa)].colliders.empty() && !propLibrary()[size_t(casa)].lights.empty(),
+              "casa_campo: con caja de colisión y farol");
+        for (LevelId id : {LevelId::Campo, LevelId::Neon, LevelId::Cafetero}) {
+            Game g = fresh();
+            g.loadLevel(id);
+            run(g, 1.0f);
+            const Body& b = g.hero_.body;
+            float floor = g.world_.groundAt(b.pos.x, b.pos.z);
+            size_t propLamps = 0;
+            for (const Lamp& l : g.lamps_) propLamps += l.style == LampStyle::Prop;
+            CHECK(g.props_.size() > 150 && b.grounded && std::fabs(b.pos.y - floor) < 0.05f && propLamps > 5,
+                  "%s: %zu piezas, %zu farolas de piezas, la protagonista en el suelo (y=%.2f, suelo %.2f)", g.levelName_.c_str(),
+                  g.props_.size(), propLamps, b.pos.y, floor);
+        }
+        Game g = fresh();  // contra la casa del pueblo del campo: la pared la para
+        g.loadLevel(LevelId::Campo);
+        const AABB* wall = nullptr;
+        for (const PropInstance& p : g.props_)
+            if (p.def == casa) {
+                for (const AABB& a : g.propSolids_)
+                    if (length(flat(a.center() - p.center)) < 1.0f) wall = &a;
+                break;
+            }
+        CHECK(wall != nullptr, "campo: la casa tiene su caja en el mundo");
+        if (wall) {
+            Vec3 c = wall->center();
+            float zOut = wall->max.z + 2.0f;
+            place(g, {c.x, g.world_.groundAt(c.x, zOut) + 0.1f, zOut}, kPi);
+            Controls c2;
+            c2.move = {0, 0, -1};
+            run(g, 1.5f, c2);
+            CHECK(g.hero_.body.pos.z > wall->max.z - 0.01f, "campo: la pared de la casa para a la protagonista (z=%.2f, pared %.2f)",
+                  g.hero_.body.pos.z, wall->max.z);
+            // De día, junto al granero (sin farol) por el lado contrario al sol hay sombra; en pleno prado, no.
+            int barn = propLibrary().find("granero");
+            const AABB* bw = nullptr;
+            for (const PropInstance& p : g.props_)
+                if (p.def == barn)
+                    for (const AABB& a : g.propSolids_)
+                        if (length(flat(a.center() - p.center)) < 1.0f) bw = &a;
+            CHECK(bw != nullptr, "campo: el granero tiene su caja en el mundo");
+            if (bw) {
+                Vec3 shade{bw->min.x - 0.6f, 0, bw->center().z};
+                shade.y = g.world_.groundAt(shade.x, shade.z);
+                Vec3 open = g.heroStart_;  // el principio del camino: sin árboles ni casas
+                CHECK(g.shadowAt(shade) > 0.5f && g.shadowAt(open) < 0.5f,
+                      "campo: sombra del sol junto al granero (%.1f) y no en el prado (%.1f)", g.shadowAt(shade), g.shadowAt(open));
+            }
+        }
     }
     {  // Salto y aterrizaje
         Game g = fresh();

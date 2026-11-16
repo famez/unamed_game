@@ -25,11 +25,14 @@ for opt in ('ciudad', 'cafetero'):
 
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith('--')]
-    out = args[0] if args else os.path.join(os.path.dirname(__file__), '..', '..', 'assets', 'props')
+    argv = sys.argv[1:]
     only = None
-    if '--solo' in sys.argv:
-        only = set(sys.argv[sys.argv.index('--solo') + 1].split(','))
+    if '--solo' in argv:
+        k = argv.index('--solo')
+        only = set(argv[k + 1].split(',')) if k + 1 < len(argv) else set()
+        del argv[k:k + 2]
+    args = [a for a in argv if not a.startswith('--')]
+    out = args[0] if args else os.path.join(os.path.dirname(__file__), '..', '..', 'assets', 'props')
     os.makedirs(out, exist_ok=True)
     total = 0
     for g in GRUPOS:

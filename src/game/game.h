@@ -187,7 +187,8 @@ struct Companion {
 // encender faroles, usar algo, llegar a un sitio, salir). Al cumplirlo se abren puertas,
 // suena su escena y empieza la siguiente.
 
-enum class LevelId { Plaza, Mercado, Puente, Prueba, Selva, Cueva, Callejones, Count };
+// Campo, Neon y Cafetero: mapas grandes (terreno con relieve y piezas .glb de assets/props).
+enum class LevelId { Plaza, Mercado, Puente, Prueba, Selva, Cueva, Callejones, Campo, Neon, Cafetero, Count };
 
 // Modos de prueba (sin historia, con vida, Luz y Sombra infinitas): un escenario aleatorio
 // con Grises sin fin, un archipiélago de islas flotantes para practicar el viaje por la luz,
@@ -295,7 +296,7 @@ struct MemoryEcho {
 
 // Forma de una fuente de luz: farola de la ciudad, antorcha (selva), cristal (cueva), farolillo
 // de papel colgado (callejones) o letrero de neón en una pared.
-enum class LampStyle { Post, Torch, Crystal, Paper, Neon };
+enum class LampStyle { Post, Torch, Crystal, Paper, Neon, Prop };  // Prop: la luz de una pieza .glb (se dibuja ella)
 
 // Farola (o fuente de luz fija): el Prismero puede entrar en ella y saltar a otras. Se puede
 // romper a golpes (ya no vuelve a alumbrar) o apagar y encender con su interruptor.
@@ -380,6 +381,14 @@ struct Block {
 };
 
 // Decoración sin colisión (copas de árboles, flores, tejados...): se calcula una vez.
+// Pieza .glb colocada en el escenario (game/props.h).
+struct PropInstance {
+    int def;
+    Mat4 transform;
+    Vec3 center;   // de su caja envolvente, en el mundo (para no dibujar lo que no se ve)
+    float radius;
+};
+
 struct Decor {
     Mat4 transform;
     Vec3 center, half;
@@ -482,6 +491,7 @@ public:
     void unlockShadow() { shadowUnlocked_ = true; }
     // Oscuridad (0..1) en un punto: donde no llega la luz de las farolas, nodos y faroles.
     float shadowAt(Vec3 p) const;
+    bool sunBlocked(Vec3 p) const;  // de día: algo tapa el sol en ese punto
     bool diving() const { return diving_; }
     bool onWall() const { return onWall_; }
     bool riposting() const { return riposteStep_ >= 0; }
@@ -499,6 +509,8 @@ public:
     float formTime() const { return formTime_; }
     // Escenario y objetivo actuales.
     LevelId level() const { return level_; }
+    float viewDistance() const { return viewDistance_; }
+    const std::vector<PropInstance>& placedProps() const { return props_; }
     const std::string& levelName() const { return levelName_; }
     int partIndex() const { return int(part_); }
     int partCount() const { return int(parts_.size()); }
@@ -546,6 +558,17 @@ private:
     void buildSelva();
     void buildCueva();
     void buildCallejones();
+    void buildCampo();
+    void buildNeon();
+    void buildCafetero();
+    // Mapas grandes: terreno de `size` m de lado con puntos cada `cell` m (alturas a cero).
+    void makeTerrain(float size, float cell);
+    // Pinta un punto del terreno (color y material del suelo).
+    void paintTerrain(int ix, int iz, uint32_t color, Material m);
+    // Pone una pieza (por su nombre de fichero). `onGround`: apoyada en el terreno (en su
+    // punto más bajo, para que no flote en las cuestas); si no, a la altura de `pos`.
+    // Devuelve falso si la pieza no existe.
+    bool addProp(const std::string& name, Vec3 pos, float yaw = 0, float scale = 1, bool onGround = true);
     void addTorch(Vec3 base);
     void addCrystal(Vec3 base, uint32_t color);
     void addPaperLantern(Vec3 a, Vec3 b, float y, uint32_t color);
@@ -671,6 +694,8 @@ private:
 
     // Dibujado (game_draw.cpp).
     void drawLevel(DebugDraw& lines, Renderer* solid, const DrawFlags& f, const ViewInfo& view, float alpha) const;
+    void drawTerrain(Renderer& r) const;
+    void drawProps(Renderer& r, const ViewInfo& view) const;
     void drawHero(DebugDraw& lines, Renderer* solid, const DrawFlags& f, float alpha) const;
     void drawEnemies(DebugDraw& lines, DebugDraw& glow, Renderer* solid, const DrawFlags& f, const ViewInfo& view,
                      float alpha) const;
@@ -682,6 +707,15 @@ private:
     World cameraWorld_;  // lo que tapa la cámara (sin las barreras translúcidas)
     std::vector<Block> blocks_;  // escenario fijo (world_ = esto + cajas + cofres)
     std::vector<Decor> decor_;
+    std::vector<PropInstance> props_;
+    std::vector<AABB> propSolids_;  // colisiones de las piezas (entran en world_)
+    std::vector<uint32_t> terrainColor_;  // por punto del terreno
+    std::vector<uint8_t> terrainMaterial_;
+    uint32_t terrainVersion_ = 0;            // cambia al hacer otro terreno (hay que volver a subirlo)
+    mutable uint32_t terrainUploaded_ = 0;
+    mutable int terrainMesh_ = -1;
+    float fogScale_ = 1;        // niebla del escenario (los abiertos, menos)
+    float viewDistance_ = 200;  // hasta dónde se dibuja
     std::vector<Lamp> lamps_;
     Vec3 heroStart_;
     float heroStartYaw_ = 0;
@@ -709,6 +743,8 @@ private:
     bool leaving_ = false;
     uint32_t floorColor_ = 0;
     float night_ = 0;  // escenario de noche (0..1): cielo oscuro, solo alumbran sus luces
+    bool daylight_ = false;     // de día (mapas abiertos): la sombra es la que hace el sol
+    float waterLevel_ = -1000;  // agua (ríos) por debajo de esta altura; muy abajo: sin agua
     Material floorMaterial_ = Material::Ground;
     Character hero_;
     Inventory inv_;

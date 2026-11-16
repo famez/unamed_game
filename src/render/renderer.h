@@ -118,6 +118,8 @@ public:
     // `outline` != 0: contorno de ese color (casco invertido: la malla inflada por detrás).
     int createSkinnedMesh(const std::vector<SkinVertex>& verts, const std::vector<uint32_t>& indices);
     void skinned(int mesh, const Mat4* bones, int boneCount, float flash, uint32_t outline);
+    // Cambia el contenido de una malla ya creada (el terreno al cambiar de escenario).
+    void updateSkinnedMesh(int mesh, const std::vector<SkinVertex>& verts, const std::vector<uint32_t>& indices);
 
     // Piezas del escenario: una malla fija (creada con createSkinnedMesh, todo en el hueso 0)
     // dibujada con instancias. `prop` encola una copia con su matriz; las del mismo modelo

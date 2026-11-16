@@ -1,4 +1,5 @@
 #include "game/game.h"
+#include "game/props.h"
 
 #include "render/renderer.h"
 #include "render/hero_model.h"
@@ -349,8 +350,16 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
     solid->setScenery(true);
     // Charcos de oscuridad (antes que las salpicaduras: tienen prioridad en el límite).
     for (const ColorSplash& sp : splashes_) solid->paint(sp.pos, sp.radius * smoothstep01(sp.age / 0.3f), sp.color);
-    // Suelo del escenario o, sobre el vacío, un mar de nubes muy abajo.
-    if (world_.ground)
+    solid->setFog(fogScale_);
+    // Suelo del escenario (el relieve de los mapas grandes) o, sobre el vacío, un mar de nubes muy abajo.
+    if (world_.terrain) {
+        drawTerrain(*solid);
+        if (waterLevel_ > -100) {
+            const Terrain& t = *world_.terrain;
+            float hx = float(t.nx - 1) * t.cell * 0.5f;
+            solid->box(id, {t.x0 + hx, waterLevel_ - 0.05f, t.z0 + hx}, {hx, 0.05f, hx}, rgba(70, 120, 140), Material::Water);
+        }
+    } else if (world_.ground)
         solid->box(id, {0, -0.5f, 0}, {200, 0.5f, 200}, floorColor_, floorMaterial_);
     else
         solid->box(id, {0, -40.5f, 0}, {400, 0.5f, 400}, rgba(200, 205, 230), Material::Water);
@@ -470,6 +479,7 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
         else
             solid->box(d.transform, d.center, d.half, d.color, d.material);
     }
+    drawProps(*solid, view);
     // Bombillas de las farolas (apagadas, grises) y la luz de las cercanas: cada luz cuesta
     // en todos los píxeles de la escena.
     for (size_t i = 0; i < lamps_.size(); ++i) {
@@ -516,6 +526,9 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
                 solid->box(translate(l.pos + Vec3{-0.45f + 0.45f * float(k), 0, 0.07f}) * rotateZ(0.3f * float(k - 1)), {},
                            {0.035f, l.broken && k == 1 ? 0.08f : 0.2f, 0.02f}, nc, nm);
             solid->box(translate(l.pos + Vec3{0, -0.24f, 0.07f}), {}, {0.6f, 0.025f, 0.02f}, nc, nm);
+        } else if (l.style == LampStyle::Prop) {  // la de una pieza: apagada o rota, se tapa su cristal
+            if (!lit) solid->ellipsoid(translate(l.pos), {}, {0.24f, 0.26f, 0.24f}, l.broken ? rgba(30, 30, 34) : rgba(64, 62, 70),
+                                       Material::Metal, hf);
         } else if (l.bulb && l.broken) {  // rota: solo queda el casquillo y unos dientes de cristal
             solid->ellipsoid(translate(l.pos + Vec3{0, 0.1f, 0}), {}, {0.12f, 0.08f, 0.12f}, rgba(40, 40, 46), Material::Metal);
             for (int k = 0; k < 5; ++k) {
@@ -581,6 +594,75 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
         }
     }
     solid->setScenery(false);
+}
+
+// Terreno de los mapas grandes: una malla (se rehace al cambiar de escenario) con el color y
+// el material de cada punto.
+void Game::drawTerrain(Renderer& r) const {
+    const Terrain& t = *world_.terrain;
+    if (terrainMesh_ < 0 || terrainUploaded_ != terrainVersion_) {
+        std::vector<SkinVertex> verts(t.heights.size());
+        for (int iz = 0; iz < t.nz; ++iz)
+            for (int ix = 0; ix < t.nx; ++ix) {
+                size_t k = size_t(iz) * size_t(t.nx) + size_t(ix);
+                float x = t.x0 + float(ix) * t.cell, z = t.z0 + float(iz) * t.cell;
+                Vec3 n = t.normalAt(x, z);
+                SkinVertex& v = verts[k];
+                v = SkinVertex{};
+                v.pos[0] = x, v.pos[1] = t.heights[k], v.pos[2] = z;
+                v.normal[0] = n.x, v.normal[1] = n.y, v.normal[2] = n.z;
+                v.color = terrainColor_[k];
+                v.weights[0] = 255;
+                v.material = float(terrainMaterial_[k]);
+            }
+        std::vector<uint32_t> idx;
+        idx.reserve(size_t(t.nx - 1) * size_t(t.nz - 1) * 6);
+        for (int iz = 0; iz + 1 < t.nz; ++iz)
+            for (int ix = 0; ix + 1 < t.nx; ++ix) {  // los mismos dos triángulos que Terrain::heightAt
+                uint32_t a = uint32_t(iz * t.nx + ix), b = a + 1, c = a + uint32_t(t.nx), d = c + 1;
+                idx.insert(idx.end(), {a, c, b, d, b, c});
+            }
+        if (terrainMesh_ < 0)
+            terrainMesh_ = r.createSkinnedMesh(verts, idx);
+        else
+            r.updateSkinnedMesh(terrainMesh_, verts, idx);
+        terrainUploaded_ = terrainVersion_;
+    }
+    r.prop(terrainMesh_, Mat4::identity(), true);
+}
+
+// Piezas .glb: solo las que caen dentro de la cámara y no están demasiado lejos para su
+// tamaño (la hierba, cerca; las torres, hasta el horizonte). Dan sombra las cercanas.
+void Game::drawProps(Renderer& r, const ViewInfo& view) const {
+    if (props_.empty()) return;
+    const PropLibrary& lib = propLibrary();
+    // Planos de la pirámide de visión (de la matriz vista-proyección).
+    const float* m = view.viewProj.m;
+    float planes[6][4];
+    for (int i = 0; i < 3; ++i)
+        for (int sgn = 0; sgn < 2; ++sgn) {
+            float s = sgn ? -1.0f : 1.0f;
+            float* pl = planes[i * 2 + sgn];
+            for (int k = 0; k < 4; ++k) pl[k] = m[k * 4 + 3] + s * m[k * 4 + i];
+            float len = std::sqrt(pl[0] * pl[0] + pl[1] * pl[1] + pl[2] * pl[2]);
+            for (int k = 0; k < 4; ++k) pl[k] /= len;
+        }
+    Vec3 hero = hero_.body.pos;
+    for (const PropInstance& p : props_) {
+        float reach = p.radius < 1.2f ? 60.0f : p.radius < 4.0f ? 170.0f : viewDistance_;
+        float d = length(p.center - view.eye);
+        if (d - p.radius > reach) continue;
+        bool visible = true;
+        for (const auto& pl : planes)
+            if (pl[0] * p.center.x + pl[1] * p.center.y + pl[2] * p.center.z + pl[3] < -p.radius) {
+                visible = false;
+                break;
+            }
+        if (!visible) continue;
+        float dh = length(flat(p.center - hero)) - p.radius;
+        bool shadow = dh < 34.0f && p.radius > 0.5f;
+        r.prop(lib[size_t(p.def)].mesh, p.transform, shadow);
+    }
 }
 
 void Game::drawHero(DebugDraw& dd, Renderer* solid, const DrawFlags& f, float alpha) const {

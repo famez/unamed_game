@@ -552,6 +552,15 @@ void Game::loadLevel(LevelId id) {
     holes_.clear();
     ghosts_.clear();
     portals_.clear();
+    props_.clear();
+    propSolids_.clear();
+    world_.terrain.reset();
+    terrainColor_.clear();
+    terrainMaterial_.clear();
+    daylight_ = false;
+    waterLevel_ = -1000;
+    fogScale_ = 1;
+    viewDistance_ = 200;
     diving_ = onWall_ = false;
     level_ = id;
     part_ = 0;
@@ -570,8 +579,12 @@ void Game::loadLevel(LevelId id) {
         case LevelId::Selva: buildSelva(); break;
         case LevelId::Cueva: buildCueva(); break;
         case LevelId::Callejones: buildCallejones(); break;
+        case LevelId::Campo: buildCampo(); break;
+        case LevelId::Neon: buildNeon(); break;
+        case LevelId::Cafetero: buildCafetero(); break;
         case LevelId::Count: break;
     }
+    if (world_.terrain || id == LevelId::Neon) croma_ = cromaShown_ = 1.0f;  // los mapas grandes, a todo color
     if (freePlay_)  // sin guion que los arme, los combates de jefe esperan desde el principio
         for (Encounter& en : encounters_) en.armed = true;
     rebuildSolids();

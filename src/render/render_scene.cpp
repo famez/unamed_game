@@ -138,6 +138,18 @@ int Renderer::createSkinnedMesh(const std::vector<SkinVertex>& verts, const std:
     return int(skinMeshes_.size()) - 1;
 }
 
+void Renderer::updateSkinnedMesh(int mesh, const std::vector<SkinVertex>& verts, const std::vector<uint32_t>& indices) {
+    if (mesh < 0 || mesh >= int(skinMeshes_.size())) return;
+    SkinMesh& m = skinMeshes_[size_t(mesh)];
+    glBindVertexArray(m.vao);
+    glBindBuffer(GL_ARRAY_BUFFER, m.vbo);
+    glBufferData(GL_ARRAY_BUFFER, GLsizeiptr(verts.size() * sizeof(SkinVertex)), verts.data(), GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m.ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, GLsizeiptr(indices.size() * sizeof(uint32_t)), indices.data(), GL_STATIC_DRAW);
+    glBindVertexArray(0);
+    m.count = GLsizei(indices.size());
+}
+
 void Renderer::skinned(int mesh, const Mat4* bones, int boneCount, float flash, uint32_t outline) {
     if (mesh < 0 || mesh >= int(skinMeshes_.size())) return;
     SkinDraw d;

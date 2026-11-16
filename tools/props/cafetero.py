@@ -9,7 +9,7 @@ import random
 from kit import Piece, box, cylinder, sphere, gable, pyramid, mix, shade, T, RY, RX, RZ, S, mul
 
 WALL = '#f4efe4'
-TILE = '#9c4a2c'
+TILE = '#84432c'  # barro cocido, envejecido
 RAFTER = '#5a3a24'
 FLOWERS = ['#e0245e', '#ff6f91', '#c13fd6', '#ff9f1c', '#f7f7f2', '#e83a3a']
 PALETTES = {  # (zócalo y balcón, puertas y contraventanas)
@@ -21,7 +21,7 @@ PALETTES = {  # (zócalo y balcón, puertas y contraventanas)
 
 def tiles(base):
     """Teja: filas alternas más claras y oscuras (según la altura en el faldón)."""
-    return lambda q: shade(base, 0.78 if int(q[1] * 6) % 2 else 1.0)
+    return lambda q: shade(base, (0.78 if int(q[1] * 6) % 2 else 1.0) * (0.9 if int(q[0] * 4) % 2 else 1.0))
 
 
 def shutter_window(p, m, w, h, frame, shutter, open_=True, bars=True):

@@ -38,7 +38,11 @@ float Game::lampLightAt(Vec3 p) const {
 
 // Oscuridad: lo que no alumbra ninguna luz (farolas encendidas, nodos, faroles). Es lo mismo
 // que oscurece el render (game_draw.cpp le pasa las mismas luces).
-float Game::shadowAt(Vec3 p) const { return 1.0f - std::max(lightAt(p), lampLightAt(p)); }
+// De día (mapas abiertos) la oscuridad es la sombra del sol: bajo un tejado, detrás de un muro.
+float Game::shadowAt(Vec3 p) const {
+    if (daylight_) return sunBlocked(p) ? 1.0f - lampLightAt(p) : 0.0f;
+    return 1.0f - std::max(lightAt(p), lampLightAt(p));
+}
 
 // Multiplicador de daño según la mitad que usa el protagonista y la familia del enemigo
 // (solo cuando ya tiene las dos: antes, la luz hiere a todos por igual).
