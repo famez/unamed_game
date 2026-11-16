@@ -6,7 +6,9 @@
 #undef private
 #include "audio/synth.h"
 #include "render/glb.h"
+#include <algorithm>
 #include <cstdio>
+#include <memory>
 
 const float dt = 1.0f / 60;
 const float kBruteHp = enemyDef(EnemyKind::Brute).maxHealth;
@@ -71,6 +73,52 @@ Enemy& addEnemy(Game& g, EnemyKind k, Vec3 pos, AiState state = AiState::Idle) {
 }
 
 int main() {
+    {  // Terreno con relieve: se baja una cuesta andando sin despegarse, y la rejilla de cajas
+        // encuentra lo mismo que mirar todas
+        auto t = std::make_shared<Terrain>();
+        t->x0 = -50, t->z0 = -50, t->cell = 2, t->nx = t->nz = 51;
+        t->heights.resize(51 * 51);
+        for (int z = 0; z < 51; ++z)
+            for (int x = 0; x < 51; ++x) t->at(x, z) = 0.35f * float(50 - x) * 2.0f;  // baja hacia +x (35 %)
+        World w;
+        w.terrain = t;
+        Body b;
+        b.pos = {-20, t->heightAt(-20, 0), 0};
+        b.grounded = true;
+        int airborne = 0;
+        for (int i = 0; i < 120; ++i) {
+            b.vel.x = 6.5f, b.vel.z = 0;
+            moveBody(b, w, dt, 0.3f);
+            airborne += !b.grounded;
+        }
+        CHECK(airborne == 0 && std::fabs(b.pos.y - t->heightAt(b.pos.x, b.pos.z)) < 1e-3f,
+              "terreno: cuesta abajo siempre en el suelo (%d pasos en el aire, x=%.1f)", airborne, b.pos.x);
+        RayHit h;
+        bool hit = segmentVsWorld({0, 40, 0}, {0, -10, 0}, w, h);
+        float y = 40 - 50 * h.t;
+        CHECK(hit && std::fabs(y - t->heightAt(0, 0)) < 0.01f, "terreno: el rayo vertical da en el suelo (y=%.2f, suelo %.2f)", y,
+              t->heightAt(0, 0));
+        World boxes;
+        uint32_t seed = 7;
+        auto rnd = [&]() { return float((seed = seed * 1664525u + 1013904223u) >> 8) / 16777216.0f; };
+        for (int i = 0; i < 400; ++i) {
+            Vec3 c{rnd() * 300 - 150, 1, rnd() * 300 - 150}, half{0.3f + rnd() * 6, 1, 0.3f + rnd() * 6};
+            boxes.solids.push_back(boxFromCenter(c, half));
+        }
+        boxes.buildGrid();
+        int missing = 0;
+        std::vector<int> found;
+        for (int q = 0; q < 200; ++q) {
+            Vec3 lo{rnd() * 300 - 150, 0, rnd() * 300 - 150}, hi = lo + Vec3{rnd() * 10, 0, rnd() * 10};
+            boxes.query(lo, hi, found);
+            for (size_t i = 0; i < boxes.solids.size(); ++i) {
+                const AABB& a = boxes.solids[i];
+                bool touches = a.min.x <= hi.x && a.max.x >= lo.x && a.min.z <= hi.z && a.max.z >= lo.z;
+                if (touches && std::find(found.begin(), found.end(), int(i)) == found.end()) ++missing;
+            }
+        }
+        CHECK(!boxes.grid.cells.empty() && missing == 0, "rejilla de cajas: no se pierde ninguna (%d perdidas)", missing);
+    }
     {  // Salto y aterrizaje
         Game g = fresh();
         run(g, 0.2f);

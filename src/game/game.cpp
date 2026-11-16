@@ -21,9 +21,11 @@ void Game::rebuildSolids() {
     for (const TreasureChest& c : chests_) world_.solids.push_back(boxFromCenter(c.pos + Vec3{0, 0.35f, 0}, {0.45f, 0.35f, 0.45f}));
     // La cámara choca con lo opaco, no con las barreras de energía (son translúcidas: si la
     // cámara se apartara de ellas, saltaría de un fotograma a otro al moverse cerca).
+    world_.buildGrid();
     cameraWorld_ = world_;
     for (const Gate& g : gates_)
         if (g.closed) world_.solids.push_back(g.box);
+    world_.buildGrid();
 }
 
 void Game::init(const char* assetDir) {
@@ -322,9 +324,10 @@ void Game::spawnRing(Vec3 pos, float radius, float life, uint32_t color) { rings
 
 float Game::groundHeight(Vec3 p) const {
     RayHit h;
-    Vec3 from{p.x, p.y, p.z}, to{p.x, -1.0f, p.z};
-    if (from.y <= 0) return 0;
-    return segmentVsWorld(from, to, world_, h) ? from.y + (to.y - from.y) * h.t : 0.0f;
+    float floor = world_.groundAt(p.x, p.z);  // 0 o el relieve del terreno
+    Vec3 from{p.x, p.y, p.z}, to{p.x, floor - 1.0f, p.z};
+    if (from.y <= floor) return floor;
+    return segmentVsWorld(from, to, world_, h) ? from.y + (to.y - from.y) * h.t : floor;
 }
 
 void Game::updateEffects(float dt) {
