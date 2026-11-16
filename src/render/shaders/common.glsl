@@ -16,7 +16,8 @@ const vec3 kMoon = vec3(0.30, 0.38, 0.62) * 0.55;
 #define kZenith mix(mix(kZenithGrey, kZenithWarm, uWorldColor), vec3(0.004, 0.008, 0.03), uNight)
 #define kHorizon mix(mix(kHorizonGrey, kHorizonWarm, uWorldColor), vec3(0.035, 0.045, 0.09), uNight)
 #define kBounce (mix(kBounceGrey, kBounceWarm, uWorldColor) * mix(1.0, 0.3, uNight))
-#define kWorldFog mix(0.024, 0.007, uWorldColor)  // niebla de la ciudad parada
+uniform float uFogScale;  // los mapas abiertos la aclaran (alcance de la vista)
+#define kWorldFog (mix(0.024, 0.007, uWorldColor) * uFogScale)  // niebla de la ciudad parada
 const float kFogDensity = 0.007;  // humo y volúmenes
 
 vec3 toLinear(vec3 c) { return pow(c, vec3(2.2)); }

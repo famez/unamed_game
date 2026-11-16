@@ -97,6 +97,8 @@ public:
     // Noche (0..1): luna en vez de sol, cielo estrellado y oscuro; solo alumbran las luces.
     void setNight(float n) { night_ = n; }
     void setScenery(bool on) { scenery_ = on; }
+    // Densidad de la niebla (1 = la de siempre; menos, se ve más lejos: mapas abiertos).
+    void setFog(float scale) { fogScale_ = scale; }
     // Salpicadura de color en el suelo (no le afecta la falta de croma).
     void paint(Vec3 pos, float radius, uint32_t color);
     // Zona donde el color ya ha vuelto (alrededor de un nodo encendido): el escenario se
@@ -116,6 +118,12 @@ public:
     // `outline` != 0: contorno de ese color (casco invertido: la malla inflada por detrás).
     int createSkinnedMesh(const std::vector<SkinVertex>& verts, const std::vector<uint32_t>& indices);
     void skinned(int mesh, const Mat4* bones, int boneCount, float flash, uint32_t outline);
+
+    // Piezas del escenario: una malla fija (creada con createSkinnedMesh, todo en el hueso 0)
+    // dibujada con instancias. `prop` encola una copia con su matriz; las del mismo modelo
+    // salen en una sola llamada. `shadow`: falso para las lejanas (fuera del mapa de sombras).
+    void prop(int mesh, const Mat4& transform, bool shadow = true);
+    size_t propCount() const { return propCount_; }
 
     // Dibuja cielo + sombras + escena en el framebuffer actual y vacía la lista.
     // `shadowCenter`: centro del área con sombras (normalmente el jugador).
@@ -171,6 +179,21 @@ private:
         uint32_t outline;
     };
     std::vector<SkinMesh> skinMeshes_;
+    // Instancias de piezas por malla (matrices seguidas); las que no dan sombra van aparte.
+    struct PropQueue {
+        std::vector<float> lit, unshadowed;
+    };
+    std::vector<PropQueue> props_;
+    size_t propCount_ = 0;
+    GLuint propProgram_ = 0, propShadowProgram_ = 0, propVbo_ = 0;
+    size_t propVboCapacity_ = 0;
+    struct PropRange {
+        int mesh;
+        size_t first, shadowed, total;  // en el buffer: primero las que dan sombra
+    };
+    std::vector<PropRange> propRanges_;
+    void uploadProps();
+    void drawProps(bool shadowPass);
     std::vector<SkinDraw> skinDraws_;
     GLuint skinProgram_ = 0, skinShadowProgram_ = 0;
     void drawSkinned(GLuint prog, bool outlinePass);
@@ -198,6 +221,7 @@ private:
     bool scenery_ = false;
     float worldColor_ = 1.0f;
     float night_ = 0.0f;
+    float fogScale_ = 1.0f;
     std::vector<float> paints_;  // x, y, z, radio, r, g, b
     std::vector<float> zones_;   // x, y, z, radio
     std::vector<float> litAreas_;  // x, y, z, radio

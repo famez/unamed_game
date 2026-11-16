@@ -93,6 +93,9 @@ const BuiltModel* wolfModel();        // el lobo de sombra (.glb), o nullptr
 bool loadCharacterGlb(Renderer& r, const std::string& path, const JointDef* rig, int jointCount, BuiltModel& out,
                       std::string& error);
 
+// Sube a la GPU las mallas de las piezas del escenario (game/props.h) que aún no lo estén.
+void uploadPropMeshes(Renderer& r);
+
 // Aspecto del protagonista según su mitad: el de siempre (historia, antes de la sombra), el de
 // la luz (abrigo marfil y oro, pelo rubio platino) o el de la sombra (negro y violeta, pelo
 // plateado). Las variantes son la misma malla con los colores cambiados.

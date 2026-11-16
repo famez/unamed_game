@@ -1,5 +1,7 @@
 #include "render/models.h"
 
+#include "game/props.h"
+
 #include "render/debug_draw.h"
 #include "render/glb.h"
 #include "render/glb_write.h"
@@ -817,3 +819,9 @@ bool glbCharacterId(const std::string& stem, ModelId& id, bool& wolf) {
 
 bool modelFromGlb(ModelId id) { return gFromGlb[int(id)]; }
 const BuiltModel* wolfModel() { return gWolfLoaded ? &gWolf : nullptr; }
+
+void uploadPropMeshes(Renderer& r) {
+    PropLibrary& lib = propLibrary();
+    for (size_t i = 0; i < lib.size(); ++i)
+        if (lib[i].mesh < 0) lib[i].mesh = r.createSkinnedMesh(lib[i].verts, lib[i].indices);
+}

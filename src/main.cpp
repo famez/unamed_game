@@ -2,6 +2,7 @@
 #include "audio/synth.h"
 #include "render/debug_draw.h"
 #include "game/game.h"
+#include "game/props.h"
 #include "core/gl.h"
 #include "ui/inventory_menu.h"
 #include "dev/showcase.h"
@@ -189,6 +190,8 @@ int main(int argc, char** argv) {
     buildModels(renderer);
     loadHeroModels(renderer, assetDir);  // Vela y Hollín (.glb); sin ellos, el modelo de siempre
     loadCharacterGlbs(renderer, std::string(assetDir) + "/models");  // enemigos, Ilse y el lobo
+    propLibrary().loadDir(std::string(assetDir) + "/props");          // piezas del escenario
+    uploadPropMeshes(renderer);
     std::printf("modelos generados en %.0f ms\n", 1000.0 * (platform::timeSeconds() - modelStart));
     for (int i = 1; i + 1 < argc; ++i)  // --visor FICHERO.glb: solo el modelo, sin partida
         if (std::strcmp(argv[i], "--visor") == 0) {

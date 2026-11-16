@@ -63,6 +63,10 @@ bool Renderer::init(Quality q) {
     skinProgram_ = link(kSkinVs, kMeshFs, true);
     skinShadowProgram_ = link(kSkinShadowVs, kShadowFs, false);
     if (!skinProgram_ || !skinShadowProgram_) return false;
+    propProgram_ = link(kPropVs, kMeshFs, true);
+    propShadowProgram_ = link(kPropShadowVs, kShadowFs, false);
+    if (!propProgram_ || !propShadowProgram_) return false;
+    glGenBuffers(1, &propVbo_);
     shadowProgram_ = link(kShadowVs, kShadowFs, false);
     skyProgram_ = link(kSkyVs, kSkyFs, true);
     fxProgram_ = link(kSmokeVs, kSmokeFs, true);
@@ -172,6 +176,9 @@ void Renderer::shutdown() {
     releaseSceneTargets();
     glDeleteProgram(skinProgram_);
     glDeleteProgram(skinShadowProgram_);
+    glDeleteProgram(propProgram_);
+    glDeleteProgram(propShadowProgram_);
+    glDeleteBuffers(1, &propVbo_);
     for (SkinMesh& m : skinMeshes_) {
         glDeleteBuffers(1, &m.vbo);
         glDeleteBuffers(1, &m.ebo);
@@ -272,6 +279,7 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
 
     // Las instancias se suben una vez y sirven para las dos pasadas.
     for (Batch* b : {&boxes_, &spheres_, &highlightBoxes_, &highlightSpheres_}) uploadBatch(*b);
+    uploadProps();
     bool highlight = !highlightBoxes_.items.empty() || !highlightSpheres_.items.empty();
     auto drawHighlighted = [&] {
         drawBatch(highlightBoxes_);
@@ -297,6 +305,11 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
         glUseProgram(skinShadowProgram_);
         setMat4(skinShadowProgram_, "uLightViewProj", lightViewProj);
         drawSkinned(skinShadowProgram_, false);
+    }
+    if (!propRanges_.empty()) {
+        glUseProgram(propShadowProgram_);
+        setMat4(propShadowProgram_, "uLightViewProj", lightViewProj);
+        drawProps(true);
     }
     glDisable(GL_POLYGON_OFFSET_FILL);
     glBindFramebuffer(GL_FRAMEBUFFER, targetFbo_);
@@ -366,6 +379,7 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
         glUniform4f(glGetUniformLocation(prog, "uOutlineColor"), 0, 0, 0, 0);
         glUniform1f(glGetUniformLocation(prog, "uWorldColor"), worldColor_);
         glUniform1f(glGetUniformLocation(prog, "uNight"), night_);
+        glUniform1f(glGetUniformLocation(prog, "uFogScale"), fogScale_);
         glUniform1f(glGetUniformLocation(prog, "uDarkness"), darkness_);
         int litCount = int(litAreas_.size() / 4);
         glUniform1i(glGetUniformLocation(prog, "uLitCount"), litCount);
@@ -394,6 +408,10 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
         glUniform1f(glGetUniformLocation(skinProgram_, "uInflate"), 0.011f);
         drawSkinned(skinProgram_, true);
         glCullFace(GL_BACK);
+    }
+    if (!propRanges_.empty()) {
+        sceneUniforms(propProgram_);
+        drawProps(false);
     }
     sceneUniforms(meshProgram_);
     drawBatch(boxes_);
@@ -434,6 +452,8 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
     glBindVertexArray(0);
     for (Batch* b : {&boxes_, &spheres_, &highlightBoxes_, &highlightSpheres_}) b->items.clear();
     skinDraws_.clear();
+    for (PropQueue& q : props_) q.lit.clear(), q.unshadowed.clear();
+    propCount_ = 0;
     smoke_.clear();
     volumes_.clear();
     lights_.clear();

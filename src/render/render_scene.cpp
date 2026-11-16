@@ -150,6 +150,58 @@ void Renderer::skinned(int mesh, const Mat4* bones, int boneCount, float flash, 
     skinDraws_.push_back(d);
 }
 
+void Renderer::prop(int mesh, const Mat4& transform, bool shadow) {
+    if (mesh < 0 || mesh >= int(skinMeshes_.size())) return;
+    if (size_t(mesh) >= props_.size()) props_.resize(size_t(mesh) + 1);
+    std::vector<float>& q = shadow ? props_[size_t(mesh)].lit : props_[size_t(mesh)].unshadowed;
+    q.insert(q.end(), transform.m, transform.m + 16);
+    ++propCount_;
+}
+
+// Todas las matrices de las piezas en un solo buffer, agrupadas por malla.
+void Renderer::uploadProps() {
+    propRanges_.clear();
+    size_t total = 0;
+    for (const PropQueue& q : props_) total += q.lit.size() + q.unshadowed.size();
+    if (total == 0) return;
+    std::vector<float> data;
+    data.reserve(total);
+    for (size_t m = 0; m < props_.size(); ++m) {
+        const PropQueue& q = props_[m];
+        if (q.lit.empty() && q.unshadowed.empty()) continue;
+        PropRange r{int(m), data.size() / 16, q.lit.size() / 16, (q.lit.size() + q.unshadowed.size()) / 16};
+        data.insert(data.end(), q.lit.begin(), q.lit.end());
+        data.insert(data.end(), q.unshadowed.begin(), q.unshadowed.end());
+        propRanges_.push_back(r);
+    }
+    glBindBuffer(GL_ARRAY_BUFFER, propVbo_);
+    size_t bytes = data.size() * sizeof(float);
+    if (bytes > propVboCapacity_) {
+        propVboCapacity_ = bytes * 2;
+        glBufferData(GL_ARRAY_BUFFER, GLsizeiptr(propVboCapacity_), nullptr, GL_STREAM_DRAW);
+    }
+    glBufferSubData(GL_ARRAY_BUFFER, 0, GLsizeiptr(bytes), data.data());
+}
+
+// Una llamada por modelo: la malla con sus matrices como atributo por instancia.
+void Renderer::drawProps(bool shadowPass) {
+    for (const PropRange& r : propRanges_) {
+        size_t count = shadowPass ? r.shadowed : r.total;
+        if (count == 0) continue;
+        const SkinMesh& m = skinMeshes_[size_t(r.mesh)];
+        glBindVertexArray(m.vao);
+        glBindBuffer(GL_ARRAY_BUFFER, propVbo_);
+        for (int c = 0; c < 4; ++c) {
+            GLuint loc = GLuint(6 + c);
+            glEnableVertexAttribArray(loc);
+            glVertexAttribPointer(loc, 4, GL_FLOAT, GL_FALSE, 64, (void*)(r.first * 64 + size_t(c) * 16));
+            glVertexAttribDivisor(loc, 1);
+        }
+        glDrawElementsInstanced(GL_TRIANGLES, m.count, GL_UNSIGNED_INT, nullptr, GLsizei(count));
+    }
+    glBindVertexArray(0);
+}
+
 // Dibuja las mallas encoladas con el programa ya activo y sus uniforms de escena puestos.
 // En la pasada de contorno: solo las que lo llevan, infladas y con color plano.
 void Renderer::drawSkinned(GLuint prog, bool outlinePass) {

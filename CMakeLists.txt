@@ -39,6 +39,8 @@ set(LOGIC_SOURCES
     src/game/allies.cpp
     src/game/story.cpp
     src/audio/synth.cpp
+    src/game/props.cpp
+    src/render/glb.cpp
 )
 
 
@@ -66,7 +68,6 @@ add_executable(game
     src/ui/level_select.cpp
     src/dev/showcase.cpp
     src/dev/viewer.cpp
-    src/render/glb.cpp
     src/render/glb_write.cpp
     src/render/hero_model.cpp
     src/render/models.cpp
@@ -97,7 +98,7 @@ target_compile_definitions(game PRIVATE
 option(GAME_TESTS "Compilar los tests de lógica" ON)
 if(GAME_TESTS)
     enable_testing()
-    add_executable(logic_test tests/logic_test.cpp src/render/glb.cpp ${LOGIC_SOURCES})
+    add_executable(logic_test tests/logic_test.cpp ${LOGIC_SOURCES})
     target_include_directories(logic_test PRIVATE src)
     target_compile_definitions(logic_test PRIVATE GAME_ASSET_DIR="${CMAKE_SOURCE_DIR}/assets")
     target_compile_options(logic_test PRIVATE -Wall -Wextra -g -fsanitize=address,undefined -fno-omit-frame-pointer)
