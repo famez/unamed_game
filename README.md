@@ -166,8 +166,8 @@ vuelve al selector.
   al encender sus cuatro **nodos de color**) y la oscuridad lejos de las farolas. La Ciudad Neón
   es de noche y a todo color.
   - **Campo abierto** (`--nivel campo`): **salen Grises al azar** por el valle (lejos de
-    la granja; como mucho cinco a la vez; los que se quedan atrás desaparecen). valle de 400 m cerrado por montañas, con
-    colinas, un río con puente de madera, un camino con faroles, una granja (casas, granero,
+    la granja; como mucho cinco a la vez; los que se quedan atrás desaparecen). Valle de 400 m cerrado por montañas,
+    con colinas, un río con puente de madera, un camino con faroles, una granja (casas, granero,
     pozo, huerto vallado con fardos), la loma de los molinos y un pinar.
   - **Ciudad Neón** (`--nivel neon`, de noche): manzanas de torres con ventanas encendidas,
     tiendas, letreros verticales, expendedoras, pantallas, semáforos y pasos de cebra, una vía
