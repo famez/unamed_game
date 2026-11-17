@@ -111,6 +111,20 @@ Especiales de combate: atacar corriendo = **embestida**; atacar con la guardia =
   - **Crear sombra**: las farolas se **rompen a golpes** (y ya no se arreglan) o se apagan y
     encienden con su **interruptor** (F), que suele estar apartado de ellas.
   - Se cambia de luz a sombra **cruzando un portal** (en los niveles sin historia, también con Z).
+- **El barrio de los faroleros** (el reparto del paquete «Farolas», ver `docs/historia.md`):
+  en la plaza, la **fonda de la Señora Mecha** (F: descansar, vida llena y punto de control),
+  el **taller de la Doctora Umbra** (F: abre el taller), **Brasa** (F: un consejo de combo),
+  **Pabilo**, el hermano de Vela, que la sigue mientras no haya peligro, y vecinos con su
+  frase (Abuelo Candil, Chispa, el mozo, el pregonero, la música). Por los demás escenarios,
+  los oficios de la luz (aceitero, vidriera, trapera, relojero, guardia apagado, monja del
+  fanal, deshollinadora, niño de las sombras, barquero). Cada uno, parado, en su **pose de
+  reposo** (`poses_idle_*.json`).
+- **Criaturas de las farolas**: **polillas de tinta** (enjambres que van a la farola
+  encendida más cercana y la apagan si no las espantas en 10 s; mueren de un golpe) y
+  **luciérnagas de cristal** (salen de las farolas rotas, se lanzan contra ti y al morir
+  estallan, encienden las farolas apagadas cercanas y queman a los Grises de sombra).
+- **Música «Farolas»**: el tema de Vela y Hollín (en la plaza y los mapas abiertos) suena en
+  dos capas, luz y sombra, que se cruzan al cambiar de forma.
 - **Enemigos de luz y de sombra** (todos fueron personas): *Deslumbrado* (figura alta y
   sobreexpuesta, dos zarpazos), *Vigía* (ojo flotante que dispara luz), *Coloso* (mole de
   sombra que aplasta) y *Sabueso* (cuadrúpedo que caza en manada y muerde por la espalda).
@@ -183,11 +197,8 @@ vuelve al selector.
     arcos con el tranvía amarillo; la favela de casas de colores con su depósito de agua en el
     morro, con escaleras de azulejos; la estatua de brazos abiertos en lo alto del cerro; y en
     la bahía, el Pan de Azúcar y el morro de Urca unidos por el teleférico.
-  - **Habitantes** (`assets/models/habitantes`, ver su `FICHA_HABITANTES.md`): nueve
-    personajes con el esqueleto de la protagonista que pasean por su zona de cada mapa, se
-    paran a descansar y miran a la protagonista si se acerca (cafeteros y recolectoras en el
-    pueblo, oficinistas, chicas neón y cocineros en la ciudad, surfistas y vendedoras en la
-    playa, granjeras y abuelos en el campo). Los genera `python3 tools/personajes/habitantes.py`.
+  - **Habitantes** (`assets/models/habitantes`): pasean por su zona de cada mapa, se paran
+    en su pose de reposo y miran a la protagonista si se acerca.
 
   - `--vuelo` sobrevuela el mapa y `--medir` escribe los fps reales por la consola.
 - En todos: **Z** cambia entre luz y sombra y **F1 / F2** hacen infinitos la vida y el Poder

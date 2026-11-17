@@ -1,5 +1,10 @@
 # Habitantes: ficha
 
+> Los personajes del barrio de los faroleros (el paquete «Farolas») tienen su propia ficha:
+> `FICHA_CIUDADANOS.md` y `FICHA_TANDA3.md`. Abuelo, cafetero y chica neón son ahora Abuelo
+> Candil, el mozo de la fonda y Chispa. Esta ficha cubre los que genera
+> `tools/personajes/habitantes.py`.
+
 Nueve personajes para poblar los mapas grandes, con **el mismo esqueleto que la protagonista**
 (y que Ilse): se animan con el motor (quieto, andar, correr...). Los genera
 `python3 tools/personajes/habitantes.py` a partir de una ficha por personaje (piel, pelo y

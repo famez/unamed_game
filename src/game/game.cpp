@@ -31,7 +31,8 @@ void Game::rebuildSolids() {
 
 void Game::init(const char* assetDir) {
     // Historia: el guion del capítulo (sin él, el escenario no tiene combates ni escenas).
-    names_ = {{"voz", ""}, {"objeto", ""}, {"ilse", "???"}};
+    names_ = {{"voz", ""}, {"objeto", ""}, {"ilse", "???"}, {"pabilo", "Pabilo"}, {"brasa", "Brasa"}, {"mecha", "Señora Mecha"},
+              {"umbra", "Doctora Umbra"}};
     story_ = assetDir && script_.load(std::string(assetDir) + "/story/capitulo1.txt");
     // Con historia se empieza sin nada: los poderes se recuperan por el camino.
     if (story_) powers_ = Powers{false, false, false, false, false, false, false, false};

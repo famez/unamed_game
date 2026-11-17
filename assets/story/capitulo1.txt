@@ -5,7 +5,8 @@
 #          eco <nombre>, eco_activa <n>, ilse x y z, ilse_gesto, ilse_fuera, portal x y z,
 #          tutorial <tecla> <acción> <palabra>, poder <nombre>, armar <combate>,
 #          abrir <puerta>, dar <objeto>, apagar_luces, fin_capitulo.
-# Hablantes (los pocos que hay): voz (un recuerdo), objeto (lo que pone en algo), ilse.
+# Hablantes (los pocos que hay): voz (un recuerdo), objeto (lo que pone en algo), ilse, y los
+# vecinos del barrio: pabilo, brasa, mecha (una frase suelta en un momento que la merece).
 
 # ============================ PLAZA DEL RELOJ ============================
 
@@ -28,6 +29,7 @@
 == tras_perros
 !aviso
 !tutorial Shift correr Correr
+pabilo: ¿Ya se han ido? …Te sigo. Llevo la escalera.
 
 == nodo_1
 !plano -9.5 1.8 -9.0  -6.0 2.8 -4.5 2.5
@@ -57,6 +59,7 @@ voz: Si un día se apaga todo, enciende tú la primera luz.
 !tutorial Q entrar Entrar en la luz
 !tutorial Q saltar_luz Saltar a otra luz
 !tutorial Espacio salir Salir
+brasa: Así se entra. Y se sale igual: sin prisa.
 
 == espejos
 !aviso
@@ -64,6 +67,7 @@ voz: Si un día se apaga todo, enciende tú la primera luz.
 
 == puerta_abierta
 !plano 0 2.0 16.0  0 2.8 7.0 2.5
+mecha: La sopa estará caliente cuando vuelvas.
 
 # ============================ MERCADO QUEMADO ============================
 
