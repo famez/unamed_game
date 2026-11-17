@@ -1,5 +1,7 @@
 #include "audio/synth.h"
 
+#include "audio/barks.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -776,6 +778,7 @@ StereoBuffer renderSfx(Sfx id) {
                       {{pitch[k], pitch[k] + 15, pitch[k] - 5, pitch[k] - 30}, 0.12f, 0.35f, 1.6f}, 0.42f - 0.08f * float(k));
             break;
         }
+        case Sfx::Abuelo:  // solo grabado (sfxVariants)
         case Sfx::Count: break;
     }
     // Saturación suave (tanh normalizada): golpes con más mordida, sin recortar.
@@ -932,6 +935,16 @@ std::vector<StereoBuffer> loadTakes(const std::string& dir, int who, const char*
 }  // namespace
 
 std::vector<StereoBuffer> sfxVariants(Sfx id, const std::string& voiceDir) {
+    if (id == Sfx::Abuelo) {  // grabado o nada; las que falten quedan vacías (se calla en esa)
+        std::vector<StereoBuffer> takes(size_t(BarkKind::Count) * kBarkTakes);
+        bool any = false;
+        for (int k = 0; k < int(BarkKind::Count); ++k)
+            for (int n = 0; n < kBarkTakes; ++n)
+                any |= !voiceDir.empty() &&
+                       loadOgg(voiceDir + "/abuelo/" + kAbueloBarks[k][n].file + ".ogg", takes[size_t(k * kBarkTakes + n)]);
+        if (!any) takes.clear();
+        return takes;
+    }
     int who;
     const char* line;
     if (voiceDir.empty() || !voiceInfo(id, who, line)) return {renderSfx(id)};

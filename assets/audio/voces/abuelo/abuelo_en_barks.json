@@ -1,0 +1,218 @@
+{
+ "npc": "abuelo",
+ "idioma": "en",
+ "voz": "ElevenLabs · Old Pirate Captain",
+ "formato": "ogg/wav mono 44,1 kHz · -18 dBFS RMS · picos -1 dBFS",
+ "barks": {
+  "ay": [
+   {
+    "archivo": "abuelo_ay_01.ogg",
+    "texto": "Ow!"
+   },
+   {
+    "archivo": "abuelo_ay_02.ogg",
+    "texto": "Oh, my back!"
+   },
+   {
+    "archivo": "abuelo_ay_03.ogg",
+    "texto": "Whoa!"
+   }
+  ],
+  "despedida": [
+   {
+    "archivo": "abuelo_despedida_01.ogg",
+    "texto": "Go with the light."
+   },
+   {
+    "archivo": "abuelo_despedida_02.ogg",
+    "texto": "Off you go… see you tomorrow."
+   },
+   {
+    "archivo": "abuelo_despedida_03.ogg",
+    "texto": "Mind the shadows."
+   }
+  ],
+  "eh_enfado": [
+   {
+    "archivo": "abuelo_eh_enfado_01.ogg",
+    "texto": "Hey! You!"
+   },
+   {
+    "archivo": "abuelo_eh_enfado_02.ogg",
+    "texto": "Now see here!"
+   },
+   {
+    "archivo": "abuelo_eh_enfado_03.ogg",
+    "texto": "The nerve!"
+   }
+  ],
+  "eh_sorpresa": [
+   {
+    "archivo": "abuelo_eh_sorpresa_01.ogg",
+    "texto": "Oh!"
+   },
+   {
+    "archivo": "abuelo_eh_sorpresa_02.ogg",
+    "texto": "Good heavens!"
+   },
+   {
+    "archivo": "abuelo_eh_sorpresa_03.ogg",
+    "texto": "Well I never!"
+   }
+  ],
+  "farola": [
+   {
+    "archivo": "abuelo_farola_01.ogg",
+    "texto": "That lamp… it'll go out tonight."
+   },
+   {
+    "archivo": "abuelo_farola_02.ogg",
+    "texto": "There used to be light on every corner."
+   },
+   {
+    "archivo": "abuelo_farola_03.ogg",
+    "texto": "I lit that one myself!"
+   }
+  ],
+  "hmm": [
+   {
+    "archivo": "abuelo_hmm_01.ogg",
+    "texto": "Hmm…"
+   },
+   {
+    "archivo": "abuelo_hmm_02.ogg",
+    "texto": "Hmmm… I see."
+   },
+   {
+    "archivo": "abuelo_hmm_03.ogg",
+    "texto": "Hm. Well well."
+   }
+  ],
+  "hollin": [
+   {
+    "archivo": "abuelo_hollin_01.ogg",
+    "texto": "You again?"
+   },
+   {
+    "archivo": "abuelo_hollin_02.ogg",
+    "texto": "Hm. Shadow eyes…"
+   },
+   {
+    "archivo": "abuelo_hollin_03.ogg",
+    "texto": "Get away from my lamp!"
+   }
+  ],
+  "mm_pregunta": [
+   {
+    "archivo": "abuelo_mm_pregunta_01.ogg",
+    "texto": "Hm?"
+   },
+   {
+    "archivo": "abuelo_mm_pregunta_02.ogg",
+    "texto": "What's that you say?"
+   },
+   {
+    "archivo": "abuelo_mm_pregunta_03.ogg",
+    "texto": "Eh? What?"
+   }
+  ],
+  "no": [
+   {
+    "archivo": "abuelo_no_01.ogg",
+    "texto": "No… no."
+   },
+   {
+    "archivo": "abuelo_no_02.ogg",
+    "texto": "Out of the question."
+   },
+   {
+    "archivo": "abuelo_no_03.ogg",
+    "texto": "Bah."
+   }
+  ],
+  "risa": [
+   {
+    "archivo": "abuelo_risa_01.ogg",
+    "texto": "Heh heh heh…"
+   },
+   {
+    "archivo": "abuelo_risa_02.ogg",
+    "texto": "Ha! Ha ha…"
+   },
+   {
+    "archivo": "abuelo_risa_03.ogg",
+    "texto": "Ho ho… the things you see."
+   }
+  ],
+  "saludo": [
+   {
+    "archivo": "abuelo_saludo_01.ogg",
+    "texto": "Evening!"
+   },
+   {
+    "archivo": "abuelo_saludo_02.ogg",
+    "texto": "Well well… long time no see!"
+   },
+   {
+    "archivo": "abuelo_saludo_03.ogg",
+    "texto": "Hey there… hello hello."
+   }
+  ],
+  "si": [
+   {
+    "archivo": "abuelo_si_01.ogg",
+    "texto": "Yes… yes."
+   },
+   {
+    "archivo": "abuelo_si_02.ogg",
+    "texto": "Uh-huh."
+   },
+   {
+    "archivo": "abuelo_si_03.ogg",
+    "texto": "That's it."
+   }
+  ],
+  "suspiro": [
+   {
+    "archivo": "abuelo_suspiro_01.ogg",
+    "texto": "Ahhh…"
+   },
+   {
+    "archivo": "abuelo_suspiro_02.ogg",
+    "texto": "Haaah… forty years lighting lamps."
+   },
+   {
+    "archivo": "abuelo_suspiro_03.ogg",
+    "texto": "Phew…"
+   }
+  ],
+  "uf": [
+   {
+    "archivo": "abuelo_uf_01.ogg",
+    "texto": "Oof!"
+   },
+   {
+    "archivo": "abuelo_uf_02.ogg",
+    "texto": "Oof… these old bones."
+   },
+   {
+    "archivo": "abuelo_uf_03.ogg",
+    "texto": "Up we go!"
+   }
+  ],
+  "vela": [
+   {
+    "archivo": "abuelo_vela_01.ogg",
+    "texto": "Well done, lass!"
+   },
+   {
+    "archivo": "abuelo_vela_02.ogg",
+    "texto": "You're just like your teacher."
+   },
+   {
+    "archivo": "abuelo_vela_03.ogg",
+    "texto": "Easy now… the night is long."
+   }
+  ]
+ }
+}

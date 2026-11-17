@@ -1,0 +1,46 @@
+file,text,tone
+abuelo_saludo_01,Evening!,warm; old man's voice
+abuelo_saludo_02,Well well… long time no see!,pleasantly surprised; slow
+abuelo_saludo_03,Hey there… hello hello.,friendly; slightly croaky
+abuelo_despedida_01,Go with the light.,calm; like a blessing
+abuelo_despedida_02,Off you go… see you tomorrow.,tired; smiling
+abuelo_despedida_03,Mind the shadows.,serious; fatherly
+abuelo_si_01,Yes… yes.,nodding; slow
+abuelo_si_02,Uh-huh.,agreeing
+abuelo_si_03,That's it.,satisfied
+abuelo_no_01,No… no.,shaking his head
+abuelo_no_02,Out of the question.,firm; grumpy
+abuelo_no_03,Bah.,dismissive; short
+abuelo_hmm_01,Hmm…,thoughtful; long
+abuelo_hmm_02,Hmmm… I see.,thoughtful
+abuelo_hmm_03,Hm. Well well.,remembering something
+abuelo_mm_pregunta_01,Hm?,puzzled; rising
+abuelo_mm_pregunta_02,What's that you say?,a bit hard of hearing
+abuelo_mm_pregunta_03,Eh? What?,absent-minded
+abuelo_eh_sorpresa_01,Oh!,startled
+abuelo_eh_sorpresa_02,Good heavens!,frightened; high for an old man
+abuelo_eh_sorpresa_03,Well I never!,surprised
+abuelo_eh_enfado_01,Hey! You!,angry; grumpy
+abuelo_eh_enfado_02,Now see here!,indignant
+abuelo_eh_enfado_03,The nerve!,grumbling
+abuelo_ay_01,Ow!,short pain
+abuelo_ay_02,"Oh, my back!",old man's groan
+abuelo_ay_03,Whoa!,small fright
+abuelo_risa_01,Heh heh heh…,soft old man's chuckle
+abuelo_risa_02,Ha! Ha ha…,laugh ending in a cough
+abuelo_risa_03,Ho ho… the things you see.,calm laugh
+abuelo_suspiro_01,Ahhh…,long nostalgic sigh
+abuelo_suspiro_02,Haaah… forty years lighting lamps.,sigh then nostalgic line
+abuelo_suspiro_03,Phew…,tired sigh
+abuelo_uf_01,Oof!,effort getting up
+abuelo_uf_02,Oof… these old bones.,tired
+abuelo_uf_03,Up we go!,effort leaning on cane
+abuelo_farola_01,That lamp… it'll go out tonight.,mysterious; certain
+abuelo_farola_02,There used to be light on every corner.,nostalgic
+abuelo_farola_03,I lit that one myself!,proud
+abuelo_vela_01,"Well done, lass!",proud; affectionate
+abuelo_vela_02,You're just like your teacher.,tender
+abuelo_vela_03,Easy now… the night is long.,advice; fatherly
+abuelo_hollin_01,You again?,suspicious
+abuelo_hollin_02,Hm. Shadow eyes…,wary; low
+abuelo_hollin_03,Get away from my lamp!,angry

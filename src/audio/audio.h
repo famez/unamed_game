@@ -26,7 +26,8 @@ public:
     bool enabled() const { return running_; }
 
     // `pan` -1 (izquierda) .. 1 (derecha); `pitch` 1 = tono original.
-    void play(Sfx id, float gain = 1, float pan = 0, float pitch = 1);
+    // `take`: una toma concreta (-1: al azar, sin repetir la última).
+    void play(Sfx id, float gain = 1, float pan = 0, float pitch = 1, int take = -1);
     // Pista que debe sonar (cambia con un fundido; si no está lista, se prepara antes).
     void playTrack(TrackId id);
     // Un fragmento suelto (victoria, derrota) sobre la música, que se aparta mientras dura.

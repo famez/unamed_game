@@ -1,0 +1,46 @@
+archivo,texto,tono
+abuelo_saludo_01,¡Buenas noches!,cálido; voz de anciano
+abuelo_saludo_02,Hombre… ¡cuánto tiempo!,sorpresa alegre; lento
+abuelo_saludo_03,¡Eh! Buenas buenas…,amable; algo cascado
+abuelo_despedida_01,Ve con luz.,tranquilo; bendición
+abuelo_despedida_02,Hala… hasta mañana.,cansado; sonriente
+abuelo_despedida_03,Cuidado con las sombras.,serio; paternal
+abuelo_si_01,Sí… sí.,asintiendo; despacio
+abuelo_si_02,Ajá.,conforme
+abuelo_si_03,Eso es.,satisfecho
+abuelo_no_01,No… no.,negando con la cabeza
+abuelo_no_02,Ni hablar.,firme; refunfuñón
+abuelo_no_03,Bah.,despectivo; corto
+abuelo_hmm_01,Mmm…,pensativo; largo
+abuelo_hmm_02,Hmmm… ya veo.,pensativo
+abuelo_hmm_03,Mmm. Vaya vaya.,recordando algo
+abuelo_mm_pregunta_01,¿Mm?,extrañado; subiendo
+abuelo_mm_pregunta_02,¿Cómo dices?,algo sordo
+abuelo_mm_pregunta_03,¿Eh? ¿Qué?,despistado
+abuelo_eh_sorpresa_01,¡Eh!,sobresalto
+abuelo_eh_sorpresa_02,"¡Ay, madre!",susto; agudo para un anciano
+abuelo_eh_sorpresa_03,¡Caramba!,sorpresa
+abuelo_eh_enfado_01,¡Eh! ¡Tú!,enfadado; gruñón
+abuelo_eh_enfado_02,¡Pero bueno!,indignado
+abuelo_eh_enfado_03,¡Habrase visto!,refunfuñando
+abuelo_ay_01,¡Ay!,dolor breve
+abuelo_ay_02,"¡Ay, mi espalda!",quejido de anciano
+abuelo_ay_03,¡Uy!,susto pequeño
+abuelo_risa_01,Je je je…,risa suave de anciano
+abuelo_risa_02,¡Ja! Ja ja…,risa con tos al final
+abuelo_risa_03,Jo jo… qué cosas.,risa tranquila
+abuelo_suspiro_01,Aaay…,suspiro largo; nostálgico
+abuelo_suspiro_02,Haaa… cuarenta años encendiendo farolas.,suspiro y frase nostálgica
+abuelo_suspiro_03,Pfff…,suspiro cansado
+abuelo_uf_01,¡Uf!,esfuerzo al levantarse
+abuelo_uf_02,Uff… estos huesos.,cansado
+abuelo_uf_03,¡Aúpa!,esfuerzo con bastón
+abuelo_farola_01,Esa farola… se va a apagar esta noche.,misterioso; seguro
+abuelo_farola_02,Antes había luz en cada esquina.,nostálgico
+abuelo_farola_03,¡Esa la encendí yo!,orgulloso
+abuelo_vela_01,¡Muchacha! Buen trabajo.,orgulloso; cariñoso
+abuelo_vela_02,Te pareces a tu maestra.,tierno
+abuelo_vela_03,No corras tanto… que la noche es larga.,consejo; paternal
+abuelo_hollin_01,¿Tú otra vez?,desconfiado
+abuelo_hollin_02,Hum. Ojos de sombra…,receloso; bajo
+abuelo_hollin_03,¡Fuera de mi farola!,enfadado

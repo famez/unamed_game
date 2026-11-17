@@ -179,7 +179,7 @@ void Audio::shutdown() {
     lib_ = nullptr;
 }
 
-void Audio::play(Sfx id, float gain, float pan, float pitch) {
+void Audio::play(Sfx id, float gain, float pan, float pitch, int pick) {
     if (!running_ || int(id) >= int(sfx_.size()) || sfx_[size_t(id)].empty()) return;
     std::lock_guard<std::mutex> lock(mutex_);
     // Una toma al azar, distinta de la última si hay más de una.
@@ -187,6 +187,7 @@ void Audio::play(Sfx id, float gain, float pan, float pitch) {
     rng_ = rng_ * 1664525u + 1013904223u;
     int take = int((rng_ >> 8) % uint32_t(takes.size()));
     if (takes.size() > 1 && take == lastTake_[size_t(id)]) take = (take + 1) % int(takes.size());
+    if (pick >= 0) take = pick % int(takes.size());
     lastTake_[size_t(id)] = take;
     if (takes[size_t(take)].frames() < 2) return;
     if (voices_.size() >= 48) voices_.erase(voices_.begin());  // se corta la más antigua

@@ -4,6 +4,7 @@
 #define private public  // solo para el test: acceso al estado interno
 #include "game/game.h"
 #undef private
+#include "audio/barks.h"
 #include "audio/synth.h"
 #include "game/props.h"
 #include "render/glb.h"
@@ -1025,6 +1026,7 @@ int main() {
     {  // Sonido sintetizado: todos los efectos suenan, sin saturar, y el WAV va y vuelve
         bool allOk = true;
         for (int i = 0; i < int(Sfx::Count); ++i) {
+            if (Sfx(i) == Sfx::Abuelo) continue;  // solo grabado
             StereoBuffer b = renderSfx(Sfx(i));
             int peak = 0;
             for (int16_t v : b.data) peak = std::max(peak, std::abs(int(v)));
@@ -1404,6 +1406,34 @@ int main() {
               "el remate sale de los golpes y la esquiva de los saltos");
         CHECK(sfxVariants(Sfx::HollinLaugh, dir).empty(), "la risa, sin grabar, se calla (no suena sintética)");
         CHECK(sfxVariants(Sfx::VelaAttack1, "/no/existe").size() == 1, "sin grabaciones, la voz sintetizada");
+        std::vector<StereoBuffer> barks = sfxVariants(Sfx::Abuelo, dir);
+        int full = 0;
+        for (const StereoBuffer& b : barks) full += b.frames() > kSampleRate / 10;
+        CHECK(barks.size() == 45 && full == 45, "barks del abuelo: %d de 45 tomas leídas", full);
+        CHECK(sfxVariants(Sfx::Abuelo, "/no/existe").empty(), "sin los barks del abuelo, se calla");
+    }
+    {  // Al hablar con el abuelo, entra con un bark: saluda la primera vez y luego va variando
+        Game g = fresh();
+        g.loadLevel(LevelId::Plaza);
+        Npc* abuelo = nullptr;
+        for (Npc& n : g.npcs_)
+            if (n.model == "abuelo") abuelo = &n;
+        CHECK(abuelo != nullptr, "el abuelo está en la plaza");
+        if (abuelo) {
+            auto barkKind = [&] {
+                int k = -1;
+                for (const SoundEvent& e : g.takeSounds())
+                    if (e.id == Sfx::Abuelo) k = e.take / kBarkTakes;
+                return k;
+            };
+            g.takeSounds();
+            g.talkTo(*abuelo);
+            int first = barkKind();
+            g.talkTo(*abuelo);
+            int second = barkKind();
+            CHECK(first == int(BarkKind::Saludo) && second >= 0 && second != int(BarkKind::Saludo),
+                  "abuelo: saluda al hablarle (%d) y luego otro bark (%d)", first, second);
+        }
     }
     {  // Personajes con esqueleto en .glb (enemigos y lobo): armadura con los huesos del juego y pesos
         struct Char {

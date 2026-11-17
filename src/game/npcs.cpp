@@ -5,6 +5,8 @@
 
 #include "game/game.h"
 
+#include "audio/barks.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -41,6 +43,7 @@ void Game::addNpc(const std::string& model, Vec3 pos, float radius, const std::s
 void Game::updateNpcs(float dt) {
     npcLineTime_ = std::max(0.0f, npcLineTime_ - dt);
     for (Npc& n : npcs_) {
+        n.sinceTalk += dt;
         Vec3 toHero = flat(hero_.body.pos - n.body.body.pos);
         float dh = length(toHero);
         if (dh > kActiveRange) continue;
@@ -103,8 +106,26 @@ const char* const kBrasaTips[] = {
 
 }  // namespace
 
+// La voz con la que entra al diálogo (como en Zelda), si el vecino la tiene grabada: saluda si
+// hace rato que no se le habla, recela de Hollín y, si no, va alternando murmullos, risas y
+// suspiros. Solo el Abuelo Candil, de momento.
+void Game::entryBark(Npc& n) {
+    if (n.model != "abuelo") return;
+    static const BarkKind kChat[] = {BarkKind::Hmm, BarkKind::Risa, BarkKind::Si, BarkKind::Suspiro,
+                                     BarkKind::Pregunta, BarkKind::Uf};
+    static const BarkKind kWary[] = {BarkKind::Hollin, BarkKind::No, BarkKind::Hollin, BarkKind::Enfado};
+    BarkKind k = n.sinceTalk > 60.0f ? (shadowMode_ ? BarkKind::Hollin : BarkKind::Saludo)
+                 : shadowMode_       ? kWary[size_t(n.bark) % std::size(kWary)]
+                                     : kChat[size_t(n.bark) % std::size(kChat)];
+    if (n.sinceTalk <= 60.0f) ++n.bark;
+    int take = int(k) * kBarkTakes + int(random01() * kBarkTakes) % kBarkTakes;
+    sounds_.push_back({Sfx::Abuelo, n.body.body.pos + Vec3{0, 1.6f, 0}, true, 1.0f, 1.0f, take});
+}
+
 void Game::talkTo(Npc& n) {
     n.wait = std::max(n.wait, 3.0f);
+    entryBark(n);
+    n.sinceTalk = 0;
     std::string text = n.lines.empty() ? std::string() : n.lines[size_t(n.line) % n.lines.size()];
     ++n.line;
     switch (n.role) {
@@ -151,7 +172,8 @@ void Game::placeCitizens() {
                 {"¿Me dejas encender la próxima? Solo una.", "Llevo la escalera. Por si acaso.",
                  "Brasa dice que tú nunca te saltabas una farola."}, 24);
             add("abuelo", {6, 0, -10}, "Abuelo Candil", NpcRole::Townsfolk,
-                {"Cuarenta años encendiéndolas. Ahora solo las cuento.", "Esa de ahí parpadea. Siempre parpadeó."}, 3);
+                {"Cuarenta años encendiéndolas. Ahora solo las cuento.", "Esa farola… se va a apagar esta noche.",
+                 "Esa de ahí parpadea. Siempre parpadeó.", "¡Esa la encendí yo!"}, 3);
             add("pregonero", {8, 0, 11}, "Pregonero", NpcRole::Townsfolk,
                 {"¡Calle del Reloj, apagada! ¡Calle de las Cerillas, apagada!", "Cada noche tacho una calle más."}, 6);
             add("musica", {-7, 0, 12}, "Música callejera", NpcRole::Townsfolk,

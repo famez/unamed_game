@@ -400,6 +400,8 @@ struct Npc {
     float radius = 8;  // hasta dónde pasea
     float wait = 0;    // segundos parado antes de echar a andar
     float walked = 0;  // segundos hacia el destino actual (si se atasca, cambia)
+    float sinceTalk = 1e9f;  // desde la última vez que se le habló
+    int bark = 0;            // barks de entrada: por cuál va
     uint32_t seed = 1;
 };
 
@@ -608,6 +610,7 @@ private:
     // Devuelve falso si la pieza no existe.
     bool addProp(const std::string& name, Vec3 pos, float yaw = 0, float scale = 1, bool onGround = true);
     // Pone un habitante (por el nombre de su .glb) que pasea a `radius` m de `pos`.
+    void entryBark(Npc& n);
     void addNpc(const std::string& model, Vec3 pos, float radius = 8, const std::string& name = "", NpcRole role = NpcRole::Townsfolk,
                 std::vector<std::string> lines = {});
     // Los vecinos con nombre de cada escenario (tras montar el escenario y sus sólidos).

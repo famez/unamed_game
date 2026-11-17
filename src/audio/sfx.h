@@ -9,6 +9,8 @@ enum class Sfx {
     // Hollín (sombra): grave, ronca, burlona.
     VelaAttack1, VelaAttack2, VelaFinisher, VelaJump, VelaHurt, VelaDodge,
     HollinAttack1, HollinAttack2, HollinFinisher, HollinJump, HollinHurt, HollinDodge, HollinLaugh,
+    // Los barks del Abuelo Candil (audio/barks.h): una toma por frase, que elige el juego.
+    Abuelo,
     Count
 };
 
@@ -19,4 +21,5 @@ struct SoundEvent {
     Vec3 pos;
     bool positional = true;  // false: suena igual en los dos oídos (interfaz, diálogo)
     float gain = 1, pitch = 1;
+    int take = -1;  // la toma concreta (-1: una al azar)
 };

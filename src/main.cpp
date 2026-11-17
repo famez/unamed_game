@@ -323,6 +323,7 @@ int main(int argc, char** argv) {
         double time;
         Sfx id;
         float gain, pan, pitch;
+        int take;
     };
     std::vector<VideoSound> videoSounds;
     for (int i = 1; i < argc; ++i) {
@@ -847,8 +848,8 @@ int main(int argc, char** argv) {
                 pan = dist > 0.1f ? dot(rel * (1.0f / dist), rc.right) * 0.8f : 0.0f;
                 gain /= 1.0f + 0.06f * dist;
             }
-            audio.play(e.id, gain, pan, e.pitch);
-            if (videoPath) videoSounds.push_back({double(videoFrames) / 30.0, e.id, gain, pan, e.pitch});
+            audio.play(e.id, gain, pan, e.pitch, e.take);
+            if (videoPath) videoSounds.push_back({double(videoFrames) / 30.0, e.id, gain, pan, e.pitch, e.take});
         }
         if (menu.open || inventory.open || selector.open) {
             if (input.wasPressed(Key::W) || input.wasPressed(Key::S) || input.wasPressed(Key::Up) ||
@@ -945,7 +946,7 @@ int main(int argc, char** argv) {
             std::vector<StereoBuffer>& takes = cache[size_t(s.id)];
             if (!loaded[size_t(s.id)]) takes = sfxVariants(s.id, std::string(assetDir) + "/audio/voces"), loaded[size_t(s.id)] = true;
             if (takes.empty()) continue;
-            const StereoBuffer& b = takes[pick++ % takes.size()];
+            const StereoBuffer& b = takes[size_t(s.take >= 0 ? s.take : pick++) % takes.size()];
             float a = (s.pan + 1.0f) * 0.25f * 3.14159f, gl = std::cos(a) * 1.41f, gr = std::sin(a) * 1.41f;
             size_t start = size_t(s.time * kSampleRate), n = b.frames();
             for (size_t i = 0; start + i < frames; ++i) {
