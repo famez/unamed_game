@@ -55,6 +55,12 @@ void InventoryMenu::show() {
     message_.clear();
 }
 
+void InventoryMenu::showWorkshop() {
+    show();
+    tab_ = Workshop;
+    top_ = 0;
+}
+
 std::vector<ItemId> InventoryMenu::entries(const Inventory& inv) const {
     if (tab_ == Workshop) {  // una fila por receta
         int n = 0;

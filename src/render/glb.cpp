@@ -329,3 +329,24 @@ bool GlbFile::load(const std::string& path, std::string& error) {
     }
     return true;
 }
+
+bool loadPoseFile(const std::string& path, GlbPoseSet& out) {
+    FILE* f = std::fopen(path.c_str(), "rb");
+    if (!f) return false;
+    std::string text;
+    char buf[4096];
+    for (size_t n; (n = std::fread(buf, 1, sizeof(buf), f)) > 0;) text.append(buf, n);
+    std::fclose(f);
+    JsonParser parser{text.data(), text.data() + text.size()};
+    Json root = parser.value();
+    if (!parser.ok || root.type != Json::Object) return false;
+    for (const auto& [who, bones] : root.keys) {
+        if (who.empty() || who[0] == '_' || bones.type != Json::Object) continue;
+        std::vector<std::pair<std::string, Vec3>> pose;
+        for (const auto& [bone, r] : bones.keys)
+            if (r.type == Json::Array && r.items.size() >= 3)
+                pose.push_back({bone, {float(r.items[0].number), float(r.items[1].number), float(r.items[2].number)}});
+        out.push_back({who, std::move(pose)});
+    }
+    return true;
+}

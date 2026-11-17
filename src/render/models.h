@@ -97,6 +97,10 @@ bool loadCharacterGlb(Renderer& r, const std::string& path, const JointDef* rig,
 // al arrancar y los busca por el nombre del fichero (nullptr si no está).
 int loadInhabitants(Renderer& r, const std::string& dir);
 const BuiltModel* inhabitantModel(const std::string& name);
+// Pose de reposo propia de un habitante (poses_idle_*.json de la carpeta): las matrices mundo
+// de sus huesos de pie, quieto, con `model` como raíz. `breath` (0..1) añade la respiración.
+// Falso si no tiene.
+bool inhabitantIdleJoints(const std::string& name, const Mat4& model, float time, Mat4* out);
 
 // Sube a la GPU las mallas de las piezas del escenario (game/props.h) que aún no lo estén.
 void uploadPropMeshes(Renderer& r);

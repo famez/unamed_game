@@ -4,6 +4,8 @@
 
 #include <dirent.h>
 
+#include <array>
+
 #include "render/debug_draw.h"
 #include "render/glb.h"
 #include "render/glb_write.h"
@@ -830,6 +832,9 @@ void uploadPropMeshes(Renderer& r) {
 
 namespace {
 std::vector<std::pair<std::string, BuiltModel>> gInhabitants;
+// Rotaciones de la pose de reposo de cada uno, por hueso del esqueleto (orden X, Y, Z sobre la
+// pose de reposo del .glb, la pose A).
+std::vector<std::pair<std::string, std::array<Vec3, JointCount>>> gIdlePoses;
 }
 
 int loadInhabitants(Renderer& r, const std::string& dir) {
@@ -841,6 +846,23 @@ int loadInhabitants(Renderer& r, const std::string& dir) {
         if (f.size() > 4 && f.compare(f.size() - 4, 4, ".glb") == 0) files.push_back(f);
     }
     closedir(dp);
+    for (const char* poses : {"poses_idle_ciudadanos.json", "poses_idle_tanda3.json"}) {
+        GlbPoseSet set;
+        if (!loadPoseFile(dir + "/" + poses, set)) continue;
+        for (const auto& [who, bones] : set) {
+            std::array<Vec3, JointCount> rot{};
+            // Las poses del paquete escriben el lado izquierdo con los ejes del derecho, pero en el
+            // esqueleto los dos lados son reflejo (en su render salen los brazos izquierdos en
+            // cruz): se refleja Y y Z en los huesos «_l».
+            for (const auto& [bone, r] : bones)
+                for (int k = 0; k < JointCount; ++k)
+                    if (bone == kSkeleton[k].name) {
+                        bool left = bone.size() > 2 && bone.compare(bone.size() - 2, 2, "_l") == 0;
+                        rot[size_t(k)] = left ? Vec3{r.x, -r.y, -r.z} : r;
+                    }
+            gIdlePoses.push_back({who, rot});
+        }
+    }
     for (const std::string& f : files) {
         BuiltModel m;
         std::string error;
@@ -856,4 +878,35 @@ const BuiltModel* inhabitantModel(const std::string& name) {
     for (const auto& [n, m] : gInhabitants)
         if (n == name) return &m;
     return nullptr;
+}
+
+bool inhabitantIdleJoints(const std::string& name, const Mat4& model, float time, Mat4* out) {
+    const BuiltModel* m = inhabitantModel(name);
+    const std::array<Vec3, JointCount>* rot = nullptr;
+    for (const auto& [n, r] : gIdlePoses)
+        if (n == name) rot = &r;
+    if (!m || !rot) return false;
+    // La pose de reposo del .glb (la A) sale de las inversas de bind; encima, la rotación local
+    // de la pose (X, luego Y, luego Z, como la escribe three.js) y una respiración muy leve.
+    Mat4 bindWorld[JointCount];
+    for (int k = 0; k < JointCount; ++k) bindWorld[k] = affineInverse(m->inverseBind[k]);
+    float breath = std::sin(time * 1.6f + float(name.size()));
+    for (int k = 0; k < JointCount; ++k) {
+        int parent = kSkeleton[k].parent;
+        Mat4 local = parent >= 0 ? affineInverse(bindWorld[parent]) * bindWorld[k] : bindWorld[k];
+        Vec3 r = (*rot)[size_t(k)];
+        if (k == Chest) r.x += 0.015f * breath;
+        if (k == Head) r.x -= 0.01f * breath;
+        Mat4 R = rotateX(r.x) * rotateY(r.y) * rotateZ(r.z);
+        out[k] = (parent >= 0 ? out[parent] : model) * local * R;
+    }
+    if (name == "abuelo") {  // el bastón cuelga de la muñeca hacia -Y: que apunte al suelo (nota del JSON)
+        Vec3 d = normalize(Vec3{-0.12f, 1.0f, -0.1f});  // el eje Y de la muñeca, hacia arriba (el bastón va hacia -Y)
+        d = normalize(Vec3{model.m[0] * d.x + model.m[4] * d.y + model.m[8] * d.z, model.m[1] * d.x + model.m[5] * d.y + model.m[9] * d.z,
+                           model.m[2] * d.x + model.m[6] * d.y + model.m[10] * d.z});
+        Vec3 x = normalize(cross(std::fabs(d.y) < 0.9f ? Vec3{0, 1, 0} : Vec3{1, 0, 0}, d)), z = cross(x, d);
+        Mat4& w = out[WristR];
+        w.m[0] = x.x, w.m[1] = x.y, w.m[2] = x.z, w.m[4] = d.x, w.m[5] = d.y, w.m[6] = d.z, w.m[8] = z.x, w.m[9] = z.y, w.m[10] = z.z;
+    }
+    return true;
 }

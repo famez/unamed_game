@@ -17,6 +17,7 @@ public:
     bool open = false;
 
     void show();
+    void showWorkshop();  // directo a la pestaña del taller (la tienda de la Doctora Umbra)
     // Devuelve true si el menú pide cerrarse.
     bool update(const Input& in, Game& game, int width, int height);
     void draw(UiLayer& ui, const Game& game, int width, int height) const;

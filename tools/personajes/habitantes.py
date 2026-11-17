@@ -407,20 +407,16 @@ def pecas(f):
 
 # --- Reparto ------------------------------------------------------------------------------
 
+# El abuelo, el cafetero y la chica neón los rehízo el paquete «Farolas» (Abuelo Candil, el mozo
+# de la fonda y Chispa): ya no se generan aquí para no pisarlos.
 HABITANTES = {
     # Pueblo cafetero
-    'cafetero': dict(piel='#c99a72', pelo='#2a2220', peinado='corto', ojos='#4a3020', bigote='#2a2220', arriba='#f4f2ee',
-                     ropa='camisa', abajo='#4a3a30', zapatos='#e8dcc0', suela='#8a7a60', ancho=1.05,
-                     extras=[sombrero_aguadeno, poncho_hombro, carriel]),
     'recolectora': dict(piel='#b98560', pelo='#1e1814', peinado='trenzas', lazo='#ffd23f', ojos='#3a2414', mujer=True,
                         mejillas='#d88a7a', arriba='#f4f2ee', mangas='cortas', ropa='blusa', abajo='#c8202f', piernas='falda_larga',
                         volante='#1b6fbc', zapatos='#5a3a24', extras=[sombrero_paja, canasto]),
     # Ciudad neón
     'oficinista': dict(piel='#f0d2b8', pelo='#141418', peinado='corto', ojos='#2a2420', arriba='#232a3c', ropa='traje',
                        abajo='#232a3c', corbata='#b8202f', zapatos='#141418', extras=[gafas, maletin]),
-    'chica_neon': dict(piel='#f2d4bf', pelo='#ff6fb0', peinado='bob', ojos='#7a3cff', mujer=True, mejillas='#f0a0a8',
-                       arriba='#2ab8d9', ropa='sudadera', abajo='#1a1a1d', piernas='shorts', medias='#2a2433', zapatos='#f4f2ee',
-                       suela='#2ee6ff', extras=[auriculares]),
     'cocinero': dict(piel='#e6c3a3', pelo='#141418', peinado='corto', ojos='#2a2420', arriba='#f4f2ee', ropa='chef', cuello='#f4f2ee',
                      abajo='#1a1a1d', zapatos='#2a2622', extras=[hachimaki, delantal]),
     # Ciudad de la bahía
@@ -433,8 +429,6 @@ HABITANTES = {
     'granjera': dict(piel='#f1d0b5', pelo='#c4532a', peinado='trenzas', lazo='#2a7d4f', ojos='#2a7d4f', mujer=True, mejillas='#f0a090',
                      arriba='#c8302f', ropa='peto', abajo='#3d5f8f', piernas='peto', zapatos='#5a3a24', botas=True,
                      extras=[sombrero_paja, horca, pecas]),
-    'abuelo': dict(piel='#e8c4a6', pelo='#e8e6e0', peinado='calvo', ojos='#4a5a6a', barba='#eceae4', arriba='#f4f2ee', ropa='chaleco',
-                   chaleco='#3f5a3a', abajo='#5a4a3a', zapatos='#2a2622', ancho=1.08, extras=[gorra_plana, baston]),
 }
 
 

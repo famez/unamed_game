@@ -461,6 +461,7 @@ int runViewer(const char* pathArg, Renderer& renderer, DebugDraw& lines, UiLayer
         int jointCount = JointCount;
         if (ok && model.humanoid) {
             hero.interpolatedJoints(alpha, j);
+            if (anim == 0) inhabitantIdleJoints(stemOf(path), Mat4::identity(), simTime, j);  // su pose de reposo, si tiene
             Vec3 lagW = hero.hairLag();
             const float* hm = j[Head].m;
             Vec3 lag{hm[0] * lagW.x + hm[1] * lagW.y + hm[2] * lagW.z, hm[4] * lagW.x + hm[5] * lagW.y + hm[6] * lagW.z,

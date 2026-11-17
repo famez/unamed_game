@@ -54,5 +54,11 @@ struct GlbFile {
     int find(const std::string& name) const;  // índice del nodo con ese nombre (-1 si no hay)
 };
 
+// Poses de reposo en JSON: {"personaje": {"hueso": [x, y, z], ...}, ...} (rotaciones Euler en
+// radianes, en orden X, Y, Z, locales sobre la pose de reposo del .glb). Las claves que
+// empiezan por «_» (notas) se ignoran.
+using GlbPoseSet = std::vector<std::pair<std::string, std::vector<std::pair<std::string, Vec3>>>>;
+bool loadPoseFile(const std::string& path, GlbPoseSet& out);
+
 // Inversa de una matriz afín (rotación, escala y traslación).
 Mat4 affineInverse(const Mat4& a);

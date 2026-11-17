@@ -681,6 +681,11 @@ void Game::drawNpcs(Renderer& r, const ViewInfo& view, float alpha) const {
         if (!model) continue;
         Mat4 j[JointCount], skin[kMaxJoints];
         n.body.interpolatedJoints(alpha, j);
+        // Parado, su pose de reposo propia (el abuelo en el bastón, Chispa de puntillas...).
+        Mat4 idle[JointCount];
+        float k = smoothstep01(n.still);
+        if (k > 0 && inhabitantIdleJoints(n.model, translate(n.body.interpolatedPos(alpha)) * rotateY(n.body.yaw), time_, idle))
+            for (int b = 0; b < JointCount; ++b) j[b] = lerpMat(j[b], idle[b], k);
         skinMatrices(*model, j, skin);
         r.skinned(model->mesh, skin, model->jointCount, 0, rgba(30, 26, 30));
     }

@@ -595,6 +595,10 @@ int main(int argc, char** argv) {
                 }
                 game.update(float(kFixedDt), c);
                 pending = PendingInput{};
+                if (game.takeShopRequest() && !inventory.open) {  // la Doctora Umbra abre el taller
+                    inventory.showWorkshop();
+                    platform::setMouseCaptured(false);
+                }
             }
             accumulator -= kFixedDt;
             ++steps;

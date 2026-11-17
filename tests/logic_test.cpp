@@ -183,6 +183,38 @@ int main() {
             w.update(dt, {});
             CHECK(w.enemies_.empty() && w.lock_ == -1, "campo: los que se quedan atrás desaparecen (%zu quedan, fijado %d)", w.enemies_.size(), w.lock_);
         }
+        {  // Vecinos de la plaza: la fonda cura y guarda, la tienda abre el taller, Brasa enseña y Pabilo sigue a Vela
+            Game p = fresh();
+            p.loadLevel(LevelId::Plaza);
+            p.enemies_.clear();
+            p.encounters_.clear();
+            auto find = [&](const char* name) -> Npc* {
+                for (Npc& n : p.npcs_)
+                    if (n.name == name) return &n;
+                return nullptr;
+            };
+            Npc *mecha = find("Señora Mecha"), *umbra = find("Doctora Umbra"), *brasa = find("Brasa"), *pabilo = find("Pabilo");
+            CHECK(mecha && umbra && brasa && pabilo && p.npcs_.size() >= 9, "plaza: %zu vecinos con la fonda, la tienda, Brasa y Pabilo",
+                  p.npcs_.size());
+            if (mecha && umbra && brasa && pabilo) {
+                p.hp_ = 10;
+                p.talkTo(*mecha);
+                bool healed = p.hp_ == p.maxHp_;
+                p.talkTo(*umbra);
+                bool shop = p.takeShopRequest() && !p.takeShopRequest();
+                p.talkTo(*brasa);
+                bool tip = p.npcSpeaker_ == "Brasa" && !p.npcLine_.empty();
+                CHECK(healed && shop && tip, "plaza: la fonda cura (%d), Umbra abre el taller (%d), Brasa da un consejo (%d)", healed, shop, tip);
+                Vec3 home = pabilo->home;
+                place(p, home + Vec3{9, 0, 0});
+                Controls walk;
+                walk.move = {1, 0, 0};
+                run(p, 1.0f, walk);
+                run(p, 4.0f);
+                float gap = length(flat(pabilo->body.body.pos - p.hero_.body.pos));
+                CHECK(gap < 5.0f && length(flat(pabilo->body.body.pos - home)) > 4.0f, "plaza: Pabilo sigue a Vela (a %.1f m)", gap);
+            }
+        }
         Game g = fresh();  // contra la casa del pueblo del campo: la pared la para
         g.loadLevel(LevelId::Campo);
         const AABB* wall = nullptr;

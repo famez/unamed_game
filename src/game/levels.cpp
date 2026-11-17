@@ -554,6 +554,7 @@ void Game::loadLevel(LevelId id) {
     portals_.clear();
     props_.clear();
     npcs_.clear();
+    npcLineTime_ = 0;
     propSolids_.clear();
     world_.terrain.reset();
     terrainColor_.clear();
@@ -599,6 +600,7 @@ void Game::loadLevel(LevelId id) {
         for (Encounter& en : encounters_) en.armed = true;
     rebuildSolids();
     placeLampSwitches();
+    placeCitizens();
     hero_.body.pos = checkpoint_ = heroStart_;
     hero_.body.vel = {};
     hero_.yaw = checkpointYaw_ = heroStartYaw_;
@@ -794,6 +796,12 @@ Game::InteractTarget Game::nearbyInteract() const {
     for (size_t i = 0; i < mirrors_.size(); ++i) consider(4, int(i), mirrors_[i].pos, "Girar el espejo");
     for (size_t i = 0; i < switches_.size(); ++i)
         consider(5, int(i), switches_[i].pos, switches_[i].on ? "Apagar las farolas" : "Encender las farolas");
+    for (size_t i = 0; i < npcs_.size(); ++i) {
+        const Npc& n = npcs_[i];
+        if (n.name.empty()) continue;
+        const char* verb = n.role == NpcRole::Inn ? "Descansar" : n.role == NpcRole::Shop ? "Taller" : n.role == NpcRole::Trainer ? "Entrenar" : "Hablar";
+        consider(6, int(i), n.body.body.pos, std::string(verb) + " · " + n.name);
+    }
     return best;
 }
 
@@ -802,6 +810,10 @@ void Game::tryInteract() {
     if (t.kind < 0 || hero_.busy()) return;
     if (t.kind == 5) {
         toggleSwitch(t.index);
+        return;
+    }
+    if (t.kind == 6) {
+        talkTo(npcs_[size_t(t.index)]);
         return;
     }
     if (t.kind == 0) {

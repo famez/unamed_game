@@ -202,7 +202,7 @@ void Game::buildRio() {
     // Habitantes: pocos y por el paseo (la playa, vacía); alguna vendedora que recoge.
     for (int i = 0; i < 10; ++i) {
         auto [p, yaw] = along(rng.range(-160, 160), kSand + kWalk * 0.5f);
-        addNpc(i % 3 == 0 ? "abuelo" : i % 3 == 1 ? "oficinista" : "vendedora", p, 14);
+        addNpc(i % 3 == 0 ? "barquero" : i % 3 == 1 ? "oficinista" : "vendedora", p, 14);
     }
     // Portales y llegada: en el paseo, mirando al mar y al Pan de Azúcar.
     auto [start, startYaw] = along(-10, kSand + kWalk * 0.5f);

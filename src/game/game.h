@@ -381,10 +381,20 @@ struct Block {
 };
 
 // Decoración sin colisión (copas de árboles, flores, tejados...): se calcula una vez.
-// Habitante de un mapa grande: pasea por su zona (en torno a `home`), se para de vez en
-// cuando y mira a la protagonista si se le acerca. `model`: su .glb de assets/models/habitantes.
+// Papel de un habitante: vecino (dice su frase), la fonda de la Señora Mecha (cura y guarda),
+// la tienda de la Doctora Umbra (abre el taller), la entrenadora (Brasa, enseña combos) o el
+// que sigue a Vela por las zonas seguras (Pabilo).
+enum class NpcRole { Townsfolk, Inn, Shop, Trainer, Follower };
+
+// Habitante: pasea por su zona (en torno a `home`), se para de vez en cuando (en su pose de
+// reposo) y mira a la protagonista si se le acerca. `model`: su .glb de assets/models/habitantes.
+// Con nombre, F le habla: dice sus frases por turnos.
 struct Npc {
-    std::string model;
+    std::string model, name;
+    NpcRole role = NpcRole::Townsfolk;
+    std::vector<std::string> lines;
+    int line = 0;
+    float still = 0;   // 0 andando, 1 en su pose de reposo (para mezclar)
     Character body;
     Vec3 home, target;
     float radius = 8;  // hasta dónde pasea
@@ -524,6 +534,11 @@ public:
     float viewDistance() const { return viewDistance_; }
     const std::vector<PropInstance>& placedProps() const { return props_; }
     const std::vector<Npc>& npcs() const { return npcs_; }
+    bool takeShopRequest() {
+        bool r = shopRequest_;
+        shopRequest_ = false;
+        return r;
+    }
     const std::string& levelName() const { return levelName_; }
     int partIndex() const { return int(part_); }
     int partCount() const { return int(parts_.size()); }
@@ -584,7 +599,11 @@ private:
     // Devuelve falso si la pieza no existe.
     bool addProp(const std::string& name, Vec3 pos, float yaw = 0, float scale = 1, bool onGround = true);
     // Pone un habitante (por el nombre de su .glb) que pasea a `radius` m de `pos`.
-    void addNpc(const std::string& model, Vec3 pos, float radius = 8);
+    void addNpc(const std::string& model, Vec3 pos, float radius = 8, const std::string& name = "", NpcRole role = NpcRole::Townsfolk,
+                std::vector<std::string> lines = {});
+    // Los vecinos con nombre de cada escenario (tras montar el escenario y sus sólidos).
+    void placeCitizens();
+    void talkTo(Npc& n);
     void updateNpcs(float dt);
     // Grises salvajes (mapas abiertos): aparecen al azar por la zona; los lejanos y los ya
     // disipados se retiran de la lista (compactEnemies arregla los índices que la apuntan).
@@ -731,6 +750,10 @@ private:
     std::vector<Decor> decor_;
     std::vector<PropInstance> props_;
     std::vector<Npc> npcs_;
+    // Lo último que ha dicho un vecino (subtítulo que no para el juego).
+    std::string npcSpeaker_, npcLine_;
+    float npcLineTime_ = 0;
+    bool shopRequest_ = false;  // la Doctora Umbra abre el taller (lo recoge main)
     std::vector<AABB> propSolids_;  // colisiones de las piezas (entran en world_)
     std::vector<uint32_t> terrainColor_;  // por punto del terreno
     std::vector<uint8_t> terrainMaterial_;

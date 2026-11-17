@@ -443,6 +443,16 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
             uiText(ui, sx, sy + 16, 15, "Clic · emboscada", kUiPink, FontFace::Body, Align::Center, 0.4f);
         }
     }
+    if (npcLineTime_ > 0 && !npcLine_.empty()) {  // lo que acaba de decir un vecino
+        float a = clampf(npcLineTime_ / 0.5f, 0, 1);
+        std::string who = npcSpeaker_ + "  ";
+        float tw = textWidth(who.c_str(), 20, FontFace::Body) + textWidth(npcLine_.c_str(), 22) + 60;
+        float x0 = (w - tw) * 0.5f, y0 = h * 0.8f;
+        skewRect(d, x0, y0, x0 + tw, y0 + 42, 10, withAlpha(kUiPanel, 0.9f * a));
+        float x = x0 + 30;
+        uiText(ui, x, y0 + 11, 20, who.c_str(), withAlpha(rgba(255, 214, 140), a));
+        uiText(ui, x + textWidth(who.c_str(), 20, FontFace::Body), y0 + 9, 22, npcLine_.c_str(), withAlpha(kUiText, a));
+    }
     InteractTarget it = nearbyInteract();
     if (it.kind >= 0 && hero_.downTimer < 0 && !inLight_) {
         const char* msg = it.label.c_str();
