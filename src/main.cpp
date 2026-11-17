@@ -189,7 +189,7 @@ int main(int argc, char** argv) {
             if (std::strcmp(argv[i], "--silencio") == 0 || std::strcmp(argv[i], "--visor") == 0) silent = true;
             if (std::strcmp(argv[i], "--volumen") == 0 && i + 1 < argc) masterVolume = clampf(float(std::atof(argv[i + 1])), 0, 1);
         }
-        if (!silent) audio.init(cache + "/unamed_game", std::string(assetDir) + "/audio/voces");
+        if (!silent) audio.init(cache + "/unamed_game", std::string(assetDir) + "/audio/voces", std::string(assetDir) + "/audio/musica");
     }
     double modelStart = platform::timeSeconds();
     buildModels(renderer);
@@ -359,6 +359,7 @@ int main(int argc, char** argv) {
     };
 
     double prevTime = platform::timeSeconds();
+    float farolasMix = 0;  // el tema «Farolas»: 0 la capa de luz, 1 la de sombra (cruce suave)
     double accumulator = 0;
     double statsTimer = 0, cpuTimeSum = 0;
     int statsFrames = 0;
@@ -848,9 +849,20 @@ int main(int argc, char** argv) {
             stems[int(Stem::Melody)] = memory ? 0.0f : smoothstep01((croma - 0.2f) / 0.15f) * 0.9f;
             stems[int(Stem::Pulse)] = (game.inCombat() && !game.dialogueBlocking()) || game.bossAlive() ? 0.8f : 0.0f;
             stems[int(Stem::Shimmer)] = memory ? 0.3f : smoothstep01((croma - 0.55f) / 0.2f) * 0.75f;
+            // El tema de Vela y Hollín (la plaza y los mapas abiertos): sus dos capas suenan a la
+            // vez y se cruzan al cambiar de forma, con potencia constante (~1,7 s).
+            bool farolas = !game.bossAlive() && (game.level() == LevelId::Plaza || game.level() == LevelId::Campo ||
+                                                 game.level() == LevelId::Cafetero || game.level() == LevelId::Rio);
+            farolasMix = moveTowards(farolasMix, game.shadowMode() ? 1.0f : 0.0f, float(frameDt) / 1.7f);
+            if (farolas) {
+                float g = smoothstep01(farolasMix);
+                for (float& s : stems) s = 0;
+                stems[int(Stem::Pad)] = 0.9f * std::cos(g * kPi * 0.5f);
+                stems[int(Stem::Melody)] = 0.9f * std::sin(g * kPi * 0.5f);
+            }
             audio.setStemGains(stems);
             // Una pista por escenario; la del jefe mientras haya uno.
-            TrackId track = game.bossAlive() ? TrackId::Jefe
+            TrackId track = farolas ? TrackId::Farolas : game.bossAlive() ? TrackId::Jefe
                             : game.level() == LevelId::Mercado || game.level() == LevelId::Callejones ? TrackId::Mercado
                             : game.level() == LevelId::Puente || game.level() == LevelId::Selva || game.level() == LevelId::Cueva
                                 ? TrackId::Puente

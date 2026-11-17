@@ -292,6 +292,14 @@ int main() {
             }
         }
     }
+    {  // El tema «Farolas»: las dos capas (luz y sombra) se leen y duran lo mismo (bucle sincronizado)
+        StereoBuffer luz, sombra;
+        std::string dir = std::string(GAME_ASSET_DIR) + "/audio/musica/";
+        bool ok = loadOgg(dir + "farolas_capa_luz_loop.ogg", luz) && loadOgg(dir + "farolas_capa_sombra_loop.ogg", sombra);
+        float secs = float(luz.frames()) / float(kSampleRate);
+        CHECK(ok && luz.frames() == sombra.frames() && std::fabs(secs - 106.667f) < 0.05f,
+              "música «Farolas»: dos capas de %.2f s, sincronizadas", double(secs));
+    }
     {  // Salto y aterrizaje
         Game g = fresh();
         run(g, 0.2f);

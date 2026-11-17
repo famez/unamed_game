@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <dlfcn.h>
 
 namespace {
 
@@ -945,4 +946,46 @@ std::vector<StereoBuffer> sfxVariants(Sfx id, const std::string& voiceDir) {
     const char* fallback = !std::strcmp(line, "remate") ? "golpe" : !std::strcmp(line, "esquiva") ? "salto" : nullptr;
     if (fallback) return loadTakes(voiceDir, who, fallback);
     return {};
+}
+
+// --- Vorbis --------------------------------------------------------------------------------
+// libvorbisfile se abre en tiempo de ejecución, como PulseAudio: sin cabeceras al compilar.
+// OggVorbis_File es una estructura opaca para nosotros: se le reserva sitio de sobra.
+bool loadOgg(const std::string& path, StereoBuffer& buf) {
+    static void* lib = dlopen("libvorbisfile.so.3", RTLD_NOW);
+    if (!lib) return false;
+    struct VorbisInfo {
+        int version, channels;
+        long rate;
+    };
+    using OvFopen = int (*)(const char*, void*);
+    using OvInfo = VorbisInfo* (*)(void*, int);
+    using OvRead = long (*)(void*, char*, int, int, int, int, int*);
+    using OvClear = int (*)(void*);
+    auto ovFopen = (OvFopen)dlsym(lib, "ov_fopen");
+    auto ovInfo = (OvInfo)dlsym(lib, "ov_info");
+    auto ovRead = (OvRead)dlsym(lib, "ov_read");
+    auto ovClear = (OvClear)dlsym(lib, "ov_clear");
+    if (!ovFopen || !ovInfo || !ovRead || !ovClear) return false;
+    alignas(16) static thread_local unsigned char vf[8192];
+    if (ovFopen(path.c_str(), vf) != 0) return false;
+    VorbisInfo* info = ovInfo(vf, -1);
+    int channels = info ? info->channels : 0;
+    long rate = info ? info->rate : 0;
+    std::vector<int16_t> pcm;
+    char chunk[16384];
+    int section = 0;
+    for (long n; (n = ovRead(vf, chunk, sizeof(chunk), 0, 2, 1, &section)) > 0;) {
+        size_t at = pcm.size();
+        pcm.resize(at + size_t(n) / 2);
+        std::memcpy(pcm.data() + at, chunk, size_t(n));
+    }
+    ovClear(vf);
+    if (channels < 1 || channels > 2 || rate != kSampleRate || pcm.empty()) return false;  // los temas van a 44,1 kHz
+    buf.data.resize(pcm.size() / size_t(channels) * 2);
+    for (size_t f = 0; f < buf.frames(); ++f) {
+        buf.data[f * 2] = pcm[f * size_t(channels)];
+        buf.data[f * 2 + 1] = pcm[f * size_t(channels) + size_t(channels - 1)];
+    }
+    return true;
 }

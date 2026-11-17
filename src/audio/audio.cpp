@@ -35,7 +35,7 @@ void makeDirs(const std::string& path) {
 
 }  // namespace
 
-bool Audio::init(const std::string& cacheDir, const std::string& voiceDir) {
+bool Audio::init(const std::string& cacheDir, const std::string& voiceDir, const std::string& musicDir) {
     lib_ = dlopen("libpulse-simple.so.0", RTLD_NOW);
     if (!lib_) {
         std::fprintf(stderr, "Audio: no se encontró libpulse-simple; el juego irá sin sonido\n");
@@ -61,6 +61,7 @@ bool Audio::init(const std::string& cacheDir, const std::string& voiceDir) {
     running_ = true;
     thread_ = std::thread(&Audio::run, this);
     cacheDir_ = cacheDir;
+    musicDir_ = musicDir;
     loader_ = std::thread(&Audio::loaderLoop, this);
     return true;
 }
@@ -77,6 +78,28 @@ void Audio::loaderLoop() {
             id = wanted_;
         }
         auto m = std::make_unique<Music>();
+        int key = id;  // dónde se guarda (sin el tema grabado, «Farolas» es la música de la plaza)
+        if (id == int(TrackId::Farolas)) {  // el tema grabado: luz y sombra (o, si no se puede leer, la de la plaza)
+            bool ok = loadOgg(musicDir_ + "/farolas_capa_luz_loop.ogg", m->stems[int(Stem::Pad)]) &&
+                      loadOgg(musicDir_ + "/farolas_capa_sombra_loop.ogg", m->stems[int(Stem::Melody)]) &&
+                      m->stems[int(Stem::Pad)].frames() == m->stems[int(Stem::Melody)].frames();
+            if (!ok) {
+                std::fprintf(stderr, "Audio: no se pudo leer el tema «Farolas»; suena la música de la plaza\n");
+                id = int(TrackId::Plaza);
+                *m = Music{};
+            } else {
+                m->loopSeconds = float(m->stems[0].frames()) / float(kSampleRate);
+                std::lock_guard<std::mutex> lock(mutex_);
+                tracks_[int(TrackId::Farolas)] = std::move(m);
+                if (wanted_ == int(TrackId::Farolas) && current_ != wanted_) {
+                    previous_ = current_;
+                    current_ = wanted_;
+                    fade_ = 0;
+                    tracks_[current_]->pos = 0;
+                }
+                continue;
+            }
+        }
         bool cached = true;
         auto path = [&](int stem) {
             char name[96];
@@ -90,12 +113,12 @@ void Audio::loaderLoop() {
             for (int st = 0; st < int(Stem::Count); ++st) saveWav(path(st), m->stems[st]);
         }
         std::lock_guard<std::mutex> lock(mutex_);
-        tracks_[id] = std::move(m);
-        if (wanted_ == id && current_ != id) {
+        tracks_[key] = std::move(m);
+        if (wanted_ == key && current_ != key) {
             previous_ = current_;
-            current_ = id;
+            current_ = key;
             fade_ = 0;
-            tracks_[id]->pos = 0;
+            tracks_[key]->pos = 0;
         }
     }
 }
@@ -162,7 +185,7 @@ void Audio::run() {
 void Audio::mixTrack(Music& m, float* acc, int frames, const float* g0, const float* g1) {
     size_t len = m.stems[0].frames();
     for (int st = 0; st < int(Stem::Count); ++st) {
-        if (g0[st] < 1e-4f && g1[st] < 1e-4f) continue;
+        if ((g0[st] < 1e-4f && g1[st] < 1e-4f) || m.stems[st].frames() != len) continue;  // capas que la pista no tiene
         const int16_t* d = m.stems[st].data.data();
         for (int i = 0; i < frames; ++i) {
             size_t p = (m.pos + size_t(i)) % len;

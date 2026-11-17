@@ -29,8 +29,10 @@ struct Music {
 };
 
 // Una pista por escenario y la del jefe. Cada una en bucle sin costura (las colas de la
-// reverberación pasan del final al principio).
-enum class TrackId { Plaza, Mercado, Puente, Jefe, Count };
+// reverberación pasan del final al principio). Farolas no se sintetiza: es el tema de Vela y
+// Hollín (assets/audio/musica), dos capas grabadas (luz en Pad, sombra en Melody) que se cruzan
+// al cambiar de forma.
+enum class TrackId { Plaza, Mercado, Puente, Jefe, Farolas, Count };
 Music renderMusic(TrackId id);
 StereoBuffer renderSfx(Sfx id);
 
@@ -39,6 +41,8 @@ bool loadWav(const std::string& path, StereoBuffer& buf);
 // Cualquier WAV (PCM de 16, 24 o 32 bits, o coma flotante; mono o estéreo; cualquier
 // frecuencia), convertido a estéreo a kSampleRate.
 bool loadAnyWav(const std::string& path, StereoBuffer& buf);
+// Un .ogg (Vorbis) con libvorbisfile, cargada en tiempo de ejecución (sin ella, falso).
+bool loadOgg(const std::string& path, StereoBuffer& buf);
 
 // Las tomas de un efecto. Las voces de la protagonista se buscan grabadas en `voiceDir`
 // (vela_golpe_1.wav, vela_golpe_2.wav, hollin_dolor_1.wav...; ver assets/audio/voces/LEEME.md):
