@@ -29,6 +29,8 @@ public:
     void play(Sfx id, float gain = 1, float pan = 0, float pitch = 1);
     // Pista que debe sonar (cambia con un fundido; si no está lista, se prepara antes).
     void playTrack(TrackId id);
+    // Un fragmento suelto (victoria, derrota) sobre la música, que se aparta mientras dura.
+    void playStinger(Stinger id);
     // Volumen deseado de cada capa de la música (se alcanza con suavidad).
     void setStemGains(const float gains[int(Stem::Count)]);
     void setMasterVolume(float v) { master_ = v; }
@@ -60,5 +62,9 @@ private:
     float stemTarget_[int(Stem::Count)] = {};
     float stemGain_[int(Stem::Count)] = {};
     std::vector<Voice> voices_;
+    StereoBuffer stingers_[int(Stinger::Count)];
+    int stinger_ = -1;  // el que suena (-1: ninguno)
+    size_t stingerPos_ = 0;
+    float duck_ = 1;  // volumen de la música bajo el fragmento
     std::atomic<float> master_{0.8f};
 };

@@ -371,6 +371,10 @@ int main(int argc, char** argv) {
 
     double prevTime = platform::timeSeconds();
     float farolasMix = 0;  // el tema «Farolas»: 0 la capa de luz, 1 la de sombra (cruce suave)
+    float combatHold = 0, memoryHold = 0;  // la música de combate y la del recuerdo aguantan un poco al acabar
+    bool atInn = false;                    // junto a la fonda (con histéresis, para no ir y venir)
+    bool wasDown = false, hadBoss = false;
+    int lastKills = 0;
     double accumulator = 0;
     double statsTimer = 0, cpuTimeSum = 0;
     int statsFrames = 0;
@@ -860,27 +864,50 @@ int main(int argc, char** argv) {
             stems[int(Stem::Melody)] = memory ? 0.0f : smoothstep01((croma - 0.2f) / 0.15f) * 0.9f;
             stems[int(Stem::Pulse)] = (game.inCombat() && !game.dialogueBlocking()) || game.bossAlive() ? 0.8f : 0.0f;
             stems[int(Stem::Shimmer)] = memory ? 0.3f : smoothstep01((croma - 0.55f) / 0.2f) * 0.75f;
-            // El tema de Vela y Hollín (la plaza y los mapas abiertos): sus dos capas suenan a la
-            // vez y se cruzan al cambiar de forma, con potencia constante (~1,7 s).
-            bool farolas = !game.bossAlive() && (game.level() == LevelId::Plaza || game.level() == LevelId::Campo ||
-                                                 game.level() == LevelId::Cafetero || game.level() == LevelId::Rio);
-            farolasMix = moveTowards(farolasMix, game.shadowMode() ? 1.0f : 0.0f, float(frameDt) / 1.7f);
-            if (farolas) {
+            // Qué suena, de más a menos importante: la portada (el selector), el fin del capítulo,
+            // los recuerdos, el jefe, el combate, la fonda y, si no, la música de la zona.
+            LevelId lv = game.level();
+            float dt = float(frameDt);
+            combatHold = game.fighting() && !game.dialogueBlocking() ? 4.0f : std::max(0.0f, combatHold - dt);
+            memoryHold = memory ? 3.0f : std::max(0.0f, memoryHold - dt);
+            float innDist = 1e9f;
+            for (const Npc& n : game.npcs())
+                if (n.role == NpcRole::Inn) innDist = std::min(innDist, length(n.body.body.pos - game.hero().body.pos));
+            atInn = innDist < (atInn ? 10.0f : 7.0f);
+            bool farolas = lv == LevelId::Plaza || lv == LevelId::Campo || lv == LevelId::Cafetero || lv == LevelId::Rio;
+            TrackId track = selector.open ? TrackId::PianoNocturno
+                            : game.chapterEnded() ? TrackId::PianoUltimoFarol
+                            : memoryHold > 0 ? TrackId::PianoVelaHollin
+                            : game.bossAlive() ? TrackId::JefeGrabado
+                            : combatHold > 0 || lv == LevelId::Prueba ? TrackId::Combate
+                            : atInn ? TrackId::Fonda
+                            : farolas ? TrackId::Farolas
+                            : lv == LevelId::Mercado || lv == LevelId::Callejones || lv == LevelId::Neon ? TrackId::Ciudad
+                            : lv == LevelId::Puente || lv == LevelId::Selva || lv == LevelId::Cueva ? TrackId::Puente
+                                                                                                     : TrackId::Plaza;
+            // «Farolas» (la plaza y los mapas abiertos): sus dos capas suenan a la vez y se cruzan
+            // al cambiar de forma, con potencia constante (~1,7 s). Las otras grabadas, en una capa.
+            farolasMix = moveTowards(farolasMix, game.shadowMode() ? 1.0f : 0.0f, dt / 1.7f);
+            if (track == TrackId::Farolas) {
                 float g = smoothstep01(farolasMix);
                 for (float& s : stems) s = 0;
                 stems[int(Stem::Pad)] = 0.9f * std::cos(g * kPi * 0.5f);
                 stems[int(Stem::Melody)] = 0.9f * std::sin(g * kPi * 0.5f);
+            } else if (int(track) > int(TrackId::Farolas)) {
+                for (float& s : stems) s = 0;
+                stems[int(Stem::Pad)] = 0.9f;
             }
             audio.setStemGains(stems);
-            // Una pista por escenario; la del jefe mientras haya uno.
-            TrackId track = farolas ? TrackId::Farolas : game.bossAlive() ? TrackId::Jefe
-                            : game.level() == LevelId::Mercado || game.level() == LevelId::Callejones ? TrackId::Mercado
-                            : game.level() == LevelId::Puente || game.level() == LevelId::Selva || game.level() == LevelId::Cueva
-                                ? TrackId::Puente
-                            : game.level() == LevelId::Prueba ? TrackId(game.testSeed() % 3)
-                                                              : TrackId::Plaza;
             audio.playTrack(track);
-            audio.setMasterVolume((paused ? 0.35f : 0.8f) * masterVolume);
+            // Fragmentos: la derrota al caer; la victoria al tumbar al jefe (no si desaparece
+            // porque se reinicia el encuentro o se cambia de escenario).
+            bool down = game.hero().downTimer >= 0, boss = game.bossAlive();
+            if (down && !wasDown) audio.playStinger(Stinger::Derrota);
+            if (hadBoss && !boss && !down && game.kills() > lastKills) audio.playStinger(Stinger::Victoria);
+            wasDown = down;
+            hadBoss = boss;
+            lastKills = game.kills();
+            audio.setMasterVolume((paused && !selector.open ? 0.35f : 0.8f) * masterVolume);
         }
 
         // Estadísticas en el título de la ventana cada medio segundo.

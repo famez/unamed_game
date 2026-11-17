@@ -29,10 +29,18 @@ struct Music {
 };
 
 // Una pista por escenario y la del jefe. Cada una en bucle sin costura (las colas de la
-// reverberación pasan del final al principio). Farolas no se sintetiza: es el tema de Vela y
-// Hollín (assets/audio/musica), dos capas grabadas (luz en Pad, sombra en Melody) que se cruzan
-// al cambiar de forma.
-enum class TrackId { Plaza, Mercado, Puente, Jefe, Farolas, Count };
+// reverberación pasan del final al principio). Las de después de Jefe no se sintetizan: están
+// grabadas en assets/audio/musica. Farolas es el tema de Vela y Hollín, dos capas (luz en Pad,
+// sombra en Melody) que se cruzan al cambiar de forma; las demás, un solo archivo (en Pad): la
+// ciudad, el combate, la fonda, el jefe y tres piezas de piano (la portada, los recuerdos y el
+// fin del capítulo). Si no se pueden leer, suena una sintetizada parecida.
+enum class TrackId {
+    Plaza, Mercado, Puente, Jefe,
+    Farolas, Ciudad, Combate, Fonda, JefeGrabado, PianoNocturno, PianoVelaHollin, PianoUltimoFarol,
+    Count
+};
+// Fragmentos sueltos (no en bucle) que suenan sobre la música, que baja mientras tanto.
+enum class Stinger { Victoria, Derrota, Count };
 Music renderMusic(TrackId id);
 StereoBuffer renderSfx(Sfx id);
 

@@ -300,6 +300,17 @@ int main() {
         CHECK(ok && luz.frames() == sombra.frames() && std::fabs(secs - 106.667f) < 0.05f,
               "música «Farolas»: dos capas de %.2f s, sincronizadas", double(secs));
     }
+    {  // Las otras pistas grabadas y los fragmentos se leen (44,1 kHz, con algo de duración)
+        const char* files[] = {"ciudad_loop", "combate_loop", "fonda_loop", "jefe_loop", "piano_nocturno_de_las_farolas",
+                               "piano_vela_y_hollin", "piano_el_ultimo_farol", "stinger_victoria", "stinger_derrota"};
+        std::string dir = std::string(GAME_ASSET_DIR) + "/audio/musica/";
+        int read = 0;
+        for (const char* f : files) {
+            StereoBuffer b;
+            if (loadOgg(dir + f + ".ogg", b) && b.frames() > size_t(kSampleRate) * 3) ++read;
+        }
+        CHECK(read == 9, "música grabada: %d de 9 pistas leídas", read);
+    }
     {  // Salto y aterrizaje
         Game g = fresh();
         run(g, 0.2f);

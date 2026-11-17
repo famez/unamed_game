@@ -28,6 +28,27 @@ PaFree paFree = nullptr;
 constexpr int kBlock = 512;  // frames por envío (~12 ms)
 constexpr int kMusicVersion = 3;  // cambiarlo regenera la caché si cambia la música
 
+// Las pistas grabadas (assets/audio/musica): su archivo y la sintetizada que suena si no se
+// puede leer. Farolas va aparte (dos capas).
+struct Recorded {
+    TrackId id;
+    const char* file;
+    TrackId fallback;
+};
+const Recorded kRecorded[] = {
+    {TrackId::Ciudad, "ciudad_loop.ogg", TrackId::Mercado},
+    {TrackId::Combate, "combate_loop.ogg", TrackId::Jefe},
+    {TrackId::Fonda, "fonda_loop.ogg", TrackId::Plaza},
+    {TrackId::JefeGrabado, "jefe_loop.ogg", TrackId::Jefe},
+    {TrackId::PianoNocturno, "piano_nocturno_de_las_farolas.ogg", TrackId::Plaza},
+    {TrackId::PianoVelaHollin, "piano_vela_y_hollin.ogg", TrackId::Plaza},
+    {TrackId::PianoUltimoFarol, "piano_el_ultimo_farol.ogg", TrackId::Plaza},
+};
+const char* const kStingerFiles[] = {"stinger_victoria.ogg", "stinger_derrota.ogg"};
+
+// Las músicas de zona siguen por donde iban al volver a ellas; las demás empiezan de cero.
+bool resumes(int id) { return id == int(TrackId::Farolas) || id == int(TrackId::Ciudad); }
+
 void makeDirs(const std::string& path) {
     for (size_t i = 1; i <= path.size(); ++i)
         if (i == path.size() || path[i] == '/') mkdir(path.substr(0, i).c_str(), 0755);
@@ -62,6 +83,8 @@ bool Audio::init(const std::string& cacheDir, const std::string& voiceDir, const
     thread_ = std::thread(&Audio::run, this);
     cacheDir_ = cacheDir;
     musicDir_ = musicDir;
+    for (int i = 0; i < int(Stinger::Count); ++i)
+        if (!loadOgg(musicDir + "/" + kStingerFiles[i], stingers_[i])) stingers_[i] = {};
     loader_ = std::thread(&Audio::loaderLoop, this);
     return true;
 }
@@ -78,39 +101,40 @@ void Audio::loaderLoop() {
             id = wanted_;
         }
         auto m = std::make_unique<Music>();
-        int key = id;  // dónde se guarda (sin el tema grabado, «Farolas» es la música de la plaza)
-        if (id == int(TrackId::Farolas)) {  // el tema grabado: luz y sombra (o, si no se puede leer, la de la plaza)
-            bool ok = loadOgg(musicDir_ + "/farolas_capa_luz_loop.ogg", m->stems[int(Stem::Pad)]) &&
-                      loadOgg(musicDir_ + "/farolas_capa_sombra_loop.ogg", m->stems[int(Stem::Melody)]) &&
-                      m->stems[int(Stem::Pad)].frames() == m->stems[int(Stem::Melody)].frames();
-            if (!ok) {
-                std::fprintf(stderr, "Audio: no se pudo leer el tema «Farolas»; suena la música de la plaza\n");
-                id = int(TrackId::Plaza);
-                *m = Music{};
-            } else {
-                m->loopSeconds = float(m->stems[0].frames()) / float(kSampleRate);
-                std::lock_guard<std::mutex> lock(mutex_);
-                tracks_[int(TrackId::Farolas)] = std::move(m);
-                if (wanted_ == int(TrackId::Farolas) && current_ != wanted_) {
-                    previous_ = current_;
-                    current_ = wanted_;
-                    fade_ = 0;
-                    tracks_[current_]->pos = 0;
-                }
-                continue;
-            }
+        int key = id;  // dónde se guarda (una grabada que no se lee se guarda con su sintetizada)
+        bool recorded = false, ok = false;
+        if (id == int(TrackId::Farolas)) {  // el tema de Vela y Hollín: luz y sombra
+            recorded = true;
+            ok = loadOgg(musicDir_ + "/farolas_capa_luz_loop.ogg", m->stems[int(Stem::Pad)]) &&
+                 loadOgg(musicDir_ + "/farolas_capa_sombra_loop.ogg", m->stems[int(Stem::Melody)]) &&
+                 m->stems[int(Stem::Pad)].frames() == m->stems[int(Stem::Melody)].frames();
+            if (!ok) id = int(TrackId::Plaza);
         }
-        bool cached = true;
-        auto path = [&](int stem) {
-            char name[96];
-            std::snprintf(name, sizeof(name), "/musica_v%d_pista%d_capa%d.wav", kMusicVersion, id, stem);
-            return cacheDir_ + name;
-        };
-        for (int st = 0; st < int(Stem::Count) && cached; ++st) cached = loadWav(path(st), m->stems[st]);
-        if (!cached) {
-            *m = renderMusic(TrackId(id));
-            makeDirs(cacheDir_);
-            for (int st = 0; st < int(Stem::Count); ++st) saveWav(path(st), m->stems[st]);
+        for (const Recorded& r : kRecorded)
+            if (id == int(r.id)) {
+                recorded = true;
+                ok = loadOgg(musicDir_ + "/" + r.file, m->stems[int(Stem::Pad)]);
+                if (!ok) id = int(r.fallback);
+            }
+        if (recorded && !ok) {
+            std::fprintf(stderr, "Audio: no se pudo leer la pista grabada %d; suena una sintetizada\n", key);
+            *m = Music{};
+        }
+        if (ok) {
+            m->loopSeconds = float(m->stems[0].frames()) / float(kSampleRate);
+        } else {
+            bool cached = true;
+            auto path = [&](int stem) {
+                char name[96];
+                std::snprintf(name, sizeof(name), "/musica_v%d_pista%d_capa%d.wav", kMusicVersion, id, stem);
+                return cacheDir_ + name;
+            };
+            for (int st = 0; st < int(Stem::Count) && cached; ++st) cached = loadWav(path(st), m->stems[st]);
+            if (!cached) {
+                *m = renderMusic(TrackId(id));
+                makeDirs(cacheDir_);
+                for (int st = 0; st < int(Stem::Count); ++st) saveWav(path(st), m->stems[st]);
+            }
         }
         std::lock_guard<std::mutex> lock(mutex_);
         tracks_[key] = std::move(m);
@@ -118,7 +142,6 @@ void Audio::loaderLoop() {
             previous_ = current_;
             current_ = key;
             fade_ = 0;
-            tracks_[key]->pos = 0;
         }
     }
 }
@@ -130,10 +153,12 @@ void Audio::playTrack(TrackId tid) {
     wanted_ = id;
     if (tracks_.count(id)) {
         if (current_ != id) {
+            // Si vuelve la que se estaba apagando, sigue donde iba; si no, desde el principio
+            // (o desde donde se dejó, si es música de zona).
+            if (id != previous_ && !resumes(id)) tracks_[id]->pos = 0;
             previous_ = current_;
             current_ = id;
             fade_ = 0;
-            tracks_[id]->pos = 0;
         }
     } else {
         loaderCv_.notify_one();
@@ -166,6 +191,13 @@ void Audio::play(Sfx id, float gain, float pan, float pitch) {
     if (takes[size_t(take)].frames() < 2) return;
     if (voices_.size() >= 48) voices_.erase(voices_.begin());  // se corta la más antigua
     voices_.push_back({&takes[size_t(take)], 0.0, gain, clampf(pan, -1, 1), pitch});
+}
+
+void Audio::playStinger(Stinger id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!running_ || stingers_[int(id)].frames() == 0) return;
+    stinger_ = int(id);
+    stingerPos_ = 0;
 }
 
 void Audio::setStemGains(const float gains[int(Stem::Count)]) {
@@ -222,6 +254,22 @@ void Audio::mix(int16_t* out, int frames) {
     };
     if (current_ >= 0) play(current_, f0, fade_);
     if (previous_ >= 0 && f0 < 1.0f) play(previous_, 1.0f - f0, 1.0f - fade_);
+    // Fragmento suelto: la música baja mientras suena (y vuelve despacio al acabar).
+    float d0 = duck_;
+    duck_ += ((stinger_ >= 0 ? 0.25f : 1.0f) - duck_) * (stinger_ >= 0 ? 0.3f : 0.03f);
+    for (int i = 0; i < frames; ++i) {
+        float d = d0 + (duck_ - d0) * float(i) / float(frames);
+        acc[size_t(i) * 2] *= d;
+        acc[size_t(i) * 2 + 1] *= d;
+    }
+    if (stinger_ >= 0) {
+        const StereoBuffer& b = stingers_[stinger_];
+        for (int i = 0; i < frames && stingerPos_ < b.frames(); ++i, ++stingerPos_) {
+            acc[size_t(i) * 2] += float(b.data[stingerPos_ * 2]) * (0.9f / 32768.0f);
+            acc[size_t(i) * 2 + 1] += float(b.data[stingerPos_ * 2 + 1]) * (0.9f / 32768.0f);
+        }
+        if (stingerPos_ >= b.frames()) stinger_ = -1;
+    }
     // Efectos: lectura con interpolación lineal (para cambiar el tono) y panorámica.
     for (Voice& v : voices_) {
         const std::vector<int16_t>& d = v.buf->data;

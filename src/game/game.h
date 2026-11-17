@@ -564,6 +564,15 @@ public:
         return out;
     }
     bool inCombat() const;
+    // Para la música de combate: algún enemigo (no los enjambres) va a por la protagonista cerca.
+    bool fighting() const {
+        for (const Enemy& e : enemies_)
+            if (e.alive() && !isSwarm(e.kind) && e.state != AiState::Idle && e.state != AiState::Spawning &&
+                length(e.body.pos - hero_.body.pos) < 25.0f)
+                return true;
+        return false;
+    }
+    bool chapterEnded() const { return chapterEnded_; }
     bool bossAlive() const {
         for (const Enemy& e : enemies_)
             if (e.boss && e.alive()) return true;
