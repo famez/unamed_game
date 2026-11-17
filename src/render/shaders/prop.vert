@@ -9,6 +9,7 @@ layout(location = 6) in mat4 aModel;  // ocupa 6, 7, 8 y 9
 uniform mat4 uViewProj;
 uniform mat4 uLightViewProj;
 uniform float uInflate;
+uniform float uPropScenery;  // 1: las piezas son escenario (croma, oscuridad); 0: sombreado de personaje
 out vec3 vWorldPos;
 out vec3 vNormal;
 out vec3 vLocal;
@@ -25,7 +26,7 @@ void main() {
     vLocal = vec3(0.0);
     vSize = vec3(1.0);
     vColor = aColor;
-    vParams = vec3(aMaterial, 0.0, 1.0);  // forma "redondeada": sin bisel
+    vParams = vec3(uPropScenery > 0.5 ? aMaterial : mod(aMaterial, 16.0), 0.0, 1.0);  // forma "redondeada": sin bisel
     vLightPos = uLightViewProj * world;
     gl_Position = uViewProj * world;
 }

@@ -161,19 +161,23 @@ vuelve al selector.
     río subterráneo.
   - **Callejones del Farol**: calles estrechas con farolillos de papel colgados de lado a lado y
     letreros de neón en las fachadas.
-- **Mapas grandes** (en construcción: sin habitantes ni combates todavía), hechos con terreno
-  con relieve y piezas `.glb`:
-  - **Campo abierto** (`--nivel campo`, de día): valle de 400 m cerrado por montañas, con
+- **Mapas grandes**, hechos con terreno con relieve y piezas `.glb`. El campo, el pueblo y la
+  bahía están en el **atardecer detenido** de los primeros niveles: luz baja, poco color (vuelve
+  al encender sus cuatro **nodos de color**) y la oscuridad lejos de las farolas. La Ciudad Neón
+  es de noche y a todo color.
+  - **Campo abierto** (`--nivel campo`): **salen Grises al azar** por el valle (lejos de
+    la granja; como mucho cinco a la vez; los que se quedan atrás desaparecen). valle de 400 m cerrado por montañas, con
     colinas, un río con puente de madera, un camino con faroles, una granja (casas, granero,
     pozo, huerto vallado con fardos), la loma de los molinos y un pinar.
   - **Ciudad Neón** (`--nivel neon`, de noche): manzanas de torres con ventanas encendidas,
     tiendas, letreros verticales, expendedoras, pantallas, semáforos y pasos de cebra, una vía
     elevada y, en el centro, un santuario con torii, cerezos y puestos de comida.
-  - **Pueblo cafetero** (`--nivel cafetero`, de día; inspirado en Salento y Filandia): en lo
+  - **Pueblo cafetero** (`--nivel cafetero`; inspirado en Salento y Filandia): en lo
     alto de una loma, plaza empedrada con iglesia, kiosco, bancas, palmas y yipaos; calles de
     casas de bahareque con zócalos, puertas y balcones de colores; alrededor, cafetales con
     plataneras de sombrío, un guadual en la cañada y palmas de cera en los cerros.
-  - **Ciudad de la Bahía** (`--nivel rio`, de día; al estilo de Río de Janeiro): playa en
+  - **Ciudad de la Bahía** (`--nivel rio`; al estilo de Río de Janeiro, pero en el tono del
+    juego: la playa vacía con las sombrillas cerradas y las ventanas de la favela encendidas): playa en
     media luna con el paseo de ondas blancas y negras, cocoteros, quioscos, sombrillas y
     puestos de socorrista; la avenida con los edificios frente al mar y manzanas detrás; los
     arcos con el tranvía amarillo; la favela de casas de colores con su depósito de agua en el
@@ -184,8 +188,7 @@ vuelve al selector.
     paran a descansar y miran a la protagonista si se acerca (cafeteros y recolectoras en el
     pueblo, oficinistas, chicas neón y cocineros en la ciudad, surfistas y vendedoras en la
     playa, granjeras y abuelos en el campo). Los genera `python3 tools/personajes/habitantes.py`.
-  - De día la **sombra es la del sol** (la que hacen tejados, muros y árboles con colisión);
-    de noche, como en los demás niveles, donde no alumbra ninguna farola.
+
   - `--vuelo` sobrevuela el mapa y `--medir` escribe los fps reales por la consola.
 - En todos: **Z** cambia entre luz y sombra y **F1 / F2** hacen infinitos la vida y el Poder
   (también en la pausa). Por defecto solo la vida.

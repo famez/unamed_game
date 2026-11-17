@@ -92,7 +92,7 @@ void Game::update(float dt, const Controls& input) {
     modeFlash_ = std::max(0.0f, modeFlash_ - dt);
     levelFlash_ = std::max(0.0f, levelFlash_ - dt);
     {
-        float want = shadowUnlocked_ && !daylight_ ? (shadowMode_ ? 1.0f : 0.8f) : 0.0f;  // de día la sombra es la del sol
+        float want = shadowUnlocked_ && !daylight_ ? (shadowMode_ ? 1.0f : 0.8f) * darkScale_ : 0.0f;  // de día la sombra es la del sol
         darkShown_ = moveTowards(darkShown_, want, 1.5f * dt);
     }
     lightHint_ = std::max(0.0f, lightHint_ - dt);
@@ -277,6 +277,7 @@ void Game::update(float dt, const Controls& input) {
     for (ColorSplash& sp : splashes_) sp.age += dt;
     updateLevel(dt);
     updateNpcs(dt);
+    updateWild(dt);
     updateEffects(dt);
     if (sandbox()) {  // sin historia: lo que esté marcado como infinito
         if (infHp_) hp_ = maxHp_;

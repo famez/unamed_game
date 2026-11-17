@@ -561,6 +561,11 @@ void Game::loadLevel(LevelId id) {
     daylight_ = false;
     waterLevel_ = -1000;
     fogScale_ = 1;
+    propScenery_ = true;
+    darkScale_ = 1;
+    wildSpawns_ = false;
+    wildTimer_ = 6;
+    wildSafe_.clear();
     viewDistance_ = 200;
     diving_ = onWall_ = false;
     level_ = id;
@@ -586,7 +591,10 @@ void Game::loadLevel(LevelId id) {
         case LevelId::Rio: buildRio(); break;
         case LevelId::Count: break;
     }
-    if (world_.terrain || id == LevelId::Neon) croma_ = cromaShown_ = 1.0f;  // los mapas grandes, a todo color
+    // Los mapas grandes: la Ciudad Neón a todo color; los demás, en el atardecer detenido con
+    // poco color (vuelve al encender sus nodos y al disipar Grises).
+    if (id == LevelId::Neon) croma_ = cromaShown_ = 1.0f;
+    else if (world_.terrain) croma_ = cromaShown_ = 0.3f;
     if (freePlay_)  // sin guion que los arme, los combates de jefe esperan desde el principio
         for (Encounter& en : encounters_) en.armed = true;
     rebuildSolids();

@@ -352,6 +352,7 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
     // Charcos de oscuridad (antes que las salpicaduras: tienen prioridad en el límite).
     for (const ColorSplash& sp : splashes_) solid->paint(sp.pos, sp.radius * smoothstep01(sp.age / 0.3f), sp.color);
     solid->setFog(fogScale_);
+    solid->setPropScenery(propScenery_);
     // Suelo del escenario (el relieve de los mapas grandes) o, sobre el vacío, un mar de nubes muy abajo.
     if (world_.terrain) {
         drawTerrain(*solid);
@@ -614,7 +615,7 @@ void Game::drawTerrain(Renderer& r) const {
                 v.normal[0] = n.x, v.normal[1] = n.y, v.normal[2] = n.z;
                 v.color = terrainColor_[k];
                 v.weights[0] = 255;
-                v.material = float(terrainMaterial_[k]);
+                v.material = float(terrainMaterial_[k]) + 16.0f;  // escenario
             }
         std::vector<uint32_t> idx;
         idx.reserve(size_t(t.nx - 1) * size_t(t.nz - 1) * 6);

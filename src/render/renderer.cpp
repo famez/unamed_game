@@ -411,6 +411,7 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
     }
     if (!propRanges_.empty()) {
         sceneUniforms(propProgram_);
+        glUniform1f(glGetUniformLocation(propProgram_, "uPropScenery"), propScenery_ ? 1.0f : 0.0f);
         drawProps(false);
     }
     sceneUniforms(meshProgram_);

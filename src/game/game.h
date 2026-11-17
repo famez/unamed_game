@@ -586,6 +586,10 @@ private:
     // Pone un habitante (por el nombre de su .glb) que pasea a `radius` m de `pos`.
     void addNpc(const std::string& model, Vec3 pos, float radius = 8);
     void updateNpcs(float dt);
+    // Grises salvajes (mapas abiertos): aparecen al azar por la zona; los lejanos y los ya
+    // disipados se retiran de la lista (compactEnemies arregla los índices que la apuntan).
+    void updateWild(float dt);
+    void compactEnemies();
     void drawNpcs(Renderer& r, const ViewInfo& view, float alpha) const;
     void addTorch(Vec3 base);
     void addCrystal(Vec3 base, uint32_t color);
@@ -734,6 +738,11 @@ private:
     mutable uint32_t terrainUploaded_ = 0;
     mutable int terrainMesh_ = -1;
     float fogScale_ = 1;        // niebla del escenario (los abiertos, menos)
+    bool wildSpawns_ = false;     // salen Grises al azar por la zona (campo)
+    float wildTimer_ = 0;
+    std::vector<Vec3> wildSafe_;  // ahí no aparecen (pueblos)
+    float darkScale_ = 1;       // cuánto oscurece la oscuridad (en los mapas abiertos, menos: se ve el paisaje)
+    bool propScenery_ = true;   // las piezas, como escenario (la Ciudad Neón, con su sombreado propio)
     float viewDistance_ = 200;  // hasta dónde se dibuja
     std::vector<Lamp> lamps_;
     Vec3 heroStart_;

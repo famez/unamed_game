@@ -87,6 +87,20 @@ def sombrilla(name, c1, c2, seed):
     return p
 
 
+def sombrilla_cerrada(name, c1, seed):
+    """Sombrilla cerrada y clavada en la arena (la playa vacía del atardecer detenido)."""
+    p = Piece(name)
+    rnd = random.Random(seed)
+    m = mul(RZ(rnd.uniform(-0.12, 0.12)), RX(rnd.uniform(-0.1, 0.1)))
+    p.rod((0, 0, 0), (0, 2.4, 0), 0.03, '#d8d8d8', m=m)
+    p.add(cylinder(0.16, 0.05, 1.3, 8, smooth=False), lambda q: c1 if int(math.atan2(q[2], q[0]) * 2.5 + 8) % 2 else shade(c1, 0.8),
+          m=mul(m, T(0, 1.05, 0)))
+    p.add(cylinder(0.05, 0.0, 0.15, 6), '#d8d8d8', m=mul(m, T(0, 2.35, 0)))
+    if seed % 2:  # una silla plegada al lado
+        p.add(box(0.28, 0.6, 0.03), shade(c1, 0.9), m=mul(T(0.6, 0.55, 0.2), RX(0.25)))
+    return p
+
+
 def socorrista(name):
     p = Piece(name)
     for x in (-0.9, 0.9):
@@ -181,9 +195,12 @@ def casa_favela(name, seed):
         else:
             p.box(c, (fw / 2, fh / 2, d / 2), col)
         p.box((ox, y + fh - 0.06, 0), (fw / 2 + 0.06, 0.06, d / 2 + 0.06), '#9a9590', 'Stone')  # losa
-        for k in range(rnd.randint(1, 2)):  # ventanas
+        for k in range(rnd.randint(1, 2)):  # ventanas (al atardecer, muchas encendidas)
             x = ox + rnd.uniform(-fw / 3, fw / 3)
-            p.add(box(0.45, 0.5, 0.03), rnd.choice(['#2b2622', '#3d6fa8', '#c8202f', '#2a7d4f']), m=T(x, y + 1.5, d / 2 + 0.02))
+            if rnd.random() < 0.55:
+                p.add(box(0.42, 0.47, 0.03), rnd.choice(['#d9a35a', '#c98a45', '#e0b070']), 'Glow', T(x, y + 1.5, d / 2 + 0.02))
+            else:
+                p.add(box(0.45, 0.5, 0.03), rnd.choice(['#2b2622', '#3d6fa8', '#c8202f', '#2a7d4f']), m=T(x, y + 1.5, d / 2 + 0.02))
             p.box((x, y + 0.95, d / 2 + 0.06), (0.55, 0.04, 0.08), '#d8d2c8')
         if f == 0:
             p.add(box(0.45, 1.0, 0.04), rnd.choice(['#5a3a24', '#3d6fa8', '#2a7d4f', '#c8202f']), m=T(ox + fw / 2 - 0.8, y + 1.0, d / 2 + 0.02))
@@ -363,7 +380,8 @@ def barca(name, color):
 def piezas():
     out = [coqueiro('cocotero', 1), coqueiro('cocotero_alto', 2, 10.5), quiosque('quiosco_playa', '#2a9d55'),
            quiosque('quiosco_playa_azul', '#1b6fbc'), sombrilla('sombrilla_playa', '#ff5a5f', '#f4f1de', 1),
-           sombrilla('sombrilla_playa_amarilla', '#ffd23f', '#1b6fbc', 2), socorrista('puesto_socorrista'), calcadao('paseo_ondas'),
+           sombrilla('sombrilla_playa_amarilla', '#ffd23f', '#1b6fbc', 2), sombrilla_cerrada('sombrilla_cerrada', '#c8202f', 1),
+           sombrilla_cerrada('sombrilla_cerrada_azul', '#1b6fbc', 2), socorrista('puesto_socorrista'), calcadao('paseo_ondas'),
            edificio_playa('edificio_playa_blanco', 14, '#f2efe8', 1), edificio_playa('edificio_playa_crema', 11, '#e9dcc0', 2),
            edificio_playa('edificio_playa_rosa', 16, '#f1c9c3', 3), edificio_playa('edificio_playa_azul', 12, '#c9dbe6', 4, 18, 12),
            escadaria('escalera_azulejos', 1), arcos('arcos'), bonde('tranvia_amarillo'), teleferico('teleferico'),

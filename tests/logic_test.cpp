@@ -157,6 +157,32 @@ int main() {
             CHECK(total >= 15 && moved >= total / 2 && grounded == total && home == total,
                   "habitantes del pueblo: %d, %d han paseado, %d en el suelo, %d en su zona", total, moved, grounded, home);
         }
+        {  // Grises salvajes en el campo: aparecen lejos, como mucho cinco, y los que se quedan atrás se van
+            Game w = fresh();
+            w.loadLevel(LevelId::Campo);
+            w.infHp_ = true;
+            w.hero_.body.pos = {-60, w.world_.groundAt(-60, 40), 40};
+            int maxAlive = 0;
+            float nearest = 1e9f;
+            size_t seen = 0;
+            for (int s2 = 0; s2 < 60 * 45; ++s2) {
+                size_t before = w.enemies_.size();
+                w.update(dt, {});
+                if (w.enemies_.size() > before)
+                    for (size_t i = before; i < w.enemies_.size(); ++i)
+                        nearest = std::min(nearest, length(flat(w.enemies_[i].body.pos - w.hero_.body.pos))), ++seen;
+                int alive = 0;
+                for (const Enemy& e : w.enemies_) alive += e.alive();
+                maxAlive = std::max(maxAlive, alive);
+            }
+            CHECK(seen >= 2 && maxAlive <= 5 && nearest > 18.0f, "campo: %zu Grises salvajes, como mucho %d a la vez, el más cercano aparece a %.0f m",
+                  seen, maxAlive, nearest);
+            w.lock_ = 0;
+            w.hero_.body.pos = {150, w.world_.groundAt(150, -150), -150};  // se aleja: desaparecen
+            w.wildTimer_ = 1000;
+            w.update(dt, {});
+            CHECK(w.enemies_.empty() && w.lock_ == -1, "campo: los que se quedan atrás desaparecen (%zu quedan, fijado %d)", w.enemies_.size(), w.lock_);
+        }
         Game g = fresh();  // contra la casa del pueblo del campo: la pared la para
         g.loadLevel(LevelId::Campo);
         const AABB* wall = nullptr;
@@ -176,7 +202,9 @@ int main() {
             run(g, 1.5f, c2);
             CHECK(g.hero_.body.pos.z > wall->max.z - 0.01f, "campo: la pared de la casa para a la protagonista (z=%.2f, pared %.2f)",
                   g.hero_.body.pos.z, wall->max.z);
-            // De día, junto al granero (sin farol) por el lado contrario al sol hay sombra; en pleno prado, no.
+            // De día (el campo es de atardecer: se fuerza), junto al granero (sin farol) por el lado
+            // contrario al sol hay sombra; en pleno prado, no.
+            g.daylight_ = true;
             int barn = propLibrary().find("granero");
             const AABB* bw = nullptr;
             for (const PropInstance& p : g.props_)

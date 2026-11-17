@@ -96,7 +96,7 @@ bool PropLibrary::loadFile(const std::string& path, const std::string& name, std
                     c[k] = (p.colors.size() >= (i + 1) * 4 ? p.colors[i * 4 + size_t(k)] : 1.0f) * mat.base[k];
                 v.color = rgba(linearToSrgb(c[0]), linearToSrgb(c[1]), linearToSrgb(c[2]));
                 v.weights[0] = 255;  // todo en el hueso 0: la matriz de la instancia
-                v.material = m;
+                v.material = m + 16.0f;  // escenario: le afectan el croma, la oscuridad y las salpicaduras
                 d.verts.push_back(v);
                 lo = {std::min(lo.x, w.x), std::min(lo.y, w.y), std::min(lo.z, w.z)};
                 hi = {std::max(hi.x, w.x), std::max(hi.y, w.y), std::max(hi.z, w.z)};

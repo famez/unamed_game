@@ -125,6 +125,8 @@ public:
     // dibujada con instancias. `prop` encola una copia con su matriz; las del mismo modelo
     // salen en una sola llamada. `shadow`: falso para las lejanas (fuera del mapa de sombras).
     void prop(int mesh, const Mat4& transform, bool shadow = true);
+    // Las piezas se pintan como escenario (por defecto) o con el sombreado de los personajes.
+    void setPropScenery(bool on) { propScenery_ = on; }
     size_t propCount() const { return propCount_; }
 
     // Dibuja cielo + sombras + escena en el framebuffer actual y vacía la lista.
@@ -224,6 +226,7 @@ private:
     float worldColor_ = 1.0f;
     float night_ = 0.0f;
     float fogScale_ = 1.0f;
+    bool propScenery_ = true;
     std::vector<float> paints_;  // x, y, z, radio, r, g, b
     std::vector<float> zones_;   // x, y, z, radio
     std::vector<float> litAreas_;  // x, y, z, radio

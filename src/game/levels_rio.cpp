@@ -16,8 +16,9 @@ void Game::buildRio() {
     levelName_ = "Ciudad de la Bahía";
     floorColor_ = rgba(70, 130, 66);
     floorMaterial_ = Material::Grass;
-    daylight_ = true;
-    fogScale_ = 0.35f;
+    night_ = 0.5f;  // el atardecer detenido sobre la bahía
+    fogScale_ = 0.22f;
+    darkScale_ = 0.6f;
     viewDistance_ = 460;
     const float kSize = 420;
     makeTerrain(kSize, 2.0f);
@@ -116,7 +117,9 @@ void Game::buildRio() {
     for (int i = 0; i < 70; ++i) {  // sombrillas por la arena
         float x = rng.range(-170, 170);
         auto [p, yaw] = along(x, rng.range(9, kSand - 14));
-        addProp(rng.next() < 0.5f ? "sombrilla_playa" : "sombrilla_playa_amarilla", p, yaw + rng.range(-0.5f, 0.5f));
+        float r = rng.next();  // casi todas cerradas: la playa vacía
+        addProp(r < 0.4f ? "sombrilla_cerrada" : r < 0.8f ? "sombrilla_cerrada_azul" : r < 0.9f ? "sombrilla_playa" : "sombrilla_playa_amarilla", p,
+                yaw + rng.range(-0.5f, 0.5f));
     }
     for (float x : {-175.0f, -168.0f, 166.0f, 173.0f}) {  // barcas en los extremos
         auto [p, yaw] = along(x, 5);
@@ -196,15 +199,10 @@ void Game::buildRio() {
     addProp("teleferico", mid1 + Vec3{1.6f, 9 - 3.7f, 0}, yaw1, 1.0f, false);
     addProp("teleferico", mid2 + Vec3{-1.6f, 9 - 3.7f, 0}, yaw2, 1.0f, false);
 
-    // Habitantes: surfistas y vendedoras en la playa, alguno por el paseo.
-    for (int i = 0; i < 14; ++i) {
-        float x = rng.range(-160, 160);
-        auto [p, yaw] = along(x, i % 2 ? rng.range(8, 20) : rng.range(24, kSand - 6));
-        addNpc(i % 2 ? "surfista" : "vendedora", p, 10);
-    }
-    for (int i = 0; i < 5; ++i) {
-        auto [p, yaw] = along(rng.range(-150, 150), kSand + kWalk * 0.5f);
-        addNpc(i % 2 ? "oficinista" : "chica_neon", p, 14);
+    // Habitantes: pocos y por el paseo (la playa, vacía); alguna vendedora que recoge.
+    for (int i = 0; i < 10; ++i) {
+        auto [p, yaw] = along(rng.range(-160, 160), kSand + kWalk * 0.5f);
+        addNpc(i % 3 == 0 ? "abuelo" : i % 3 == 1 ? "oficinista" : "vendedora", p, 14);
     }
     // Portales y llegada: en el paseo, mirando al mar y al Pan de Azúcar.
     auto [start, startYaw] = along(-10, kSand + kWalk * 0.5f);
@@ -214,10 +212,18 @@ void Game::buildRio() {
     auto [pa, ya] = along(20, kSand + 3);
     addPortal({pa.x, ground(pa.x, pa.z), pa.z});
     addPortal({favela.x + 30, ground(favela.x + 30, favela.z - 40), favela.z - 40});
-    Vec3 goal{cerro.x, ground(cerro.x, cerro.z), cerro.z};
-    LevelPart explore{"Ciudad de la Bahía", "Sube al cerro de la estatua", PartKind::Reach, "", 0,
-                      {goal + Vec3{-12, -6, -12}, goal + Vec3{12, 30, 12}}, goal + Vec3{0, 25, 0}, {}, "", ""};
+    // Nodos de color: la playa, la favela, los arcos y el cerro de la estatua.
+    auto [nb, nby] = along(30, kSand + 3);
+    const Vec3 nodeSpots[] = {nb, favela + Vec3{18, 0, -30}, {0, 0, 50}, cerro + Vec3{0, 0, -9}};
+    const uint32_t nodeColors[] = {rgba(255, 190, 60), rgba(255, 70, 190), rgba(40, 220, 255), rgba(120, 255, 140)};
+    for (int k = 0; k < 4; ++k) {
+        Vec3 p = nodeSpots[k];
+        p.y = ground(p.x, p.z);
+        nodes_.push_back({"nodo_bahia_" + std::to_string(k), p, 40, nodeColors[k], ""});
+    }
+    LevelPart explore{"Ciudad de la Bahía", "Enciende los cuatro nodos de la bahía", PartKind::Nodes, "", 4, {}, nodeSpots[0], {}, "", ""};
     parts_ = {explore};
+    (void)nby;
     nextLevel_ = LevelId::Rio;
     (void)ya;
 }

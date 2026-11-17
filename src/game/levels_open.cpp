@@ -89,8 +89,10 @@ void Game::buildCampo() {
     levelName_ = "Campo abierto";
     floorColor_ = rgba(80, 130, 70);
     floorMaterial_ = Material::Grass;
-    daylight_ = true;
-    fogScale_ = 0.4f;
+    night_ = 0.42f;  // el atardecer detenido: luz baja, solo alumbran los faroles
+    wildSpawns_ = true;  // Grises salvajes por el valle
+    fogScale_ = 0.3f;
+    darkScale_ = 0.6f;
     viewDistance_ = 420;
     const float kSize = 400;
     makeTerrain(kSize, 2.0f);
@@ -223,6 +225,7 @@ void Game::buildCampo() {
         float r = rng.next();
         addProp(r < 0.8f ? "hierba" : r < 0.9f ? "flores_amarillas" : "flores_lila", p, rng.range(0, 6.28f), rng.range(0.8f, 1.4f));
     }
+    wildSafe_ = {village, {0, 0, -150}};  // ni en el pueblo ni en la llegada
     // Habitantes: la granja y la loma.
     addNpc("granjera", village + Vec3{22, 0, 11}, 4);
     addNpc("granjera", village + Vec3{-6, 0, -4}, 9);
@@ -236,8 +239,15 @@ void Game::buildCampo() {
 
     heroStart_ = {0, ground(0, -150), -150};
     heroStartYaw_ = 0;
-    LevelPart explore{"Campo abierto", "Sube a la loma de los molinos", PartKind::Reach, "", 0,
-                      {hill + Vec3{-14, -10, -14}, hill + Vec3{14, 40, 14}}, hill + Vec3{0, 12, 0}, {}, "", ""};
+    // Nodos de color: el pueblo, la loma, el puente y el pinar (devuelven el color al valle).
+    const Vec3 nodeSpots[] = {village + Vec3{-4, 0, -6}, hill + Vec3{0, 0, -16}, {28, 0, -14}, {104, 0, 92}};
+    const uint32_t nodeColors[] = {rgba(255, 190, 60), rgba(255, 70, 190), rgba(40, 220, 255), rgba(120, 255, 140)};
+    for (int k = 0; k < 4; ++k) {
+        Vec3 p = nodeSpots[k];
+        p.y = ground(p.x, p.z);
+        nodes_.push_back({"nodo_campo_" + std::to_string(k), p, 34, nodeColors[k], ""});
+    }
+    LevelPart explore{"Campo abierto", "Enciende los cuatro nodos del valle", PartKind::Nodes, "", 4, {}, nodeSpots[0], {}, "", ""};
     parts_ = {explore};
     nextLevel_ = LevelId::Campo;
 }
@@ -250,6 +260,7 @@ void Game::buildNeon() {
     floorMaterial_ = Material::Ground;
     night_ = 1;
     fogScale_ = 0.55f;
+    propScenery_ = false;  // las fachadas, con su sombreado propio: la oscuridad no las apaga
     viewDistance_ = 300;
     const Mat4 id = Mat4::identity();
     Rng rng{8128};
@@ -363,8 +374,9 @@ void Game::buildCafetero() {
     levelName_ = "Pueblo cafetero";
     floorColor_ = rgba(78, 138, 62);
     floorMaterial_ = Material::Grass;
-    daylight_ = true;
-    fogScale_ = 0.45f;
+    night_ = 0.45f;  // atardecer detenido
+    fogScale_ = 0.3f;
+    darkScale_ = 0.6f;
     viewDistance_ = 380;
     const float kSize = 320;
     makeTerrain(kSize, 2.0f);
@@ -496,8 +508,15 @@ void Game::buildCafetero() {
     addPortal({60, ground(60, 0), 0});
     heroStart_ = {0, ground(0, -12), -12};
     heroStartYaw_ = 0;
-    LevelPart explore{"Pueblo cafetero", "Baja al guadual de la cañada", PartKind::Reach, "", 0, {{98, -20, -20}, {122, 30, 20}},
-                      {110, ground(110, 0) + 2, 0}, {}, "", ""};
+    // Nodos de color: la plaza, el atrio de la iglesia, el cafetal y el guadual.
+    const Vec3 nodeSpots[] = {{12, 0, -12}, {-9, 0, kPlaza - 3}, {-118, 0, -20}, {104, 0, 26}};
+    const uint32_t nodeColors[] = {rgba(255, 190, 60), rgba(40, 220, 255), rgba(255, 70, 190), rgba(120, 255, 140)};
+    for (int k = 0; k < 4; ++k) {
+        Vec3 p = nodeSpots[k];
+        p.y = ground(p.x, p.z);
+        nodes_.push_back({"nodo_pueblo_" + std::to_string(k), p, 32, nodeColors[k], ""});
+    }
+    LevelPart explore{"Pueblo cafetero", "Enciende los cuatro nodos del pueblo", PartKind::Nodes, "", 4, {}, nodeSpots[0], {}, "", ""};
     parts_ = {explore};
     nextLevel_ = LevelId::Cafetero;
 }
