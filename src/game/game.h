@@ -608,6 +608,10 @@ private:
     // Grises salvajes (mapas abiertos): aparecen al azar por la zona; los lejanos y los ya
     // disipados se retiran de la lista (compactEnemies arregla los índices que la apuntan).
     void updateWild(float dt);
+    // Enjambres (polillas de tinta, luciérnagas de cristal): su propio comportamiento.
+    void updateSwarm(Enemy& e, float dt);
+    void fireflyBurst(Vec3 c);
+    std::vector<Spawn> deferredSpawns_;  // aparecen en el próximo paso (no en mitad de un recorrido de enemies_)
     void compactEnemies();
     void drawNpcs(Renderer& r, const ViewInfo& view, float alpha) const;
     void addTorch(Vec3 base);
@@ -762,6 +766,7 @@ private:
     mutable int terrainMesh_ = -1;
     float fogScale_ = 1;        // niebla del escenario (los abiertos, menos)
     bool wildSpawns_ = false;     // salen Grises al azar por la zona (campo)
+    bool wildOnlyMoths_ = false;  // solo enjambres de polillas (la ciudad)
     float wildTimer_ = 0;
     std::vector<Vec3> wildSafe_;  // ahí no aparecen (pueblos)
     float darkScale_ = 1;       // cuánto oscurece la oscuridad (en los mapas abiertos, menos: se ve el paisaje)

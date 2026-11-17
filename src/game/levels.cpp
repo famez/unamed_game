@@ -565,6 +565,8 @@ void Game::loadLevel(LevelId id) {
     propScenery_ = true;
     darkScale_ = 1;
     wildSpawns_ = false;
+    wildOnlyMoths_ = false;
+    deferredSpawns_.clear();
     wildTimer_ = 6;
     wildSafe_.clear();
     viewDistance_ = 200;

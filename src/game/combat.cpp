@@ -511,7 +511,7 @@ void Game::killEnemy(Enemy& e) {
     e.stateTime = 0;
     e.health = 0;
     ++kills_;
-    croma_ = std::min(1.0f, croma_ + kCromaPerKill);
+    if (!isSwarm(e.kind)) croma_ = std::min(1.0f, croma_ + kCromaPerKill);
     if (e.rlState >= 0) brainFor(e).learn(e.rlState, e.intent, e.rlReward - 2.0f, 0, true);  // disipado
     e.rlState = -1;
     sound(Sfx::EnemyDie, e.center(), 1.0f, 0.9f + 0.25f * random01());
@@ -526,8 +526,10 @@ void Game::killEnemy(Enemy& e) {
     spawnRing(ground + Vec3{0, 0.05f, 0}, 1.6f, 0.5f, col);
     // El color robado vuelve al mundo: salpica el suelo y se queda.
     // Lo que suelta se queda en el suelo: un poso cálido (luz) o un charco violáceo (sombra).
-    splashes_.push_back({ground, randRange(1.1f, 1.6f), d.shadow ? rgba(46, 30, 74) : rgba(196, 176, 136), 0});
-    if (splashes_.size() > size_t(Renderer::kMaxPaints)) splashes_.erase(splashes_.begin());
+    if (!isSwarm(e.kind)) {  // los bichos de un enjambre no dejan charco (serían decenas)
+        splashes_.push_back({ground, randRange(1.1f, 1.6f), d.shadow ? rgba(46, 30, 74) : rgba(196, 176, 136), 0});
+        if (splashes_.size() > size_t(Renderer::kMaxPaints)) splashes_.erase(splashes_.begin());
+    }
     for (int i = 0; i < 14 && particles_.size() < kMaxParticles; ++i) {
         float a = random01() * 2.0f * kPi;
         particles_.push_back({c, {std::cos(a) * randRange(2, 5), randRange(2, 5), std::sin(a) * randRange(2, 5)}, 0.7f, 0.7f,
@@ -535,6 +537,11 @@ void Game::killEnemy(Enemy& e) {
     }
     // El "alma" del enemigo: un destello grande que sube despacio.
     particles_.push_back({c, {0, 1.6f, 0}, 1.3f, 1.3f, 0.5f, col, -0.2f, true});
+    if (e.kind == EnemyKind::Firefly) fireflyBurst(c);  // estalla y enciende lo que toca
+    if (isSwarm(e.kind)) {  // un bicho de un golpe: un poco de Poder y nada más
+        dropLoot(c, 0, 0, random01() < 0.35f ? 1 : 0, ItemId::Potion, false, d.shadow);
+        return;
+    }
 
     // Botín: dinero, experiencia y vida siempre, orbes de su familia casi siempre y, a
     // veces, un objeto. La experiencia crece con lo duro que es (y el jefe vale por siete).

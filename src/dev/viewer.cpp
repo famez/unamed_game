@@ -625,9 +625,9 @@ int runViewer(const char* pathArg, Renderer& renderer, DebugDraw& lines, UiLayer
             for (size_t k = 0; k < model.props.size(); ++k) {
                 const PropDef& d = lib[size_t(model.props[k])];
                 Vec3 top = model.spots[k] + Vec3{d.bounds.center().x, d.bounds.max.y + 0.4f, d.bounds.center().z};
-                const float* m = vp.m;
-                float cx = m[0] * top.x + m[4] * top.y + m[8] * top.z + m[12], cy = m[1] * top.x + m[5] * top.y + m[9] * top.z + m[13];
-                float cw = m[3] * top.x + m[7] * top.y + m[11] * top.z + m[15];
+                const float* vm = vp.m;
+                float cx = vm[0] * top.x + vm[4] * top.y + vm[8] * top.z + vm[12], cy = vm[1] * top.x + vm[5] * top.y + vm[9] * top.z + vm[13];
+                float cw = vm[3] * top.x + vm[7] * top.y + vm[11] * top.z + vm[15];
                 if (cw < 0.1f || length(top - rc.position) > 60.0f) continue;
                 float sx = (cx / cw * 0.5f + 0.5f) * uw, sy = (1.0f - (cy / cw * 0.5f + 0.5f)) * uh;
                 if (sx < 390 || sx > uw || sy < 0 || sy > uh) continue;

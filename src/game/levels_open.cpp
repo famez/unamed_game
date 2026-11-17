@@ -261,6 +261,7 @@ void Game::buildNeon() {
     night_ = 1;
     fogScale_ = 0.55f;
     propScenery_ = false;  // las fachadas, con su sombreado propio: la oscuridad no las apaga
+    wildSpawns_ = wildOnlyMoths_ = true;  // de vez en cuando, una nube de polillas va a por las farolas
     viewDistance_ = 300;
     const Mat4 id = Mat4::identity();
     Rng rng{8128};

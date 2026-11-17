@@ -117,6 +117,7 @@ struct Field {
 }  // namespace
 
 void buildSkinnedMesh(const ModelDef& def, std::vector<SkinVertex>& verts, std::vector<uint32_t>& indices) {
+    if (def.primCount <= 0) return;  // todo en piezas aparte (la luciérnaga: solo brillos)
     Mat4 bind[kMaxJoints];
     bindMatrices(def, bind);
     Field f;
@@ -439,7 +440,8 @@ void defineEnemyModels() {
             prims.push_back({sh.joint, false, sh.center, {}, sh.radii, sh.color, 0.03f});
         }
         gEnemyBind[k] = enemyBindPose(EnemyKind(k));
-        kModels[1 + k] = {d.rig, d.jointCount, prims.data(), int(prims.size()), k == int(EnemyKind::Brute) ? 0.017f : 0.011f, &gEnemyBind[k]};
+        float voxel = k == int(EnemyKind::Brute) ? 0.017f : isSwarm(EnemyKind(k)) ? 0.008f : 0.011f;
+        kModels[1 + k] = {d.rig, d.jointCount, prims.data(), int(prims.size()), voxel, &gEnemyBind[k]};
     }
     kModels[int(ModelId::HeroHead)] = {kSkeleton, JointCount, kHeroHeadPrims, int(sizeof(kHeroHeadPrims) / sizeof(kHeroHeadPrims[0])),
                                        0.005f, &kHeroBind, 0.0f, 0.75f, Head, {0, 0.11f, -0.01f}};
@@ -540,7 +542,7 @@ void buildModels(Renderer& r) {
         std::vector<uint32_t> indices;
         buildSkinnedMesh(def, verts, indices);
         BuiltModel& m = gModels[i];
-        m.mesh = r.createSkinnedMesh(verts, indices);
+        m.mesh = verts.empty() ? -1 : r.createSkinnedMesh(verts, indices);
         m.jointCount = def.jointCount;
         m.triangles = indices.size() / 3;
         Mat4 bind[kMaxJoints];
@@ -575,6 +577,7 @@ struct GlbCharacter {
 const GlbCharacter kGlbCharacters[] = {
     {"deslumbrado", ModelId::Dazzled, false}, {"coloso", ModelId::Brute, false}, {"vigia", ModelId::Watcher, false},
     {"sabueso", ModelId::Hound, false},       {"ilse", ModelId::Ilse, false},    {"lobo_de_sombra", ModelId::Hound, true},
+    {"polilla", ModelId::Moth, false},        {"luciernaga", ModelId::Firefly, false},
 };
 bool gFromGlb[int(ModelId::Count)] = {};
 BuiltModel gWolf;
@@ -854,11 +857,11 @@ int loadInhabitants(Renderer& r, const std::string& dir) {
             // Las poses del paquete escriben el lado izquierdo con los ejes del derecho, pero en el
             // esqueleto los dos lados son reflejo (en su render salen los brazos izquierdos en
             // cruz): se refleja Y y Z en los huesos «_l».
-            for (const auto& [bone, r] : bones)
+            for (const auto& [bone, angles] : bones)
                 for (int k = 0; k < JointCount; ++k)
                     if (bone == kSkeleton[k].name) {
                         bool left = bone.size() > 2 && bone.compare(bone.size() - 2, 2, "_l") == 0;
-                        rot[size_t(k)] = left ? Vec3{r.x, -r.y, -r.z} : r;
+                        rot[size_t(k)] = left ? Vec3{angles.x, -angles.y, -angles.z} : angles;
                     }
             gIdlePoses.push_back({who, rot});
         }

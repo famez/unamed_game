@@ -239,6 +239,8 @@ void Game::update(float dt, const Controls& input) {
         }
 
     // Por índice: un jefe puede añadir enemigos mientras se recorren (los nuevos se mueven ya).
+    for (const Spawn& s : deferredSpawns_) spawnEnemy(s);  // las luciérnagas de las farolas rotas
+    deferredSpawns_.clear();
     for (size_t i = 0; i < enemies_.size(); ++i) updateEnemy(enemies_[i], dt);
     // Los que han terminado de desvanecerse se quitan (manteniendo el índice del fijado).
     {

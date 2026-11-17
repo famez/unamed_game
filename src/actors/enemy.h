@@ -12,7 +12,10 @@
 #include <cstdint>
 
 // Deslumbrado y Vigía son de luz; Coloso y Sabueso, de sombra.
-enum class EnemyKind { Dazzled, Brute, Watcher, Hound, Count };
+// Moth y Firefly son enjambres (polilla de tinta, luciérnaga de cristal): esqueleto propio
+// mínimo y un comportamiento aparte (game/swarm.cpp), sin cerebro.
+enum class EnemyKind { Dazzled, Brute, Watcher, Hound, Moth, Firefly, Count };
+inline bool isSwarm(EnemyKind k) { return k == EnemyKind::Moth || k == EnemyKind::Firefly; }
 
 // Ciclo de combate: aparece, persigue, avisa (preparación), ataca y se recupera. Un golpe
 // le hace tambalearse (interrumpe la preparación).
@@ -60,6 +63,8 @@ struct Enemy {
     float cooldown = 0;   // hasta poder volver a atacar
     float freeze = 0;     // > 0: congelado (Hielo): todo a menos velocidad
     float stun = 0;       // aturdido tras un bloqueo perfecto: segundos de tambaleo
+    int swarmLamp = -1;   // enjambres: la farola a la que van (polillas)
+    float swarmTime = 0;  // polillas: segundos rondando su farola sin que las espanten
     float burn = 0;       // > 0: ardiendo (Fuego): daño continuo
     float seed = 0;       // desfase de animación y de la deambulación
     float phase = 0;      // ciclo de pasos / aleteo

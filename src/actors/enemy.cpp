@@ -211,6 +211,40 @@ const EnemyShape kHoundShapes[] = {
     {HdTail,   {0, 0, -0.2f},          {0.03f, 0.03f, 0.21f},  kHdSkin, false},
 };
 
+// --- Polilla de tinta (sombra): un triángulo negro con un punto violeta. Llegan en
+// enjambre a las farolas para apagarlas. Mismos huesos que polilla.glb (sin rotación).
+enum MothJoint { MoRoot, MoBody, MoHead, MoWingL, MoWingR, MoCount };
+const JointDef kMothRig[MoCount] = {
+    {"root",   -1,     {0, 0, 0},           {0, 0, 0}, {0, 0, 0}},
+    {"body",   MoRoot, {0, 0.10f, 0},       {0, 0, 0}, {0.03f, 0.03f, 0.08f}},
+    {"head",   MoBody, {0, 0, 0.07f},       {0, 0, 0}, {0.03f, 0.03f, 0.03f}},
+    {"wing_l", MoBody, {0.03f, 0.02f, 0},   {0, 0, 0}, {0, 0, 0}},
+    {"wing_r", MoBody, {-0.03f, 0.02f, 0},  {0, 0, 0}, {0, 0, 0}},
+};
+const EnemyShape kMothShapes[] = {  // si no está polilla.glb
+    {MoBody,  {0, 0, 0},           {0.035f, 0.03f, 0.09f},  rgb(30, 24, 40), false},
+    {MoWingL, {0.12f, 0, -0.02f},  {0.12f, 0.008f, 0.08f},  rgb(22, 18, 30), false},
+    {MoWingR, {-0.12f, 0, -0.02f}, {0.12f, 0.008f, 0.08f},  rgb(22, 18, 30), false},
+    {MoHead,  {0, 0.01f, 0.02f},   {0.015f, 0.015f, 0.015f}, kShadowEye, true},
+};
+
+// --- Luciérnaga de cristal (luz): octaedro de luz con alas de filamento. Chispas que se
+// escapan de las farolas rotas; explotan al morir y encienden lo que tocan.
+enum FireflyJoint { FfRoot, FfCore, FfWingL, FfWingR, FfTail, FfCount };
+const JointDef kFireflyRig[FfCount] = {
+    {"root",   -1,     {0, 0, 0},           {0, 0, 0}, {0, 0, 0}},
+    {"core",   FfRoot, {0, 0.10f, 0},       {0, 0, 0}, {0.04f, 0.04f, 0.04f}},
+    {"wing_l", FfCore, {0.02f, 0.03f, 0},   {0, 0, 0}, {0, 0, 0}},
+    {"wing_r", FfCore, {-0.02f, 0.03f, 0},  {0, 0, 0}, {0, 0, 0}},
+    {"tail",   FfCore, {0, 0, -0.04f},      {0, 0, 0}, {0.02f, 0.02f, 0.03f}},
+};
+const EnemyShape kFireflyShapes[] = {  // si no está luciernaga.glb
+    {FfCore,  {0, 0, 0},            {0.05f, 0.06f, 0.05f},   kLightHot, true},
+    {FfWingL, {0.07f, 0, 0},        {0.07f, 0.005f, 0.04f},  kLightGlow, true},
+    {FfWingR, {-0.07f, 0, 0},       {0.07f, 0.005f, 0.04f},  kLightGlow, true},
+    {FfTail,  {0, 0, -0.03f},       {0.025f, 0.025f, 0.035f}, kLightGlow, true},
+};
+
 #define COUNT(a) int(sizeof(a) / sizeof((a)[0]))
 const EnemyDef kDefs[int(EnemyKind::Count)] = {
 //   nombre        rig          n        formas          n                     vida  vel.  radio alto  aggro alc.  prep. ataque recup. espera daño golpe vuela altura munny sombra
@@ -218,11 +252,15 @@ const EnemyDef kDefs[int(EnemyKind::Count)] = {
     {"Coloso",      kBruteRig,   BrCount, kBruteShapes,   COUNT(kBruteShapes),   110, 2.7f, 0.6f, 2.2f, 16, 3.4f, 0.55f, 1.00f, 0.70f, 1.3f,  22, 9.0f, false, 0,    6, 10, true},
     {"Vigía",       kWatcherRig, WaCount, kWatcherShapes, COUNT(kWatcherShapes), 32, 3.6f, 0.40f, 0.7f, 22, 10.0f, 0.60f, 0.30f, 0.60f, 1.3f, 13, 4.0f, true,  2.6f, 4, 8,  false},
     {"Sabueso",     kHoundRig,   HdCount, kHoundShapes,   COUNT(kHoundShapes),   38, 6.2f, 0.42f, 0.9f, 22, 3.0f, 0.28f, 0.40f, 0.50f, 0.8f,  10, 4.0f, false, 0,    2, 5,  true},
+    // Enjambres: mueren de un golpe; el cuerpo de colisión, algo más grande que el bicho (que se le pueda dar).
+    {"Polilla de tinta",      kMothRig,    MoCount, kMothShapes,    COUNT(kMothShapes),    1, 4.5f, 0.3f, 0.5f, 18, 1.0f, 0.20f, 0.20f, 0.30f, 1.2f, 2, 1.0f, true, 1.6f, 0, 1, true},
+    {"Luciérnaga de cristal", kFireflyRig, FfCount, kFireflyShapes, COUNT(kFireflyShapes), 1, 9.0f, 0.3f, 0.5f, 22, 1.2f, 0.25f, 0.20f, 0.40f, 1.0f, 5, 2.5f, true, 1.3f, 0, 1, false},
 };
 #undef COUNT
 // clang-format on
 
-static_assert(DzCount <= kMaxJoints && BrCount <= kMaxJoints && WaCount <= kMaxJoints && HdCount <= kMaxJoints,
+static_assert(DzCount <= kMaxJoints && BrCount <= kMaxJoints && WaCount <= kMaxJoints && HdCount <= kMaxJoints && MoCount <= kMaxJoints &&
+                  FfCount <= kMaxJoints,
               "rig demasiado grande");
 
 // Sacudida nerviosa: casi siempre quieta y, de vez en cuando, un tirón brusco.
@@ -597,6 +635,17 @@ void animateEnemy(Enemy& e, float time, float dt) {
             r[HdTail].x -= 1.2f * up;
             r[HdTail].y += 1.5f * side;
             break;
+        case EnemyKind::Moth:  // aleteo (9 Hz) y un cabeceo suave, como en el visor del paquete
+        case EnemyKind::Firefly: {
+            bool moth = e.kind == EnemyKind::Moth;
+            float a = moth ? 0.55f : 0.4f, w = (moth ? 9.0f : 14.0f) * 2.0f * kPi;
+            float flap = a * std::sin(time * w + e.seed * 7.0f);
+            r[moth ? int(MoWingL) : int(FfWingL)].z = flap;
+            r[moth ? int(MoWingR) : int(FfWingR)].z = -flap;
+            r[moth ? int(MoBody) : int(FfCore)].x = (moth ? -0.3f : 0.2f) + 0.1f * std::sin(time * 1.3f + e.seed);
+            root.y = 0.06f * std::sin(time * 1.7f + e.seed * 3.0f);
+            break;
+        }
         case EnemyKind::Count: break;
     }
     // Fundido al cambiar de estado.

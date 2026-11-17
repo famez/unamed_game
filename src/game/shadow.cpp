@@ -109,6 +109,9 @@ void Game::hitLamp(int i, float damage) {
         particles_.push_back({l.pos, v, 0.9f, 0.9f, 0.05f, k % 3 ? rgba(220, 230, 240) : l.color, 9.0f, true});
     }
     spawnSparks(l.pos, {0, 1, 0}, 20, l.color, 5.0f);
+    // Chispas que se escapan de la farola rota y se vuelven agresivas: luciérnagas de cristal.
+    for (int k = 0, n = 2 + int(random01() * 2.0f); k < n; ++k)
+        deferredSpawns_.push_back({EnemyKind::Firefly, l.pos + Vec3{randRange(-0.5f, 0.5f), -0.3f, randRange(-0.5f, 0.5f)}});
     shake_ = std::max(shake_, 0.15f);
     sound(Sfx::Crate, l.pos, 1.0f, 1.5f);
     sound(Sfx::Ice, l.pos, 0.8f, 0.7f);

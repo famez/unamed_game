@@ -140,14 +140,14 @@ void Game::uiSound(Sfx id, float gain, float pitch) { sounds_.push_back({id, {},
 
 void Game::loadBrains(const std::string& dir) {
     brainDir_ = dir;
-    const char* names[] = {"deslumbrado", "coloso", "vigia", "sabueso"};
+    const char* names[] = {"deslumbrado", "coloso", "vigia", "sabueso", "polilla", "luciernaga"};
     for (int k = 0; k < int(EnemyKind::Count); ++k) brains_[k].load(dir + "/ia_" + names[k] + ".q");
     bossBrain_.load(dir + "/ia_jefe.q");
 }
 
 void Game::saveBrains() const {
     if (brainDir_.empty()) return;
-    const char* names[] = {"deslumbrado", "coloso", "vigia", "sabueso"};
+    const char* names[] = {"deslumbrado", "coloso", "vigia", "sabueso", "polilla", "luciernaga"};
     for (int k = 0; k < int(EnemyKind::Count); ++k) brains_[k].save(brainDir_ + "/ia_" + names[k] + ".q");
     bossBrain_.save(brainDir_ + "/ia_jefe.q");
 }

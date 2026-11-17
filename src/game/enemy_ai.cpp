@@ -72,6 +72,10 @@ void Game::updateEnemy(Enemy& e, float dt) {
                                   {0, randRange(1.0f, 2.0f), 0}, 0.5f, 0.5f, 0.1f, rgba(255, 150, 50), -1.0f, false});
         if (e.health <= 0) killEnemy(e);
     }
+    if (isSwarm(e.kind)) {  // polillas y luciérnagas: swarm.cpp
+        updateSwarm(e, dt);
+        return;
+    }
 
     Vec3 toHero = flat(hero_.body.pos - e.body.pos);
     float dist = length(toHero);
@@ -317,6 +321,8 @@ void Game::enemyStartAttack(Enemy& e) {
             spawnSparks(origin, aim, 8, rgba(255, 240, 200), 2.0f);
             break;
         }
+        case EnemyKind::Moth:
+        case EnemyKind::Firefly:  // los enjambres atacan a su manera (swarm.cpp)
         case EnemyKind::Count: break;
     }
 }

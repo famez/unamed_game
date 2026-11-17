@@ -171,8 +171,8 @@ int main() {
                 if (w.enemies_.size() > before)
                     for (size_t i = before; i < w.enemies_.size(); ++i)
                         nearest = std::min(nearest, length(flat(w.enemies_[i].body.pos - w.hero_.body.pos))), ++seen;
-                int alive = 0;
-                for (const Enemy& e : w.enemies_) alive += e.alive();
+                int alive = 0;  // los Grises (las nubes de polillas van aparte)
+                for (const Enemy& e : w.enemies_) alive += e.alive() && !isSwarm(e.kind);
                 maxAlive = std::max(maxAlive, alive);
             }
             CHECK(seen >= 2 && maxAlive <= 5 && nearest > 18.0f, "campo: %zu Grises salvajes, como mucho %d a la vez, el más cercano aparece a %.0f m",
@@ -214,6 +214,45 @@ int main() {
                 float gap = length(flat(pabilo->body.body.pos - p.hero_.body.pos));
                 CHECK(gap < 5.0f && length(flat(pabilo->body.body.pos - home)) > 4.0f, "plaza: Pabilo sigue a Vela (a %.1f m)", gap);
             }
+        }
+        {  // Enjambres: las polillas apagan una farola si nadie las espanta; romper una farola suelta
+            // luciérnagas, y al estallar encienden la farola apagada que tienen cerca
+            auto setup = [&](Game& m) {
+                m.loadLevel(LevelId::Prueba);
+                m.enemies_.clear();
+                m.devNoSpawns_ = true;
+                m.lamps_.clear();
+                Lamp l;
+                l.pos = {10, 3.35f, 10};
+                l.color = rgba(255, 220, 160);
+                m.lamps_.push_back(l);
+            };
+            Game m = fresh();
+            setup(m);
+            place(m, {-12, 0, -12});
+            for (int k = 0; k < 9; ++k) m.spawnEnemy({EnemyKind::Moth, {9.0f + 0.2f * float(k), 2.5f, 9.0f}});
+            run(m, 12.0f);
+            bool putOut = !m.lamps_[0].on;
+            Game n = fresh();
+            setup(n);
+            place(n, {11.5f, 0, 10});  // al pie de la farola: las espanta
+            for (int k = 0; k < 9; ++k) n.spawnEnemy({EnemyKind::Moth, {9.0f + 0.2f * float(k), 2.5f, 9.0f}});
+            run(n, 12.0f);
+            CHECK(putOut && n.lamps_[0].on, "polillas: apagan la farola en 10 s (%d) salvo si Vela las espanta (%d)", putOut, n.lamps_[0].on);
+            Game f = fresh();
+            setup(f);
+            place(f, {-12, 0, -12});
+            f.hitLamp(0, 100);
+            f.update(dt, {});
+            int flies = 0;
+            for (const Enemy& e : f.enemies_) flies += e.kind == EnemyKind::Firefly;
+            Lamp off = f.lamps_[0];
+            off.pos = {-5, 3.35f, -5};
+            off.broken = false;
+            off.on = false;
+            f.lamps_.push_back(off);
+            f.fireflyBurst({-5, 3.0f, -5});
+            CHECK(flies >= 2 && f.lamps_[1].on, "luciérnagas: salen %d de la farola rota y al estallar encienden la apagada (%d)", flies, f.lamps_[1].on);
         }
         Game g = fresh();  // contra la casa del pueblo del campo: la pared la para
         g.loadLevel(LevelId::Campo);
