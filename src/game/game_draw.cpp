@@ -953,6 +953,7 @@ void Game::drawEnemies(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Dr
                 glowStar(glow, view, e.center() + Vec3{std::sin(time_ * 2 + float(k) * 3), 0.3f * float(k), std::cos(time_ * 2 + float(k) * 3)} * 0.45f,
                          0.12f, time_ * 2.0f, withAlpha(rgba(170, 230, 255), 0.6f));
         if (e.kind == EnemyKind::Watcher && !dying) solid->light(e.center(), Vec3{1.0f, 0.9f, 0.7f} * 0.7f, 3.0f);
+        if (e.kind == EnemyKind::Firefly && !dying) solid->light(e.center(), Vec3{1.0f, 0.85f, 0.5f} * 1.2f, 2.5f);
         if (e.burn > 0 && !dying) solid->fireColumn(e.body.pos, d.radius + 0.1f, d.height * 1.3f, float(i) * 13.0f, std::min(1.0f, e.burn));
         // Retícula del objetivo fijado: rombos que giran alrededor.
         if (int(i) == lock_) {

@@ -115,7 +115,8 @@ const char kHelp[] =
     "  --sombra                      empezar en modo sombra\n"
     "  --medir                       sin vsync: escribe los fps reales por la consola\n"
     "  --vuelo                       la cámara sobrevuela el escenario (para ver los mapas grandes)\n"
-    "  --vitrina                     guion que enseña ataques, técnicas, formas y mecánicas (en el patio)\n"
+    "  --vitrina [N,M...]            guion que enseña ataques, técnicas, formas y mecánicas (en el patio);\n"
+    "                                con números, solo esos actos (6: romper farolas, 17: polillas)\n"
     "  --video FICHERO.mp4 [SEG]     graba a velocidad real (30 fps, con ffmpeg); sale a los SEG segundos\n"
     "  --screenshot FICHERO SEG [N]  guarda N fotogramas (.ppm) desde SEG segundos y sale\n"
     "  -h, --help                    esta ayuda\n";
@@ -308,6 +309,16 @@ int main(int argc, char** argv) {
     int videoFrames = 0, videoW = 0, videoH = 0;
     std::vector<unsigned char> videoPx;
     Showcase vitrina;
+    for (int i = 1; i + 1 < argc; ++i)  // --vitrina 5,16: solo esos actos (contados desde 1)
+        if (std::strcmp(argv[i], "--vitrina") == 0 && argv[i + 1][0] != '-') {
+            std::vector<int> acts;
+            for (const char* p = argv[i + 1]; *p;) {
+                acts.push_back(std::atoi(p) - 1);
+                while (*p && *p != ',') ++p;
+                if (*p == ',') ++p;
+            }
+            vitrina.only(acts);
+        }
     struct VideoSound {  // efectos que han sonado durante la grabación (se mezclan al acabar)
         double time;
         Sfx id;

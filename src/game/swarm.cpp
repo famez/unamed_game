@@ -87,7 +87,7 @@ void Game::updateSwarm(Enemy& e, float dt) {
             }
         } else {
             if (e.state == AiState::Recover && e.stateTime > 0.3f) e.state = AiState::Idle, e.stateTime = 0;
-            goal = canSee ? chest + Vec3{std::cos(a) * 2.6f, 0.4f * std::sin(time_ * 4.0f + e.seed), std::sin(a) * 2.6f}
+            goal = canSee ? chest + Vec3{std::cos(a) * 2.0f, 0.3f * std::sin(time_ * 4.0f + e.seed) - 0.2f, std::sin(a) * 2.0f}
                           : pos + Vec3{std::cos(a), 0.2f, std::sin(a)};
             if (canSee && e.cooldown <= 0 && e.state == AiState::Idle && length(chest - pos) < 5.5f) {
                 e.state = AiState::Attack;

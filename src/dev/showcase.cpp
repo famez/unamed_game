@@ -1,5 +1,6 @@
 #include "dev/showcase.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace {
@@ -16,7 +17,7 @@ const Act kActs[] = {
     {"SUPERNOVA", "Técnica 5: gasta todo el Poder", 320},
     {"FORMA SOLAR", "G · 50 de Poder: más rápida, más fuerte y ondas en los remates", 560},
     {"VIAJE POR LA LUZ", "Q junto a una farola para entrar · R elige otra fuente · Q salta · Espacio sale", 640},
-    {"ROMPER FAROLAS", "A golpes: la farola rota no vuelve a encenderse y deja sombra", 360},
+    {"ROMPER FAROLAS", "La farola rota no vuelve a encenderse · de ella escapan luciérnagas de cristal", 640},
     {"INTERRUPTORES", "F: apagar y encender un grupo de farolas", 600},
     {"MODO SOMBRA", "Z: cambio de luz a sombra", 240},
     {"MAZO DE SOMBRA", "Mazazo, barrido y salto que agrieta el suelo", 480},
@@ -27,6 +28,7 @@ const Act kActs[] = {
     {"TREPAR COMO SOMBRA", "Fundido, empuja contra una pared oscura: sube por ella y pasa al tejado", 480},
     {"BLOQUEO PERFECTO", "Guardia justo antes del golpe: aturdido · ataca: súper contraataque (luz)", 600},
     {"BLOQUEO PERFECTO", "En sombra, con el mazo: súper contraataque y corona de púas", 600},
+    {"POLILLAS DE TINTA", "Acuden a una farola y la apagan si nadie las espanta · mueren de un golpe", 900},
 };
 constexpr int kActCount = int(sizeof(kActs) / sizeof(kActs[0]));
 
@@ -92,8 +94,10 @@ Controls Showcase::step(Game& g, float& camYaw, const Controls& base) {
     c.camForward = base.camForward;
     c.aimOrigin = base.aimOrigin;
     c.aimDir = base.aimDir;
-    if (act_ < 0 || ++t_ >= kActs[act_].steps) {  // siguiente acto
+    if (act_ < 0 || ++t_ >= kActs[act_].steps) {  // siguiente acto (o el siguiente de los pedidos)
         ++act_;
+        if (!only_.empty())
+            while (act_ < kActCount && std::find(only_.begin(), only_.end(), act_) == only_.end()) ++act_;
         t_ = 0;
         if (done()) return c;
         g.setTestCheats(true, true);
@@ -149,6 +153,20 @@ Controls Showcase::step(Game& g, float& camYaw, const Controls& base) {
                 place(p, yawTo(p, l));
                 camYaw = clearestYaw(g, p, camYaw, {1.3f, -1.3f, 0.9f, -0.9f});  // de lado: farola y golpe
                 home_ = l;
+                break;
+            }
+            case 16: {  // una farola encendida, vista desde lejos: llegan las polillas
+                int pick = -1;
+                for (size_t i = 0; i < lamps.size(); ++i)
+                    if (lamps[i].bulb && lamps[i].on && !lamps[i].broken) pick = int(i);
+                if (pick < 0) break;
+                Vec3 l = flat(lamps[size_t(pick)].pos);
+                Vec3 p = l + Vec3{-8.0f, 0, -3.0f};
+                g.devFreeSpot(p, 0.6f);
+                place(p, yawTo(p, l));
+                camYaw = yawTo(p, l);
+                home_ = l;
+                for (int k = 0; k < 10; ++k) g.devSpawn(EnemyKind::Moth, l + Vec3{4.0f + 0.3f * float(k % 3), 0, -4.0f + 0.4f * float(k)});
                 break;
             }
             case 6: {  // un interruptor con sus farolas aún encendidas
@@ -267,8 +285,19 @@ Controls Showcase::step(Game& g, float& camYaw, const Controls& base) {
             if (t == 180 || t == 390) c.light = true;   // saltar
             if (t == 560) c.jump = true;           // salir
             break;
-        case 5:
-            if (t > 40 && t % 24 == 0) c.attack = true;
+        case 5: {  // a golpes hasta romperla; luego, contra las luciérnagas que escapan
+            Vec3 foe;
+            bool flies = g.lockTarget(foe);
+            if (t > 40 && t % 24 == 0 && !flies && t < 300) c.attack = true;
+            if (t > 120) fight(g, c, t, 9);
+            break;
+        }
+        case 16:  // espera a que la apaguen; luego va a espantarlas y a por ellas
+            if (t > 660) {
+                Vec3 to = flat(home_ - g.hero().body.pos);
+                if (length(to) > 2.5f && t < 760) c.move = normalize(to);
+                if (t >= 760) fight(g, c, t, 8);
+            }
             break;
         case 6:
             if (t == 70 || t == 250 || t == 430) c.interact = true;

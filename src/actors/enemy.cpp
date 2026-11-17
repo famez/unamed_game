@@ -566,6 +566,8 @@ Enemy makeEnemy(EnemyKind kind, Vec3 pos, float yaw, float seed) {
     e.health = d.maxHealth;
     e.seed = seed;
     e.phase = seed;
+    if (kind == EnemyKind::Moth) e.size = 1.4f;     // que se lean a la distancia de la cámara
+    if (kind == EnemyKind::Firefly) e.size = 1.7f;
     animateEnemy(e, 0, 0);
     for (int i = 0; i < d.jointCount; ++i) e.prevJoints[i] = e.joints[i];
     e.prevPos = pos;
