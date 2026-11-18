@@ -171,16 +171,25 @@ void Game::buildRio() {
             addProp(rng.next() < 0.6f ? "roca_grande" : "roca", {x, 0, z}, rng.range(0, 6.28f), rng.range(1.0f, 1.8f));
         }
     }
-    addProp("quiosco_playa", {-12, 0, -13}, kPi);
-    addProp("banca_parque", {-8, 0, -11.5f}, kPi);
-    addProp("puesto_socorrista", {5, 0, -21}, kPi);
+    // Playa salvaje: sin quiosco, ni sombrillas, ni socorrista. Cocoteros inclinados, matorral
+    // de duna, troncos varados y la selva que baja hasta la arena.
     addProp("barca", {-7, 0, -31}, 1.2f);
-    addProp("barca_roja", {14, 0, -29.5f}, 2.0f);
-    for (Vec3 p : {Vec3{-16.5f, 0, -11}, Vec3{16.5f, 0, -13}, Vec3{-17.5f, 0, -23}})
-        addProp(p.x < 0 ? "cocotero" : "cocotero_alto", p, rng.range(0, 6.28f));
-    for (int i = 0; i < 6; ++i)  // sombrillas cerradas: la playa vacía
-        addProp(i % 2 ? "sombrilla_cerrada" : "sombrilla_cerrada_azul", {-4.0f + float(i) * 3.4f, 0, -16.0f - float(i % 3) * 2.5f},
-                rng.range(0, 6.28f));
+    for (Vec3 p : {Vec3{-16.5f, 0, -11}, Vec3{16.5f, 0, -13}, Vec3{-17.5f, 0, -23}, Vec3{-13, 0, -19}, Vec3{12.5f, 0, -20},
+                   Vec3{17, 0, -26}, Vec3{-6, 0, -12.5f}, Vec3{7, 0, -14}})
+        addProp(int(p.x) % 2 ? "cocotero" : "cocotero_alto", p, rng.range(0, 6.28f), rng.range(0.9f, 1.15f));
+    for (int i = 0; i < 26; ++i) {  // matorral y flores en lo alto de la arena, al pie del paseo
+        Vec3 p{rng.range(-18, 18), 0, rng.range(-15, -9.5f)};
+        float r = rng.next();
+        addProp(r < 0.4f ? "hierba" : r < 0.65f ? "arbusto" : r < 0.85f ? "heliconia" : "platanera", p, rng.range(0, 6.28f),
+                rng.range(0.7f, 1.1f));
+    }
+    for (Vec3 p : {Vec3{-11, 0, -22}, Vec3{4, 0, -19.5f}, Vec3{14, 0, -17}})  // troncos que trajo el mar
+        addProp("tronco_caido", p, rng.range(0, 6.28f), rng.range(0.7f, 0.9f));
+    for (int i = 0; i < 10; ++i) {  // piedras sueltas en la orilla
+        Vec3 p{rng.range(-17, 17), 0, rng.range(-33, -24)};
+        if (length(flat(p - Vec3{-7, 0, -31})) < 3) continue;
+        addProp(i % 3 ? "piedra" : "roca", p, rng.range(0, 6.28f), rng.range(0.5f, 1.0f));
+    }
     // El paseo de ondas entre la playa y la plaza, con dos farolas.
     for (float x : {-12.0f, 0.0f, 12.0f}) addProp("paseo_ondas", {x, kPlazaH, -5.5f}, 0, 1.0f, false);
     for (float x : {-8.0f, 8.0f}) addProp("farola_paseo", {x, 0, -8.2f}, 0);
