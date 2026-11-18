@@ -111,6 +111,7 @@ struct Pickup {
     float age = 0, seed = 0;
     bool resting = false;
     bool dead = false;
+    bool placed = false;  // puesto en el mapa (no lo ha soltado nadie): no caduca
 };
 
 struct Particle {

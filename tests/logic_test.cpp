@@ -140,6 +140,22 @@ int main() {
                   "%s: %zu piezas, %zu farolas de piezas, la protagonista en el suelo (y=%.2f, suelo %.2f)", g.levelName_.c_str(),
                   g.props_.size(), propLamps, b.pos.y, floor);
         }
+        {  // Campo: cápsulas en el suelo y objetos sueltos por el mapa que no caducan
+            Game g = fresh();
+            g.loadLevel(LevelId::Campo);
+            int grounded = 0;
+            for (const TreasureChest& c : g.chests_) grounded += std::fabs(c.pos.y - g.world_.groundAt(c.pos.x, c.pos.z)) < 0.05f;
+            auto placed = [&] {
+                size_t n = 0;
+                for (const Pickup& p : g.pickups_) n += p.placed;
+                return n;
+            };
+            size_t before = placed();
+            run(g, 65.0f);
+            CHECK(g.chests_.size() >= 8 && grounded == int(g.chests_.size()) && before >= 30 && placed() == before,
+                  "campo: %zu cápsulas (%d en el suelo), %zu objetos sueltos y siguen %zu pasado un minuto", g.chests_.size(), grounded,
+                  before, placed());
+        }
         {  // Habitantes: pasean por su zona, sin hundirse ni salir volando
             Game h = fresh();
             h.loadLevel(LevelId::Cafetero);

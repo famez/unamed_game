@@ -1045,7 +1045,7 @@ void Game::drawEffects(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Vi
     // Botín.
     for (const Pickup& p : pickups_) {
         float limit = p.kind == PickupKind::Item ? 60.0f : 25.0f;
-        if (limit - p.age < 3.0f && std::fmod(p.age, 0.25f) < 0.1f) continue;  // parpadea antes de desaparecer
+        if (!p.placed && limit - p.age < 3.0f && std::fmod(p.age, 0.25f) < 0.1f) continue;  // parpadea antes de desaparecer
         float bob = p.resting ? 0.12f + 0.05f * std::sin(time_ * 3.0f + p.seed) : 0.05f;
         Vec3 c = p.pos + Vec3{0, bob, 0};
         uint32_t col = p.kind == PickupKind::Hp      ? rgba(110, 255, 130)
@@ -1088,7 +1088,9 @@ void Game::drawEffects(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Vi
                 solid->box(m, {}, {0.11f, 0.11f, 0.11f}, col, Material::Glow);
                 glowDot(glow, view, c + Vec3{0, 0.1f, 0}, 0.35f, withAlpha(col, 0.3f));
                 // Haz de luz vertical para verlo de lejos.
-                glowQuad(glow, c + Vec3{0, 0.8f, 0}, view.right * 0.04f, Vec3{0, 0.8f, 0}, withAlpha(col, 0.25f));
+                // (Los puestos en el mapa, más alto: se buscan desde lejos.)
+                float beam = p.placed ? 2.2f : 0.8f;
+                glowQuad(glow, c + Vec3{0, beam, 0}, view.right * 0.04f, Vec3{0, beam, 0}, withAlpha(col, 0.25f));
                 break;
             }
         }

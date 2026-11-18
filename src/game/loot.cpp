@@ -38,7 +38,7 @@ void Game::updatePickups(float dt) {
     bool heroOk = hero_.downTimer < 0;
     for (Pickup& p : pickups_) {
         p.age += dt;
-        if (p.age > (p.kind == PickupKind::Item ? 60.0f : 25.0f)) {
+        if (!p.placed && p.age > (p.kind == PickupKind::Item ? 60.0f : 25.0f)) {
             p.dead = true;
             continue;
         }

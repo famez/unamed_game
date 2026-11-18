@@ -1,8 +1,9 @@
 // Mapas grandes: terreno con relieve (mapa de alturas) y escenario hecho con piezas .glb
 // (assets/props, generadas por tools/props o rehechas a mano). Por ahora solo construcción:
 // sin habitantes ni combates, para recorrerlos.
-//   - Campo: valle abierto de día, con colinas, un río con puente, una granja, molinos en la
-//     loma y un pinar.
+//   - Campo: valle abierto rodeado de montes (un pico con mirador, una sierra, peñas que corta
+//     el río), seis caminos que acaban en algo, bosques grandes (pinar, robledales), una granja,
+//     molinos en la loma, y cápsulas y objetos repartidos para quien explore.
 //   - Ciudad Neón (de noche): manzanas de torres con ventanas encendidas, tiendas, letreros
 //     verticales, vía elevada y un santuario con torii y cerezos en el centro.
 //   - Pueblo cafetero (de día): plaza con iglesia y kiosco, calles de casas de bahareque de
@@ -93,17 +94,41 @@ void Game::buildCampo() {
     wildSpawns_ = true;  // Grises salvajes por el valle
     fogScale_ = 0.3f;
     darkScale_ = 0.6f;
-    viewDistance_ = 420;
-    const float kSize = 400;
-    makeTerrain(kSize, 2.0f);
+    viewDistance_ = 480;
+    const float kSize = 520;
+    const float kHalf = kSize * 0.5f;
+    makeTerrain(kSize, 2.5f);
     Terrain& t = const_cast<Terrain&>(*world_.terrain);
 
-    // Camino (de la llegada al pueblo, al molino y al pinar) y el río que lo cruza.
-    const std::vector<Vec3> path = {{0, 0, -150}, {10, 0, -100}, {25, 0, -55}, {30, 0, -20}, {45, 0, 20}, {52, 0, 45},
-                                    {20, 0, 75},  {-30, 0, 95},  {-80, 0, 108}, {-100, 0, 112}};
-    const std::vector<Vec3> branch = {{52, 0, 45}, {95, 0, 70}, {120, 0, 110}, {130, 0, 150}};
+    // Caminos: el principal (de la llegada al pueblo y a la loma de los molinos) y cinco que salen
+    // de él: al pinar del norte, la senda en zigzag al mirador, a las peñas del este por la
+    // garganta del río, al robledal del suroeste y al bosque del oeste. Cada uno acaba en algo.
+    const std::vector<Vec3> road = {{0, 0, -205}, {5, 0, -160}, {10, 0, -100}, {25, 0, -55}, {30, 0, -20}, {45, 0, 20},
+                                    {52, 0, 45},  {20, 0, 75},  {-30, 0, 95},  {-80, 0, 108}, {-100, 0, 112}};
+    const std::vector<Vec3> toPines = {{52, 0, 45}, {95, 0, 70}, {120, 0, 110}, {132, 0, 150}, {150, 0, 190}};
+    const std::vector<Vec3> toSummit = {{-100, 0, 112}, {-126, 0, 122}, {-112, 0, 140}, {-142, 0, 150}, {-126, 0, 166},
+                                        {-156, 0, 174}, {-142, 0, 192}, {-168, 0, 196}};
+    const std::vector<Vec3> toCrags = {{45, 0, 20}, {90, 0, 4}, {128, 0, -14}, {162, 0, -40}, {186, 0, -72}, {200, 0, -105}};
+    const std::vector<Vec3> toOaks = {{10, 0, -100}, {-38, 0, -112}, {-86, 0, -118}, {-124, 0, -140}, {-160, 0, -165}};
+    const std::vector<Vec3> toWest = {{-30, 0, 95}, {-62, 0, 62}, {-100, 0, 34}, {-148, 0, 14}, {-192, 0, -6}};
+    const std::vector<const std::vector<Vec3>*> paths = {&road, &toPines, &toSummit, &toCrags, &toOaks, &toWest};
+    auto pathDist = [&](Vec3 p) {
+        float d = 1e9f;
+        for (const auto* pl : paths) d = std::min(d, distToPath(p, *pl));
+        return d;
+    };
     auto riverZ = [](float x) { return -30.0f + 22.0f * std::sin(x / 45.0f) + 8.0f * std::sin(x / 17.0f); };
     const Vec3 village{55, 0, 45}, hill{-110, 0, 120};
+    // Montes: el pico del mirador (noroeste), la sierra del norte, las peñas del este (las corta
+    // el río) y las lomas del suroeste. Fuera del valle, crestas con ruido «afilado».
+    struct Peak {
+        Vec3 c;
+        float h, r;
+    };
+    const Peak peaks[] = {{{-172, 0, 196}, 62, 48}, {{-60, 0, 230}, 34, 60}, {{60, 0, 238}, 30, 55},
+                          {{205, 0, -90}, 44, 42},  {{215, 0, 10}, 30, 45},  {{-175, 0, -175}, 32, 48},
+                          {{150, 0, -195}, 26, 50}, {{-215, 0, 70}, 28, 45}};
+    const Vec3 summit = toSummit.back();
 
     for (int iz = 0; iz < t.nz; ++iz)
         for (int ix = 0; ix < t.nx; ++ix) {
@@ -112,64 +137,105 @@ void Game::buildCampo() {
             float h = 4.0f * (fbm(x / 95.0f, z / 95.0f, 11) + 1.0f) + 1.2f * fbm(x / 23.0f, z / 23.0f, 12);
             h += 16.0f * std::exp(-length(flat(p - hill)) * length(flat(p - hill)) / (2 * 38.0f * 38.0f));  // la loma del molino
             h += 9.0f * std::exp(-((x - 120) * (x - 120) + (z - 140) * (z - 140)) / (2 * 50.0f * 50.0f));    // el monte del pinar
-            // Bordes: montañas que cierran el valle.
+            for (const Peak& k : peaks) {
+                float d2 = dot(flat(p - k.c), flat(p - k.c));
+                h += k.h * std::exp(-d2 / (2 * k.r * k.r));
+            }
+            // Lejos del centro del valle, el terreno se encrespa: crestas y barrancos.
+            // Los caminos van por vaguadas y collados: cerca de ellos, las crestas se calman.
+            float dp = pathDist(p);
+            float wild = smoothstep01(clampf((length(flat(p)) - 110.0f) / 90.0f, 0, 1)) * (1.0f - smoothFalloff(dp, 26.0f));
+            float ridge = 1.0f - std::fabs(noise(x / 38.0f, z / 38.0f, 21));
+            h += wild * (18.0f * ridge * ridge + 6.0f * fbm(x / 14.0f, z / 14.0f, 22));
+            // Bordes: montañas altas que cierran el mapa.
             float edge = std::min({x - t.x0, -t.x0 - x, z - t.z0, -t.z0 - z});
-            if (edge < 45) h += 40.0f * (1 - edge / 45) * (1 - edge / 45);
-            // El pueblo, en un llano.
+            if (edge < 50) h += 55.0f * (1 - edge / 50) * (1 - edge / 50);
+            // El pueblo, en un llano; la cima del mirador, una explanada.
             float dv = length(flat(p - village));
             h = h + (4.2f - h) * smoothFalloff(dv, 42.0f);
-            // Camino: se suaviza el relieve (no se hunde).
-            float dp = std::min(distToPath(p, path), distToPath(p, branch));
+            // Caminos: se suaviza el relieve (no se hunde); en los montes, más ancho (terraza).
             float hp = h * 0.92f + 0.3f;
-            h = h + (hp - h) * smoothFalloff(dp, 6.0f);
-            // Río: cauce con orillas suaves.
+            h = h + (hp - h) * smoothFalloff(dp, 6.0f + 4.0f * wild);
+            // Río: cauce con orillas suaves (entre las peñas, una garganta).
             float dr = std::fabs(z - riverZ(x));
             h = h + (-1.3f - h) * smoothFalloff(dr, 9.0f) * smoothFalloff(dr, 9.0f);
             t.at(ix, iz) = std::max(h, -1.3f);
-            // Color: hierba con variación, tierra en el camino, arena en las orillas, roca en las cumbres.
+        }
+    // La cima del mirador, llana: se aplana alrededor de la altura del final de la senda.
+    {
+        float top = t.heightAt(summit.x, summit.z);
+        for (int iz = 0; iz < t.nz; ++iz)
+            for (int ix = 0; ix < t.nx; ++ix) {
+                float x = t.x0 + float(ix) * t.cell, z = t.z0 + float(iz) * t.cell;
+                float k = smoothFalloff(length(flat(Vec3{x, 0, z} - summit)), 14.0f);
+                t.at(ix, iz) += (top - t.at(ix, iz)) * k;
+            }
+    }
+    // Color: hierba con variación, tierra en los caminos, arena en las orillas, roca en las
+    // laderas empinadas y en las cumbres (con nieve sucia en lo más alto).
+    for (int iz = 0; iz < t.nz; ++iz)
+        for (int ix = 0; ix < t.nx; ++ix) {
+            float x = t.x0 + float(ix) * t.cell, z = t.z0 + float(iz) * t.cell;
+            Vec3 p{x, 0, z};
+            float h = t.at(ix, iz);
+            float slope = 1.0f - t.normalAt(x, z).y;
             float v = noise(x / 7.0f, z / 7.0f, 5) * 0.5f + 0.5f;
-            uint32_t grass = mixRgb(rgba(78, 128, 60), rgba(112, 156, 70), v);
-            if (h > 18) grass = mixRgb(grass, rgba(120, 118, 108), clampf((h - 18) / 10, 0, 1));
-            Material m = h > 22 ? Material::Stone : Material::Grass;
-            if (dr < 7.5f) grass = mixRgb(rgba(176, 160, 120), grass, clampf((dr - 5.0f) / 2.5f, 0, 1)), m = Material::Cloth;
-            if (dp < 2.2f) grass = mixRgb(rgba(150, 120, 82), rgba(132, 104, 70), v), m = Material::Cloth;
-            paintTerrain(ix, iz, grass, m);
+            uint32_t col = mixRgb(rgba(78, 128, 60), rgba(112, 156, 70), v);
+            Material m = Material::Grass;
+            float rock = std::max(clampf((h - 20) / 12, 0, 1), clampf((slope - 0.18f) / 0.15f, 0, 1));
+            if (rock > 0) col = mixRgb(col, mixRgb(rgba(120, 118, 108), rgba(98, 94, 88), v), rock);
+            if (rock > 0.6f) m = Material::Stone;
+            if (h > 48) col = mixRgb(col, rgba(214, 212, 206), clampf((h - 48) / 10, 0, 0.85f));
+            float dr = std::fabs(z - riverZ(x));
+            if (dr < 7.5f) col = mixRgb(rgba(176, 160, 120), col, clampf((dr - 5.0f) / 2.5f, 0, 1)), m = Material::Cloth;
+            float dp = pathDist(p);
+            if (dp < 2.2f) col = mixRgb(rgba(150, 120, 82), rgba(132, 104, 70), v), m = Material::Cloth;
+            paintTerrain(ix, iz, col, m);
         }
     waterLevel_ = -0.45f;
 
     auto ground = [&](float x, float z) { return t.heightAt(x, z); };
+    // Sitios que se dejan libres de árboles y rocas: el pueblo, la llegada, los nodos, los
+    // portales, las cápsulas y la cima.
+    std::vector<std::pair<Vec3, float>> clearings = {{village, 40}, {road.front(), 22}, {summit, 12}};
     auto clearOf = [&](Vec3 p, float pathGap, float riverGap) {
-        return std::min(distToPath(p, path), distToPath(p, branch)) > pathGap && std::fabs(p.z - riverZ(p.x)) > riverGap &&
-               length(flat(p - village)) > 40 && std::fabs(p.x) < kSize / 2 - 30 && std::fabs(p.z) < kSize / 2 - 30;
+        if (pathDist(p) < pathGap || std::fabs(p.z - riverZ(p.x)) < riverGap) return false;
+        if (std::fabs(p.x) > kHalf - 30 || std::fabs(p.z) > kHalf - 30) return false;
+        for (const auto& [c, r] : clearings)
+            if (length(flat(p - c)) < r) return false;
+        return true;
     };
     Rng rng{20251116};
 
-    // Puente donde el camino cruza el río.
-    for (size_t i = 0; i + 1 < path.size(); ++i) {
-        Vec3 a = path[i], b = path[i + 1];
-        float fa = a.z - riverZ(a.x), fb = b.z - riverZ(b.x);
-        if (fa * fb > 0) continue;
-        Vec3 c = a + (b - a) * (fa / (fa - fb));
-        float yaw = std::atan2(b.x - a.x, b.z - a.z);
-        float bank = std::max(ground(c.x + std::sin(yaw) * 6, c.z + std::cos(yaw) * 6), ground(c.x - std::sin(yaw) * 6, c.z - std::cos(yaw) * 6));
-        addProp("puente_madera", {c.x, bank - 0.55f, c.z}, yaw, 1.0f, false);
-    }
-    // Faroles a lo largo del camino.
-    for (const auto* pl : {&path, &branch}) {
-        float acc = 0;
+    // Puentes donde los caminos cruzan el río.
+    for (const auto* pl : paths)
+        for (size_t i = 0; i + 1 < pl->size(); ++i) {
+            Vec3 a = (*pl)[i], b = (*pl)[i + 1];
+            float fa = a.z - riverZ(a.x), fb = b.z - riverZ(b.x);
+            if (fa * fb > 0) continue;
+            Vec3 c = a + (b - a) * (fa / (fa - fb));
+            float yaw = std::atan2(b.x - a.x, b.z - a.z);
+            float bank = std::max(ground(c.x + std::sin(yaw) * 6, c.z + std::cos(yaw) * 6), ground(c.x - std::sin(yaw) * 6, c.z - std::cos(yaw) * 6));
+            addProp("puente_madera", {c.x, bank - 0.55f, c.z}, yaw, 1.0f, false);
+            clearings.push_back({c, 8});
+        }
+    // Faroles a lo largo de los caminos (en las sendas de monte, más espaciados).
+    for (const auto* pl : paths) {
+        float acc = 0, gap = pl == &road || pl == &toPines ? 28.0f : 40.0f;
         for (size_t i = 0; i + 1 < pl->size(); ++i) {
             Vec3 a = (*pl)[i], b = (*pl)[i + 1], d = flat(b - a);
             float len = length(d);
             Vec3 side = normalize(Vec3{d.z, 0, -d.x});
             for (float s = 0; s < len; s += 2) {
                 acc += 2;
-                if (acc < 28) continue;
+                if (acc < gap) continue;
                 acc = 0;
                 Vec3 p = a + d * (s / len) + side * 2.6f;
-                if (std::fabs(p.z - riverZ(p.x)) < 9) continue;
+                if (std::fabs(p.z - riverZ(p.x)) < 9 || length(flat(p - village)) < 30) continue;
                 addProp("farol_camino", p, std::atan2(-side.x, -side.z));
             }
         }
+        addProp("senal_camino", pl->front() + normalize(flat((*pl)[1] - pl->front())) * 6.0f + Vec3{2.8f, 0, 0}, rng.range(0, 6.28f));
     }
     // El pueblo: tres casas, el granero, el pozo, un huerto vallado con fardos.
     addProp("casa_campo", village + Vec3{-14, 0, 12}, 3.3f);
@@ -186,46 +252,125 @@ void Game::buildCampo() {
         addProp("valla", c + Vec3{k < 4 ? -7.5f : 7.5f, 0, -4.5f + 3.0f * float(k % 4)}, kPi * 0.5f);
     }
     for (int k = 0; k < 6; ++k) addProp("fardo_heno", village + Vec3{18.0f + float(k % 3) * 3.5f, 0, 14.0f + float(k / 3) * 4.5f}, 0.3f * float(k));
-    addProp("senal_camino", {50, 0, 38}, 0.6f);
     // La loma de los molinos.
     addProp("molino", hill + Vec3{0, 0, 0}, 2.6f);
     addProp("molino", hill + Vec3{-26, 0, 24}, 2.2f);
     addProp("molino", hill + Vec3{22, 0, 30}, 2.9f);
-    // Pinar al noreste.
-    for (int k = 0; k < 260; ++k) {
-        Vec3 p{rng.range(60, 180), 0, rng.range(85, 182)};
-        if (!clearOf(p, 4, 10)) continue;
-        addProp(rng.next() < 0.4f ? "pino_alto" : "pino", p, rng.range(0, 6.28f), rng.range(0.85f, 1.25f));
+    clearings.push_back({hill, 14});
+    clearings.push_back({hill + Vec3{-26, 0, 24}, 10});
+    clearings.push_back({hill + Vec3{22, 0, 30}, 10});
+    // Nodos de color (el pueblo, la loma, el puente y el pinar) y portales: con su claro.
+    const Vec3 nodeSpots[] = {village + Vec3{-4, 0, -6}, hill + Vec3{0, 0, -16}, {28, 0, -14}, {104, 0, 92}};
+    const Vec3 portalSpots[] = {{12, 0, -178}, {46, 0, 30}};
+    for (Vec3 p : nodeSpots) clearings.push_back({p, 12});
+    for (Vec3 p : portalSpots) clearings.push_back({p, 5});
+
+    // Objetos por el mapa: cápsulas al final de cada camino y en algún rincón escondido, y
+    // botín suelto (pociones, materiales, lúmenes) lejos de los caminos, para quien explore.
+    auto chest = [&](Vec3 p, float yaw, std::vector<std::pair<ItemId, int>> contents, int munny) {
+        TreasureChest c;
+        c.pos = {p.x, ground(p.x, p.z), p.z};
+        c.yaw = yaw;
+        c.contents = std::move(contents);
+        c.munny = munny;
+        chests_.push_back(c);
+        clearings.push_back({p, 6});
+    };
+    chest(summit + Vec3{0, 0, 4}, kPi, {{ItemId::LightLance, 1}, {ItemId::Elixir, 1}}, 80);           // la cima del mirador
+    chest(toPines.back() + Vec3{3, 0, 4}, kPi, {{ItemId::ShadowClaws, 1}, {ItemId::HiPotion, 1}}, 40);  // el fondo del pinar
+    chest(toCrags.back() + Vec3{4, 0, -3}, 0.5f, {{ItemId::BlazeGem, 2}, {ItemId::Ether, 1}}, 50);      // las peñas del este
+    chest(toOaks.back() + Vec3{-3, 0, -4}, 0.8f, {{ItemId::HiPotion, 2}, {ItemId::GoldSpore, 2}}, 30);  // el robledal
+    chest(toWest.back() + Vec3{-4, 0, 2}, -kPi * 0.5f, {{ItemId::Ether, 2}, {ItemId::WingDust, 2}}, 30); // el bosque del oeste
+    chest({-150, 0, 70}, 1.2f, {{ItemId::ShinyShard, 3}, {ItemId::Potion, 2}}, 40);                    // claro escondido en el bosque
+    chest({170, 0, 130}, -0.6f, {{ItemId::Elixir, 1}, {ItemId::GoldSpore, 1}}, 60);                     // en lo hondo del pinar
+    chest(hill + Vec3{-16, 0, -14}, 0.3f, {{ItemId::Potion, 3}}, 20);                                  // al pie de los molinos
+    {
+        const ItemId loose[] = {ItemId::Potion, ItemId::Potion, ItemId::Potion, ItemId::Ether, ItemId::Ether, ItemId::HiPotion,
+                                ItemId::ShinyShard, ItemId::GoldSpore, ItemId::WingDust, ItemId::BlazeGem};
+        int placed = 0;
+        for (int tries = 0; tries < 400 && placed < 46; ++tries) {
+            Vec3 p{rng.range(-kHalf + 40, kHalf - 40), 0, rng.range(-kHalf + 40, kHalf - 40)};
+            float dp = pathDist(p);
+            if (dp < 5 || dp > 45 || std::fabs(p.z - riverZ(p.x)) < 8 || length(flat(p - village)) < 35) continue;
+            Pickup it;
+            it.placed = it.resting = true;
+            it.seed = rng.range(0, 10);
+            it.pos = {p.x, ground(p.x, p.z) + 0.25f, p.z};
+            if (placed % 4 == 3) {  // un puñado de lúmenes
+                it.kind = PickupKind::Munny;
+                for (int k = 0; k < 3; ++k) {
+                    it.value = 10;
+                    pickups_.push_back(it);
+                    it.pos += Vec3{0.5f, 0, 0.3f};
+                    it.pos.y = ground(it.pos.x, it.pos.z) + 0.25f;
+                }
+            } else {
+                it.kind = PickupKind::Item;
+                it.item = loose[rng.pick(10)];
+                it.value = 1;
+                pickups_.push_back(it);
+            }
+            clearings.push_back({p, 2.5f});
+            ++placed;
+        }
+    }
+
+    // Bosques: el pinar del norte (sube por las laderas de la sierra), el robledal del oeste y
+    // el del suroeste, con claros donde el ruido baja; y pinos sueltos en las laderas altas.
+    auto forest = [&](float x, float z) {  // densidad del bosque en [0, 1]
+        float d = 0;
+        d = std::max(d, smoothFalloff(length(flat(Vec3{x, 0, z} - Vec3{140, 0, 160})), 115.0f));  // pinar
+        d = std::max(d, smoothFalloff(length(flat(Vec3{x, 0, z} - Vec3{-150, 0, 40})), 90.0f));   // bosque del oeste
+        d = std::max(d, smoothFalloff(length(flat(Vec3{x, 0, z} - Vec3{-120, 0, -130})), 85.0f)); // robledal
+        return d * clampf(0.55f + noise(x / 26.0f, z / 26.0f, 31), 0, 1);  // claros
+    };
+    for (int k = 0; k < 5200; ++k) {
+        Vec3 p{rng.range(-kHalf + 30, kHalf - 30), 0, rng.range(-kHalf + 30, kHalf - 30)};
+        float dens = forest(p.x, p.z);
+        if (rng.next() > dens * 0.85f || !clearOf(p, 4, 10)) continue;
+        float h = ground(p.x, p.z);
+        if (h > 52) continue;  // por encima, roca pelada
+        bool pines = (p.z > 60 && p.x > 20) || rng.next() < (h > 20 ? 0.8f : 0.15f);
+        if (pines) addProp(rng.next() < 0.4f ? "pino_alto" : "pino", p, rng.range(0, 6.28f), rng.range(0.85f, 1.3f));
+        else addProp(rng.next() < 0.3f ? "roble_grande" : "roble", p, rng.range(0, 6.28f), rng.range(0.85f, 1.25f));
+        float r = rng.next();
+        if (r < 0.25f) addProp("arbusto", p + Vec3{rng.range(-4, 4), 0, rng.range(2, 5)}, rng.range(0, 6.28f));
+        else if (r < 0.32f) addProp(rng.next() < 0.5f ? "tocon" : "tronco_caido", p + Vec3{rng.range(-5, 5), 0, rng.range(-5, 5)}, rng.range(0, 6.28f));
+    }
+    for (int k = 0; k < 500; ++k) {  // pinos en las laderas altas, fuera de los bosques
+        Vec3 p{rng.range(-kHalf + 30, kHalf - 30), 0, rng.range(-kHalf + 30, kHalf - 30)};
+        float h = ground(p.x, p.z);
+        if (h < 16 || h > 50 || forest(p.x, p.z) > 0.2f || !clearOf(p, 4, 10)) continue;
+        addProp(rng.next() < 0.5f ? "pino_alto" : "pino", p, rng.range(0, 6.28f), rng.range(0.8f, 1.2f));
     }
     // Robles por los prados, arbustos, rocas, tocones y troncos.
     for (int k = 0; k < 140; ++k) {
         Vec3 p{rng.range(-170, 170), 0, rng.range(-170, 170)};
-        if (!clearOf(p, 6, 11) || (p.x > 55 && p.z > 80)) continue;
+        if (!clearOf(p, 6, 11) || forest(p.x, p.z) > 0.3f) continue;
         addProp(rng.next() < 0.3f ? "roble_grande" : "roble", p, rng.range(0, 6.28f), rng.range(0.85f, 1.2f));
         if (rng.next() < 0.5f) addProp("arbusto", p + Vec3{rng.range(-4, 4), 0, rng.range(2, 5)}, rng.range(0, 6.28f));
     }
-    for (int k = 0; k < 160; ++k) {
-        Vec3 p{rng.range(-170, 170), 0, rng.range(-170, 170)};
+    for (int k = 0; k < 260; ++k) {
+        Vec3 p{rng.range(-kHalf + 30, kHalf - 30), 0, rng.range(-kHalf + 30, kHalf - 30)};
         if (!clearOf(p, 3, 8)) continue;
         float r = rng.next();
         const char* what = r < 0.35f ? "arbusto" : r < 0.5f ? "arbusto_flores" : r < 0.72f ? "piedra" : r < 0.86f ? "roca"
                          : r < 0.93f ? "tocon" : "tronco_caido";
         addProp(what, p, rng.range(0, 6.28f), rng.range(0.8f, 1.3f));
     }
-    for (int k = 0; k < 18; ++k) {  // rocas grandes en las laderas
-        Vec3 p{rng.range(-175, 175), 0, rng.range(-175, 175)};
-        if (!clearOf(p, 8, 10) || ground(p.x, p.z) < 6) continue;
-        addProp("roca_grande", p, rng.range(0, 6.28f), rng.range(0.8f, 1.5f));
+    for (int k = 0; k < 120; ++k) {  // rocas grandes en las laderas y las cumbres
+        Vec3 p{rng.range(-kHalf + 30, kHalf - 30), 0, rng.range(-kHalf + 30, kHalf - 30)};
+        if (!clearOf(p, 7, 10) || ground(p.x, p.z) < 8) continue;
+        addProp(rng.next() < 0.6f ? "roca_grande" : "roca", p, rng.range(0, 6.28f), rng.range(0.9f, 1.9f));
     }
     // Hierba alta y flores (solo se dibujan cerca).
-    for (int k = 0; k < 2600; ++k) {
-        Vec3 p{rng.range(-170, 170), 0, rng.range(-170, 170)};
-        if (!clearOf(p, 2.5f, 7) && length(flat(p - village)) > 40) continue;
-        if (distToPath(p, path) < 2.5f || std::fabs(p.z - riverZ(p.x)) < 7) continue;
+    for (int k = 0; k < 4200; ++k) {
+        Vec3 p{rng.range(-kHalf + 40, kHalf - 40), 0, rng.range(-kHalf + 40, kHalf - 40)};
+        if (pathDist(p) < 2.5f || std::fabs(p.z - riverZ(p.x)) < 7 || ground(p.x, p.z) > 30) continue;
         float r = rng.next();
         addProp(r < 0.8f ? "hierba" : r < 0.9f ? "flores_amarillas" : "flores_lila", p, rng.range(0, 6.28f), rng.range(0.8f, 1.4f));
     }
-    wildSafe_ = {village, {0, 0, -150}};  // ni en el pueblo ni en la llegada
+    wildSafe_ = {village, road.front()};  // ni en el pueblo ni en la llegada
     // Habitantes: la granja y la loma.
     addNpc("granjera", village + Vec3{22, 0, 11}, 4);
     addNpc("granjera", village + Vec3{-6, 0, -4}, 9);
@@ -234,13 +379,11 @@ void Game::buildCampo() {
     addNpc("granjera", hill + Vec3{8, 0, -12}, 12);
     addNpc("relojero", hill + Vec3{-6, 0, -16}, 6);
     // Dos portales para cambiar de luz a sombra.
-    addPortal({12, ground(12, -128), -128});
-    addPortal({46, ground(46, 30), 30});
+    for (Vec3 p : portalSpots) addPortal({p.x, ground(p.x, p.z), p.z});
 
-    heroStart_ = {0, ground(0, -150), -150};
+    heroStart_ = {road.front().x, ground(road.front().x, road.front().z), road.front().z};
     heroStartYaw_ = 0;
-    // Nodos de color: el pueblo, la loma, el puente y el pinar (devuelven el color al valle).
-    const Vec3 nodeSpots[] = {village + Vec3{-4, 0, -6}, hill + Vec3{0, 0, -16}, {28, 0, -14}, {104, 0, 92}};
+    // Nodos de color: devuelven el color al valle.
     const uint32_t nodeColors[] = {rgba(255, 190, 60), rgba(255, 70, 190), rgba(40, 220, 255), rgba(120, 255, 140)};
     for (int k = 0; k < 4; ++k) {
         Vec3 p = nodeSpots[k];
