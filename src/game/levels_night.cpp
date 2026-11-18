@@ -260,7 +260,8 @@ void Game::buildCueva() {
     encounters_ = {
         {"cueva_rio", AABB{{-12, -1, 16}, {12, 6, 32}},
          {{{EnemyKind::Dazzled, {-6, 0, 28}}, {EnemyKind::Dazzled, {6, 0, 28}}, {EnemyKind::Watcher, {0, 0, 30}}},
-          {{EnemyKind::Hound, {-8, 0, 20}}, {EnemyKind::Hound, {8, 0, 20}}, {EnemyKind::Brute, {0, 0, 29}}}},
+          // los cangrejos de cristal salen del río
+          {{EnemyKind::Crab, {-9, 0, 24}}, {EnemyKind::Crab, {9, 0, 24}}, {EnemyKind::Brute, {0, 0, 29}}}},
          {}, "", ""},
         {"cueva_gruta", AABB{{-15, -1, 40}, {15, 8, 62}},
          {{{EnemyKind::Watcher, {-8, 0, 56}}, {EnemyKind::Watcher, {8, 0, 56}}, {EnemyKind::Hound, {0, 0, 50}}},

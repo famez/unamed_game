@@ -245,6 +245,40 @@ const EnemyShape kFireflyShapes[] = {  // si no está luciernaga.glb
     {FfTail,  {0, 0, -0.03f},       {0.025f, 0.025f, 0.035f}, kLightGlow, true},
 };
 
+// --- Cangrejo de cristal (sombra, del bestiario): caparazón de tinta con cristales y vetas
+// violeta, dos pinzas y seis patas. Mismos huesos que cangrejo.glb (sin rotación en bind).
+enum CrabJoint { CrRoot, CrBody, CrEyeL, CrEyeR, CrClawL, CrClawR, CrLegL1, CrLegR1, CrLegL2, CrLegR2, CrLegL3, CrLegR3, CrCount };
+const JointDef kCrabRig[CrCount] = {
+    {"root",   -1,     {0, 0, 0},                 {0, 0, 0},           {0, 0, 0}},
+    {"body",   CrRoot, {0, 0.26f, 0},             {0, 0.02f, 0},       {0.24f, 0.1f, 0.2f}},
+    {"eye_l",  CrBody, {0.06f, 0.10f, 0.18f},     {0, 0, 0},           {0, 0, 0}},
+    {"eye_r",  CrBody, {-0.06f, 0.10f, 0.18f},    {0, 0, 0},           {0, 0, 0}},
+    {"claw_l", CrBody, {0.22f, -0.02f, 0.16f},    {0.06f, 0, 0.12f},   {0.07f, 0.05f, 0.1f}},
+    {"claw_r", CrBody, {-0.22f, -0.02f, 0.16f},   {-0.06f, 0, 0.12f},  {0.07f, 0.05f, 0.1f}},
+    {"leg_l1", CrBody, {0.2f, -0.02f, 0.06f},     {0, 0, 0},           {0, 0, 0}},
+    {"leg_r1", CrBody, {-0.2f, -0.02f, 0.06f},    {0, 0, 0},           {0, 0, 0}},
+    {"leg_l2", CrBody, {0.2f, -0.02f, -0.04f},    {0, 0, 0},           {0, 0, 0}},
+    {"leg_r2", CrBody, {-0.2f, -0.02f, -0.04f},   {0, 0, 0},           {0, 0, 0}},
+    {"leg_l3", CrBody, {0.2f, -0.02f, -0.14f},    {0, 0, 0},           {0, 0, 0}},
+    {"leg_r3", CrBody, {-0.2f, -0.02f, -0.14f},   {0, 0, 0},           {0, 0, 0}},
+};
+const uint32_t kCrInk = rgb(34, 30, 43), kCrCrystal = rgb(42, 30, 61);
+const EnemyShape kCrabShapes[] = {  // si no está cangrejo.glb
+    {CrBody,  {0, 0.02f, 0},        {0.26f, 0.1f, 0.21f},   kCrInk, false},
+    {CrBody,  {0, 0.1f, -0.02f},    {0.12f, 0.06f, 0.1f},   kCrCrystal, false},
+    {CrBody,  {0, 0.13f, 0},        {0.015f, 0.02f, 0.14f}, kShadowGlow, true},   // veta
+    {CrEyeL,  {0, 0.02f, 0},        {0.03f, 0.03f, 0.03f},  kShadowEye, true},
+    {CrEyeR,  {0, 0.02f, 0},        {0.03f, 0.03f, 0.03f},  kShadowEye, true},
+    {CrClawL, {0.06f, 0, 0.12f},    {0.08f, 0.06f, 0.11f},  kCrCrystal, false},
+    {CrClawR, {-0.06f, 0, 0.12f},   {0.08f, 0.06f, 0.11f},  kCrCrystal, false},
+    {CrLegL1, {0.12f, -0.1f, 0},    {0.14f, 0.03f, 0.03f},  kCrInk, false},
+    {CrLegR1, {-0.12f, -0.1f, 0},   {0.14f, 0.03f, 0.03f},  kCrInk, false},
+    {CrLegL2, {0.12f, -0.1f, 0},    {0.14f, 0.03f, 0.03f},  kCrInk, false},
+    {CrLegR2, {-0.12f, -0.1f, 0},   {0.14f, 0.03f, 0.03f},  kCrInk, false},
+    {CrLegL3, {0.12f, -0.1f, 0},    {0.14f, 0.03f, 0.03f},  kCrInk, false},
+    {CrLegR3, {-0.12f, -0.1f, 0},   {0.14f, 0.03f, 0.03f},  kCrInk, false},
+};
+
 #define COUNT(a) int(sizeof(a) / sizeof((a)[0]))
 const EnemyDef kDefs[int(EnemyKind::Count)] = {
 //   nombre        rig          n        formas          n                     vida  vel.  radio alto  aggro alc.  prep. ataque recup. espera daño golpe vuela altura munny sombra
@@ -255,12 +289,14 @@ const EnemyDef kDefs[int(EnemyKind::Count)] = {
     // Enjambres: mueren de un golpe; el cuerpo de colisión, algo más grande que el bicho (que se le pueda dar).
     {"Polilla de tinta",      kMothRig,    MoCount, kMothShapes,    COUNT(kMothShapes),    1, 4.5f, 0.3f, 0.5f, 18, 1.0f, 0.20f, 0.20f, 0.30f, 1.2f, 2, 1.0f, true, 1.6f, 0, 1, true},
     {"Luciérnaga de cristal", kFireflyRig, FfCount, kFireflyShapes, COUNT(kFireflyShapes), 1, 9.0f, 0.3f, 0.5f, 22, 1.2f, 0.25f, 0.20f, 0.40f, 1.0f, 5, 2.5f, true, 1.3f, 0, 1, false},
+    // El cangrejo (con su escala de 1,35): bajo y ancho; el pinzazo llega lejos.
+    {"Cangrejo de cristal",   kCrabRig,    CrCount, kCrabShapes,    COUNT(kCrabShapes),    60, 4.2f, 0.55f, 0.6f, 18, 2.0f, 0.45f, 0.35f, 0.60f, 1.1f, 14, 6.0f, false, 0, 4, 8, true},
 };
 #undef COUNT
 // clang-format on
 
 static_assert(DzCount <= kMaxJoints && BrCount <= kMaxJoints && WaCount <= kMaxJoints && HdCount <= kMaxJoints && MoCount <= kMaxJoints &&
-                  FfCount <= kMaxJoints,
+                  FfCount <= kMaxJoints && CrCount <= kMaxJoints,
               "rig demasiado grande");
 
 // Sacudida nerviosa: casi siempre quieta y, de vez en cuando, un tirón brusco.
@@ -442,6 +478,77 @@ void animateWatcher(Enemy& e, float time, Vec3* r, Vec3& root) {
     }
 }
 
+// Cangrejo: las patas en dos grupos alternos (la 1 y la 3 de un lado con la 2 del otro); cada
+// una se levanta (Z, hacia fuera) y se adelanta o se atrasa (Y). Las pinzas chasquean.
+void animateCrab(Enemy& e, float time, Vec3* r, Vec3& root) {
+    float t = e.stateTime;
+    const int legs[6] = {CrLegL1, CrLegL3, CrLegR2, CrLegR1, CrLegR3, CrLegL2};  // grupo A, grupo B
+    auto legPose = [&](float run, float phase) {
+        for (int k = 0; k < 6; ++k) {
+            float ph = phase + (k < 3 ? 0.0f : kPi);
+            float side = legs[k] == CrLegL1 || legs[k] == CrLegL2 || legs[k] == CrLegL3 ? 1.0f : -1.0f;
+            r[legs[k]].z = side * 0.35f * std::max(0.0f, std::sin(ph)) * run;
+            r[legs[k]].y = side * 0.3f * std::cos(ph) * run;
+        }
+    };
+    // Ojos en sus pedúnculos: se mueven a tirones, cada uno a su aire.
+    r[CrEyeL].x = 0.25f * twitch(time, e.seed, 0.9f);
+    r[CrEyeR].x = 0.25f * twitch(time, e.seed + 2.0f, 0.8f);
+    r[CrEyeL].z = 0.15f * std::sin(time * 1.3f + e.seed);
+    r[CrEyeR].z = -0.15f * std::sin(time * 1.1f + e.seed);
+    // Pinzas algo alzadas y abiertas; de vez en cuando un chasquido.
+    float snap = twitch(time, e.seed + 5.0f, 0.6f);
+    r[CrClawL].x = r[CrClawR].x = -0.2f;
+    r[CrClawL].y = 0.15f + 0.3f * snap;
+    r[CrClawR].y = -0.15f - 0.3f * snap;
+    switch (e.state) {
+        case AiState::Chase:
+        case AiState::Idle: {
+            float run = e.state == AiState::Chase ? 1.0f : 0.4f;
+            legPose(run, e.phase * 2.0f);
+            root.y = 0.02f * std::fabs(std::sin(e.phase * 2.0f)) * run;
+            r[CrBody].z = 0.06f * std::sin(e.phase * 2.0f) * run;  // se balancea de un lado a otro
+            break;
+        }
+        case AiState::Windup: {
+            // Se encabrita: la parte de delante arriba y las pinzas en alto, abiertas; tiembla.
+            float w = smoothstep01(t / 0.3f);
+            r[CrBody].x = -0.3f * w;
+            r[CrClawL].x = r[CrClawR].x = lerpf(-0.2f, -1.0f, w);
+            r[CrClawL].y = lerpf(0.15f, 0.55f, w);
+            r[CrClawR].y = lerpf(-0.15f, -0.55f, w);
+            r[CrBody].y = 0.04f * std::sin(time * 60.0f) * w;
+            for (int k : {CrLegL3, CrLegR3}) r[k].z = (k == CrLegL3 ? -0.2f : 0.2f) * w;  // se apoya atrás
+            root.y = 0.05f * w;
+            break;
+        }
+        case AiState::Attack: {
+            // Pinzazo doble: las dos pinzas bajan y se cierran a la vez, cruzándose por delante.
+            float u = smoothstep01(clampf(t / 0.15f, 0, 1));
+            r[CrBody].x = lerpf(-0.3f, 0.2f, u);
+            r[CrClawL].x = r[CrClawR].x = lerpf(-1.0f, 0.25f, u);
+            r[CrClawL].y = lerpf(0.55f, -0.25f, u);
+            r[CrClawR].y = lerpf(-0.55f, 0.25f, u);
+            legPose(1.0f, t * 30.0f);
+            break;
+        }
+        case AiState::Recover:
+            r[CrBody].x = 0.15f;
+            r[CrClawL].x = r[CrClawR].x = 0.2f;
+            break;
+        case AiState::Stagger: {
+            float w = std::sin(clampf(t / 0.45f, 0, 1) * kPi);
+            r[CrBody].z = 0.35f * w * std::sin(t * 30.0f);
+            r[CrBody].x = -0.2f * w;
+            r[CrClawL].z = 0.5f * w;
+            r[CrClawR].z = -0.5f * w;
+            break;
+        }
+        case AiState::Spawning:
+        case AiState::Dying: legPose(0.6f, time * 20.0f); break;
+    }
+}
+
 void animateHound(Enemy& e, float time, Vec3* r, Vec3& root) {
     float t = e.stateTime;
     // Cabeza baja, olfateando; la cola rígida.
@@ -568,10 +675,17 @@ Enemy makeEnemy(EnemyKind kind, Vec3 pos, float yaw, float seed) {
     e.phase = seed;
     if (kind == EnemyKind::Moth) e.size = 1.4f;     // que se lean a la distancia de la cámara
     if (kind == EnemyKind::Firefly) e.size = 1.7f;
+    if (kind == EnemyKind::Crab) e.size = 1.35f;  // algo más de un metro de pinza a pinza
     animateEnemy(e, 0, 0);
     for (int i = 0; i < d.jointCount; ++i) e.prevJoints[i] = e.joints[i];
     e.prevPos = pos;
     return e;
+}
+
+float enemyArmor(const Enemy& e, Vec3 dir, bool heavy) {
+    if (e.kind != EnemyKind::Crab || heavy || e.stun > 0) return 1.0f;  // un remate o aturdido: entra todo
+    // `dir` va del golpe hacia el cangrejo: de frente, contra su mirada.
+    return dot(flat(dir), e.forward()) < -0.35f ? 0.3f : 1.0f;
 }
 
 Vec3 Enemy::center() const { return body.pos + Vec3{0, body.height * 0.5f, 0}; }
@@ -648,6 +762,11 @@ void animateEnemy(Enemy& e, float time, float dt) {
             root.y = 0.06f * std::sin(time * 1.7f + e.seed * 3.0f);
             break;
         }
+        case EnemyKind::Crab:
+            animateCrab(e, time, r, root);
+            r[CrEyeL].x -= 0.8f * (fwd + up);
+            r[CrEyeR].x -= 0.8f * (fwd + up);
+            break;
         case EnemyKind::Count: break;
     }
     // Fundido al cambiar de estado.

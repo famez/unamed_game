@@ -174,7 +174,7 @@ bool Game::spawnTestEnemy() {
         if (!free) continue;
         Spawn s;
         float r = random01();
-        s.kind = r < 0.3f ? EnemyKind::Dazzled : r < 0.5f ? EnemyKind::Watcher : r < 0.8f ? EnemyKind::Hound : EnemyKind::Brute;
+        s.kind = r < 0.3f ? EnemyKind::Dazzled : r < 0.5f ? EnemyKind::Watcher : r < 0.7f ? EnemyKind::Hound : r < 0.82f ? EnemyKind::Crab : EnemyKind::Brute;
         s.pos = p;
         bool bossAlive = false;
         for (const Enemy& e : enemies_) bossAlive |= e.boss && e.alive();

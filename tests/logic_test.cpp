@@ -1441,7 +1441,7 @@ int main() {
             EnemyKind kind;
         };
         for (Char ch : {Char{"deslumbrado", EnemyKind::Dazzled}, Char{"coloso", EnemyKind::Brute}, Char{"vigia", EnemyKind::Watcher},
-                        Char{"sabueso", EnemyKind::Hound}, Char{"lobo_de_sombra", EnemyKind::Hound}}) {
+                        Char{"sabueso", EnemyKind::Hound}, Char{"lobo_de_sombra", EnemyKind::Hound}, Char{"cangrejo", EnemyKind::Crab}}) {
             GlbFile f;
             std::string err;
             bool ok = f.load(std::string(GAME_ASSET_DIR) + "/models/" + ch.file + ".glb", err);
@@ -1459,6 +1459,139 @@ int main() {
                 }
             CHECK(bones && verts > 1000 && worst < 0.02f, "%s.glb: %zu vértices, armadura de %d huesos, colores y pesos (error %.3f) %s",
                   ch.file, verts, d.jointCount, worst, err.c_str());
+        }
+    }
+    {  // Bestiario: los esqueletos salen de los .glb (padres antes que hijos, cada hueso en su sitio)
+        const std::string dir = std::string(GAME_ASSET_DIR) + "/models/bestiario/";
+        int n = loadCreatureRigs(dir);
+        CHECK(n == int(CreatureKind::Count), "bestiario: %d de %d esqueletos leídos", n, int(CreatureKind::Count));
+        bool order = true, placed = true;
+        for (int k = 0; k < int(CreatureKind::Count); ++k) {
+            const CreatureRig& rig = creatureRig(CreatureKind(k));
+            GlbFile f;
+            std::string err;
+            f.load(dir + creatureFile(CreatureKind(k)) + ".glb", err);
+            Mat4 w[kMaxJoints];
+            computeWorldMatrices(rig.joints, rig.count, Pose{}, Mat4::identity(), w);
+            for (int i = 0; i < rig.count; ++i) {
+                order &= rig.joints[i].parent < i && rig.joints[i].name == rig.names[i].c_str();
+                int node = f.find(rig.names[i]);
+                placed &= node >= 0 && length(translationOf(w[i]) - translationOf(f.nodes[size_t(node)].world)) < 1e-3f;
+            }
+        }
+        CHECK(order && placed, "bestiario: jerarquía ordenada (%d) y huesos donde los pone el .glb (%d)", order, placed);
+        const CreatureRig& giant = creatureRig(CreatureKind::Larguero);
+        CHECK(giant.count == JointCount && creatureRig(CreatureKind::Hollinete).find("tail2") >= 0 && creatureRig(CreatureKind::Ballena).find("jaw") >= 0,
+              "bestiario: el Larguero con los %d huesos humanos, el gato con su cola, la ballena con su mandíbula", giant.count);
+    }
+    {  // Cangrejo de cristal: de frente, el caparazón para casi todo y ni se inmuta; por detrás o
+        // con un remate, entra todo
+        Game g = fresh();
+        g.loadLevel(LevelId::Prueba);
+        g.enemies_.clear();
+        g.devNoSpawns_ = true;
+        place(g, {0, 0, -4});
+        addEnemy(g, EnemyKind::Crab, {0, 0, 0});  // mira hacia -z (hacia Vela)
+        Enemy& e = g.enemies_.back();
+        float h0 = e.health;
+        g.hitEnemy(e, {0, 0, 1}, 10, 3, 0, false);  // de frente
+        float front = h0 - e.health;
+        bool unmoved = e.state != AiState::Stagger;
+        float h1 = e.health;
+        g.hitEnemy(e, {0, 0, -1}, 10, 3, 0, false);  // por detrás
+        float back = h1 - e.health;
+        e.state = AiState::Idle;
+        float h2 = e.health;
+        g.hitEnemy(e, {0, 0, 1}, 10, 3, 0, true);  // remate de frente
+        float heavy = h2 - e.health;
+        CHECK(front > 0 && front < back * 0.5f && unmoved && heavy > back * 0.9f,
+              "cangrejo: de frente %.1f (sin tambalearse: %d), por detrás %.1f, remate de frente %.1f", front, unmoved, back, heavy);
+        // Lejos, se acerca de lado; de cerca, encara.
+        Game h = fresh();
+        h.loadLevel(LevelId::Prueba);
+        h.enemies_.clear();
+        h.devNoSpawns_ = true;
+        place(h, {0, 0, -14});
+        addEnemy(h, EnemyKind::Crab, {0, 0, 0}, AiState::Chase);
+        run(h, 0.6f);
+        const Enemy& c = h.enemies_.back();
+        Vec3 to = flat(h.hero_.body.pos - c.body.pos);
+        float side = std::fabs(dot(normalize(to), c.forward()));
+        CHECK(side < 0.5f && length(to) < 14.0f, "cangrejo: se acerca de lado (|cos| %.2f)", side);
+    }
+    {  // Criaturas en los escenarios: la Mechita sigue a Vela, el búho cambia de farola si se la
+        // apagan, el gato salta de tejado si se le acercan y los comerciantes abren el taller
+        Game g = fresh();
+        g.loadLevel(LevelId::Plaza);
+        auto find = [](Game& gg, CreatureKind k) -> Creature* {
+            for (Creature& c : gg.creatures_)
+                if (c.kind == k) return &c;
+            return nullptr;
+        };
+        Creature* mechita = find(g, CreatureKind::Mechita);
+        Creature* owl = find(g, CreatureKind::Buho);
+        Creature* cat = find(g, CreatureKind::Hollinete);
+        CHECK(mechita && owl && cat && find(g, CreatureKind::Ballena), "plaza: la Mechita, un búho, un gato en un tejado y la ballena en el cielo");
+        if (mechita && owl && cat) {
+            skipDialogues(g);
+            place(g, g.heroStart_ + Vec3{6, 0, 0});
+            Controls walk;
+            walk.move = {0, 0, 1};
+            run(g, 1.5f, walk);
+            run(g, 1.5f);
+            float gap = length(flat(mechita->pos - g.hero_.body.pos));
+            CHECK(gap < 1.6f, "la Mechita va con Vela (a %.1f m)", gap);
+            int lamp = owl->lamp;
+            g.lamps_[size_t(lamp)].on = false;
+            run(g, 6.0f);
+            CHECK(owl->lamp != lamp && owl->lamp >= 0 && g.lamps_[size_t(owl->lamp)].on && owl->hop < 0 &&
+                      length(owl->pos - g.lamps_[size_t(owl->lamp)].pos) < 0.6f,
+                  "búho: le apagan la farola y vuela a otra encendida");
+            g.hero_.body.pos = cat->pos + Vec3{1.0f, 0, 0};
+            Vec3 before = cat->pos;
+            run(g, 0.2f);
+            bool jumped = cat->hop >= 0;
+            run(g, 3.0f);
+            CHECK(jumped && length(cat->pos - before) > 3.0f, "gato: salta a otro tejado si se le acercan (%.1f m)", length(cat->pos - before));
+        }
+        Game m = fresh();
+        m.loadLevel(LevelId::Mercado);
+        Creature* snail = find(m, CreatureKind::Caracol);
+        Game c = fresh();
+        c.loadLevel(LevelId::Cueva);
+        Creature* mole = find(c, CreatureKind::Topo);
+        bool shops = snail && mole;
+        if (shops) {
+            m.talkToCreature(*snail);
+            c.talkToCreature(*mole);
+            shops = m.takeShopRequest() && c.takeShopRequest();
+        }
+        CHECK(shops, "el Caracol mercader (mercado) y el Topo minero (cueva) abren el taller");
+    }
+    {  // El Larguero vuelve a encender una farola que se ha apagado (no la rota)
+        Game g = fresh();
+        g.loadLevel(LevelId::Campo);
+        g.wildSpawns_ = false;
+        g.enemies_.clear();
+        Creature* giant = nullptr;
+        for (Creature& c : g.creatures_)
+            if (c.kind == CreatureKind::Larguero) giant = &c;
+        int lamp = -1;
+        float best = 1e9f;
+        for (size_t i = 0; giant && i < g.lamps_.size(); ++i) {
+            float d = length(flat(g.lamps_[i].pos - giant->pos));
+            if (g.lamps_[i].bulb && !g.lamps_[i].broken && d < best && !g.lampSwitchedOff(int(i))) best = d, lamp = int(i);
+        }
+        CHECK(giant && lamp >= 0, "campo: el Larguero y una farola cerca (a %.0f m)", best);
+        if (giant && lamp >= 0) {
+            skipDialogues(g);
+            g.lamps_[size_t(lamp)].on = false;
+            bool lit = false;
+            for (int s = 0; s < 90 && !lit; ++s) {
+                run(g, 1.0f);
+                lit = g.lamps_[size_t(lamp)].on;
+            }
+            CHECK(lit, "el Larguero vuelve a encender la farola apagada (%.0f m)", best);
         }
     }
     {  // Modelos de la protagonista (.glb): se leen y tienen la jerarquía de la ficha

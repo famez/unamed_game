@@ -14,7 +14,9 @@
 // Deslumbrado y Vigía son de luz; Coloso y Sabueso, de sombra.
 // Moth y Firefly son enjambres (polilla de tinta, luciérnaga de cristal): esqueleto propio
 // mínimo y un comportamiento aparte (game/swarm.cpp), sin cerebro.
-enum class EnemyKind { Dazzled, Brute, Watcher, Hound, Moth, Firefly, Count };
+// Crab: el cangrejo de cristal (sombra, del bestiario): anda de lado, el caparazón de cristal
+// para casi todo lo que le llega de frente y ataca con un pinzazo doble.
+enum class EnemyKind { Dazzled, Brute, Watcher, Hound, Moth, Firefly, Crab, Count };
 inline bool isSwarm(EnemyKind k) { return k == EnemyKind::Moth || k == EnemyKind::Firefly; }
 
 // Ciclo de combate: aparece, persigue, avisa (preparación), ataca y se recupera. Un golpe
@@ -105,6 +107,9 @@ struct Enemy {
 };
 
 Enemy makeEnemy(EnemyKind kind, Vec3 pos, float yaw, float seed);
+// Parte del daño que pasa un golpe que llega en la dirección `dir` (cangrejo: el caparazón
+// de cristal para los de frente si no son un remate; los demás, todo).
+float enemyArmor(const Enemy& e, Vec3 dir, bool heavy);
 // Postura en la que se genera la malla del cuerpo: brazos y piernas separados del tronco
 // para que la unión suave no los pegue.
 Pose enemyBindPose(EnemyKind kind);

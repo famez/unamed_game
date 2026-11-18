@@ -8,6 +8,7 @@
 // Los detalles que deben verse nítidos o brillar (ojos, líneas de neón, núcleo del pecho,
 // mechones con inercia) siguen siendo piezas rígidas aparte (ver game_draw.cpp).
 
+#include "actors/creature.h"
 #include "actors/enemy.h"
 #include "render/renderer.h"
 #include "actors/skeleton.h"
@@ -62,7 +63,7 @@ void bindMatrices(const ModelDef& def, Mat4* out);
 // Genera la malla en la CPU (lógica pura; también la usan los tests).
 void buildSkinnedMesh(const ModelDef& def, std::vector<SkinVertex>& verts, std::vector<uint32_t>& indices);
 
-enum class ModelId { Hero, Dazzled, Brute, Watcher, Hound, Moth, Firefly, Ilse, HeroHead, Count };  // enemigos: 1 + EnemyKind
+enum class ModelId { Hero, Dazzled, Brute, Watcher, Hound, Moth, Firefly, Crab, Ilse, HeroHead, Count };  // enemigos: 1 + EnemyKind
 // Modelo del cuerpo de un enemigo.
 ModelId enemyModel(int enemyKind);
 // Formas de un enemigo que no van en su malla (brillan o son demasiado finas) y se dibujan aparte.
@@ -101,6 +102,11 @@ const BuiltModel* inhabitantModel(const std::string& name);
 // de sus huesos de pie, quieto, con `model` como raíz. `breath` (0..1) añade la respiración.
 // Falso si no tiene.
 bool inhabitantIdleJoints(const std::string& name, const Mat4& model, float time, Mat4* out);
+
+// Criaturas del bestiario (assets/models/bestiario): sus mallas, con el esqueleto de cada una
+// (actors/creature.h, que hay que leer antes con loadCreatureRigs). Devuelve cuántas.
+int loadCreatureModels(Renderer& r, const std::string& dir);
+const BuiltModel* creatureModel(CreatureKind k);  // nullptr si no está
 
 // Sube a la GPU las mallas de las piezas del escenario (game/props.h) que aún no lo estén.
 void uploadPropMeshes(Renderer& r);

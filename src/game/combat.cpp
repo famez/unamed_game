@@ -484,6 +484,9 @@ void Game::hitEnemy(Enemy& e, Vec3 dir, float damage, float knock, float lift, b
     // protagonista hiere más a la familia contraria.
     if (lightAt(e.body.pos) > 0.3f) damage *= e.def().shadow ? 1.5f : 0.8f;
     damage *= familyDamage(e);
+    // El caparazón de cristal del cangrejo: de frente casi no entra y ni se inmuta.
+    float armor = enemyArmor(e, dir, heavy);
+    damage *= armor;
     e.health -= damage;
     e.rlReward -= damage / 15.0f;
     e.hitFlash = 0.12f;
@@ -497,7 +500,11 @@ void Game::hitEnemy(Enemy& e, Vec3 dir, float damage, float knock, float lift, b
         return;
     }
     // Las setas, mientras saltan para aplastar, solo se detienen con un remate.
-    bool armored = (e.kind == EnemyKind::Brute && e.state == AiState::Attack && !heavy) || (e.boss && !heavy);
+    bool armored = (e.kind == EnemyKind::Brute && e.state == AiState::Attack && !heavy) || (e.boss && !heavy) || armor < 1.0f;
+    if (armor < 1.0f) {  // rebota en el cristal
+        spawnSparks(point, -dir, 10, rgba(200, 140, 255), 3.5f);
+        sound(Sfx::Ice, point, 0.5f, 1.4f);
+    }
     if (armored) return;
     e.state = AiState::Stagger;
     e.stateTime = 0;

@@ -603,6 +603,7 @@ void Game::loadLevel(LevelId id) {
     rebuildSolids();
     placeLampSwitches();
     placeCitizens();
+    placeCreatures();
     hero_.body.pos = checkpoint_ = heroStart_;
     hero_.body.vel = {};
     hero_.yaw = checkpointYaw_ = heroStartYaw_;
@@ -804,6 +805,20 @@ Game::InteractTarget Game::nearbyInteract() const {
         const char* verb = n.role == NpcRole::Inn ? "Descansar" : n.role == NpcRole::Shop ? "Taller" : n.role == NpcRole::Trainer ? "Entrenar" : "Hablar";
         consider(6, int(i), n.body.body.pos, std::string(verb) + " · " + n.name);
     }
+    for (size_t i = 0; i < creatures_.size(); ++i) {  // el búho, desde el pie de su farola
+        const Creature& c = creatures_[i];
+        if (c.kind == CreatureKind::Buho && c.hop < 0) {
+            float d = length(flat(c.pos - hp));  // está en lo alto: cuenta la distancia en el suelo
+            if (d < 4.0f && (best.kind < 0 || d < bestD)) {
+                bestD = d;
+                best = {7, int(i), std::string("Preguntar · ") + creatureName(c.kind)};
+            }
+        } else if (c.kind == CreatureKind::Topo || c.kind == CreatureKind::Caracol) {
+            consider(7, int(i), c.pos, std::string("Comerciar · ") + creatureName(c.kind));
+        } else if (c.kind == CreatureKind::Larguero) {
+            consider(7, int(i), c.pos, std::string("Hablar · ") + creatureName(c.kind));
+        }
+    }
     return best;
 }
 
@@ -816,6 +831,10 @@ void Game::tryInteract() {
     }
     if (t.kind == 6) {
         talkTo(npcs_[size_t(t.index)]);
+        return;
+    }
+    if (t.kind == 7) {
+        talkToCreature(creatures_[size_t(t.index)]);
         return;
     }
     if (t.kind == 0) {
