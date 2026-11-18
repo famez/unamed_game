@@ -1,6 +1,7 @@
 #include "dev/viewer.h"
 
 #include "actors/character.h"
+#include "actors/creature.h"
 #include "actors/enemy.h"
 #include "actors/physics.h"
 #include "actors/skeleton.h"
@@ -21,6 +22,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -30,11 +32,13 @@ constexpr float kStep = 1.0f / 60.0f;
 
 // Lo que se ha leído del fichero.
 struct Loaded {
-    enum class Kind { None, Hero, Character, Prop, Gallery } kind = Kind::None;
+    enum class Kind { None, Hero, Character, Prop, Gallery, Creature } kind = Kind::None;
     HeroGlbModel hero;        // Vela, Hollín o una protagonista nueva (piezas por hueso)
     BuiltModel body;          // personaje con armadura
     ModelId id = ModelId::Hero;
     bool humanoid = false;    // esqueleto de la protagonista: se anima con Character
+    std::shared_ptr<CreatureRig> rig;  // criatura: su esqueleto propio (el del .glb)
+    int creature = -1;        // qué criatura del bestiario es (-1: otra, sin animación)
     bool shadowLook = false;  // contorno violeta (Hollín) en lugar de dorado
     std::string what;         // qué es, para el panel
     size_t triangles = 0;
@@ -90,6 +94,7 @@ const char* rigName(ModelId id) {
         case ModelId::Brute: return "Coloso";
         case ModelId::Watcher: return "Vigía";
         case ModelId::Hound: return "Sabueso";
+        case ModelId::Crab: return "Cangrejo de cristal";
         case ModelId::Ilse: return "protagonista (Ilse)";
         default: return "protagonista";
     }
@@ -158,8 +163,33 @@ bool load(Renderer& r, const std::string& path, Loaded& out, std::string& error)
     bool wolf = false;
     std::vector<ModelId> tries;
     if (glbCharacterId(stem, id, wolf)) tries.push_back(id);
+    // Criatura con su propio esqueleto: las del bestiario por su nombre y, si no encaja con ningún
+    // esqueleto del juego, cualquier otra (quieta).
+    auto asCreature = [&](int which) {
+        auto rig = std::make_shared<CreatureRig>();
+        std::string e;
+        if (!creatureRigFromGlb(g, *rig, e) || !loadCharacterGlb(r, path, rig->joints, rig->count, l.body, e)) return error = path + ": " + e, false;
+        l.kind = Loaded::Kind::Creature;
+        l.rig = rig;
+        l.creature = which;
+        l.bones = rig->count;
+        l.what = which >= 0 ? std::string("criatura del bestiario: ") + creatureName(CreatureKind(which)) : std::string("esqueleto propio (sin animación)");
+        Vec3 lo{1e9f, 1e9f, 1e9f}, hi{-1e9f, -1e9f, -1e9f};
+        for (const auto& mesh : g.meshes)
+            for (const GlbPrimitive& p : mesh)
+                for (const Vec3& v : p.positions) lo = {std::min(lo.x, v.x), std::min(lo.y, v.y), std::min(lo.z, v.z)}, hi = {std::max(hi.x, v.x), std::max(hi.y, v.y), std::max(hi.z, v.z)};
+        float sc = which >= 0 ? creatureScale(CreatureKind(which)) : 1.0f;
+        l.center = (lo + hi) * (0.5f * sc);
+        l.extent = (hi - lo) * (0.5f * sc);
+        return true;
+    };
+    int which = -1;
+    for (int k = 0; k < int(CreatureKind::Count); ++k)
+        if (stem == creatureFile(CreatureKind(k))) which = k;
+    if (which >= 0 && !asCreature(which)) return false;
     std::string heroError;
-    if (tries.empty() && loadHeroGlb(r, path, l.hero, heroError)) {
+    if (which >= 0) {
+    } else if (tries.empty() && loadHeroGlb(r, path, l.hero, heroError)) {
         l.kind = Loaded::Kind::Hero;
         l.humanoid = true;
         l.shadowLook = stem.find("hollin") != std::string::npos || stem.find("sombra") != std::string::npos;
@@ -183,6 +213,7 @@ bool load(Renderer& r, const std::string& path, Loaded& out, std::string& error)
             }
             if (firstError.empty()) firstError = e;
         }
+        if (l.kind == Loaded::Kind::None && !g.skins.empty() && asCreature(-1)) firstError.clear(), heroError.clear();
         if (l.kind == Loaded::Kind::None) {
             error = !heroError.empty() && firstError.empty() ? heroError : firstError;
             if (!heroError.empty()) error += "\n(como protagonista: " + heroError + ")";
@@ -199,6 +230,8 @@ bool load(Renderer& r, const std::string& path, Loaded& out, std::string& error)
 // Animaciones del visor.
 const char* const kHumanAnims[] = {"Quieta", "Andar", "Correr", "Combo", "Saltar", "Esquivar", "Guardia"};
 const char* const kEnemyAnims[] = {"Quieto", "Persigue", "Ataque", "Aturdido", "Aparece", "Muere", "Anda", "Trota"};
+// Criaturas: lo especial de cada una (saltar de tejado, volar, cavar, esconderse, encender una farola...).
+const char* const kCreatureAnims[] = {"Quieta", "Anda", "Especial"};
 
 struct Orbit {
     float yaw = 2.6f, pitch = 0.18f, distance = 3.6f, height = 0.9f;
@@ -293,14 +326,16 @@ int runViewer(const char* pathArg, Renderer& renderer, DebugDraw& lines, UiLayer
     };
     resetActors();
     auto animsOf = [](const Loaded& l) {
+        if (l.kind == Loaded::Kind::Creature) return l.creature >= 0 ? int(std::size(kCreatureAnims)) : 0;
         return l.still() || l.kind == Loaded::Kind::None ? 0 : l.humanoid ? int(std::size(kHumanAnims)) : int(std::size(kEnemyAnims));
     };
+    CreatureMotion motion;
     int animCount = animsOf(model);
     anim = std::max(0, std::min(anim, animCount - 1));
 
     // Altura a la que mira la cámara: el centro del cuerpo (los voladores, a su altura de vuelo).
     auto subjectHeight = [&]() {
-        if (model.still()) return std::max(0.9f, model.center.y);
+        if (model.still() || model.kind == Loaded::Kind::Creature) return std::max(0.3f, model.center.y);
         if (model.humanoid || model.kind == Loaded::Kind::None) return 0.9f;
         const EnemyDef& d = enemyDef(EnemyKind(int(model.id) - 1));
         return d.flying ? d.hoverHeight : d.height * 0.55f;
@@ -309,7 +344,7 @@ int runViewer(const char* pathArg, Renderer& renderer, DebugDraw& lines, UiLayer
     auto frame = [&](Orbit& o) {
         o.height = subjectHeight();
         float size = model.humanoid || model.kind == Loaded::Kind::None ? 1.8f
-                     : model.still()                                     ? length(model.extent) * 1.4f
+                     : model.still() || model.kind == Loaded::Kind::Creature ? length(model.extent) * 1.4f
                                                                          : enemyDef(EnemyKind(int(model.id) - 1)).height;
         o.distance = clampf(size * 2.0f, 2.4f, 140.0f);
         if (model.kind == Loaded::Kind::Gallery) o.pitch = 0.45f, o.yaw = kPi, o.distance = std::min(o.distance, 42.0f);
@@ -396,6 +431,37 @@ int runViewer(const char* pathArg, Renderer& renderer, DebugDraw& lines, UiLayer
             animTime += kStep;
             simTime += kStep;
             if (model.still()) {
+            } else if (model.kind == Loaded::Kind::Creature) {
+                // Como las mueve el juego (game/creatures.cpp), en el sitio.
+                CreatureKind ck = CreatureKind(std::max(0, model.creature));
+                float walk = ck == CreatureKind::Mechita ? 2.0f : ck == CreatureKind::Hollinete ? 0.9f : ck == CreatureKind::Caracol ? 0.3f
+                           : ck == CreatureKind::Larguero ? 1.3f : ck == CreatureKind::Ballena ? 2.6f : 0.0f;
+                float rate = ck == CreatureKind::Mechita ? 12.0f : ck == CreatureKind::Hollinete ? 7.0f : ck == CreatureKind::Caracol ? 1.8f
+                           : ck == CreatureKind::Larguero ? 2.9f : 1.0f;
+                motion = CreatureMotion{};
+                motion.time = simTime;
+                motion.look = anim == 0 ? 0.8f * std::sin(simTime * 0.5f) : 0.0f;
+                if (anim == 1 || ck == CreatureKind::Ballena) motion.speed = walk;
+                static float phase = 0;
+                if (anim == 2) {
+                    float u = std::fmod(animTime, 2.4f);
+                    switch (ck) {
+                        case CreatureKind::Mechita:
+                        case CreatureKind::Caracol: motion.hide = smoothstep01(std::sin(u / 2.4f * kPi)); break;
+                        case CreatureKind::Hollinete: motion.hop = u < 1.0f ? u : -1.0f; break;
+                        case CreatureKind::Buho: motion.hop = 0.5f, rate = 16.0f; break;
+                        case CreatureKind::Topo: motion.hide = 1.0f, motion.look = 0.5f * std::sin(simTime * 0.7f); break;
+                        case CreatureKind::Larguero: motion.lighting = u < 2.2f ? u : -1.0f; break;
+                        default: break;
+                    }
+                }
+                phase += (motion.speed > 0 || motion.hop >= 0 ? rate : 0.0f) * kStep;
+                motion.phase = phase;
+                for (int k = 0; k < model.rig->count; ++k) enemy.prevJoints[k] = enemy.joints[k];
+                Pose pose;
+                if (model.creature >= 0) poseCreature(ck, *model.rig, motion, pose);
+                float sc = model.creature >= 0 ? creatureScale(ck) : 1.0f;
+                computeWorldMatrices(model.rig->joints, model.rig->count, pose, scale({sc, sc, sc}), enemy.joints);
             } else if (model.humanoid) {
                 Vec3 dir{};
                 bool jump = false;
@@ -503,6 +569,13 @@ int runViewer(const char* pathArg, Renderer& renderer, DebugDraw& lines, UiLayer
                     renderer.light(model.spots[k] + l.pos, c * (night ? 2.5f : 1.0f), 6.0f);
                 }
             }
+        } else if (ok && model.kind == Loaded::Kind::Creature) {
+            rig = model.rig->joints;
+            jointCount = model.rig->count;
+            for (int k = 0; k < jointCount; ++k) j[k] = lerpMat(enemy.prevJoints[k], enemy.joints[k], alpha);
+            Mat4 skin[kMaxJoints];
+            skinMatrices(model.body, j, skin);
+            renderer.skinned(model.body.mesh, skin, model.body.jointCount, 0, rgba(30, 26, 30));
         } else if (ok) {
             const EnemyDef& d = enemy.def();
             rig = d.rig;
@@ -601,7 +674,8 @@ int runViewer(const char* pathArg, Renderer& renderer, DebugDraw& lines, UiLayer
             y += 22;
             for (int k = 0; k < animCount; ++k) {
                 char a[64];
-                std::snprintf(a, sizeof(a), "%d  %s", k + 1, model.humanoid ? kHumanAnims[k] : kEnemyAnims[k]);
+                std::snprintf(a, sizeof(a), "%d  %s", k + 1,
+                              model.kind == Loaded::Kind::Creature ? kCreatureAnims[k] : model.humanoid ? kHumanAnims[k] : kEnemyAnims[k]);
                 drawText(ui, 30, y, 17, a, k == anim ? gold : soft, body);
                 y += 23;
             }

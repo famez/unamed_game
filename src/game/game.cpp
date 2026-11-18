@@ -88,6 +88,7 @@ void Game::update(float dt, const Controls& input) {
         hero_.setGuard(false);
         hero_.update(dt, {}, false, world_);
         updateBrizna(dt);
+        updateCreatures(dt);
         updateEffects(dt);
         return;
     }
@@ -283,6 +284,7 @@ void Game::update(float dt, const Controls& input) {
     for (ColorSplash& sp : splashes_) sp.age += dt;
     updateLevel(dt);
     updateNpcs(dt);
+    updateCreatures(dt);
     updateWild(dt);
     updateEffects(dt);
     if (sandbox()) {  // sin historia: lo que esté marcado como infinito

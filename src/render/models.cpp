@@ -577,7 +577,7 @@ struct GlbCharacter {
 const GlbCharacter kGlbCharacters[] = {
     {"deslumbrado", ModelId::Dazzled, false}, {"coloso", ModelId::Brute, false}, {"vigia", ModelId::Watcher, false},
     {"sabueso", ModelId::Hound, false},       {"ilse", ModelId::Ilse, false},    {"lobo_de_sombra", ModelId::Hound, true},
-    {"polilla", ModelId::Moth, false},        {"luciernaga", ModelId::Firefly, false},
+    {"polilla", ModelId::Moth, false},        {"luciernaga", ModelId::Firefly, false}, {"cangrejo", ModelId::Crab, false},
 };
 bool gFromGlb[int(ModelId::Count)] = {};
 BuiltModel gWolf;
@@ -826,6 +826,30 @@ bool glbCharacterId(const std::string& stem, ModelId& id, bool& wolf) {
 
 bool modelFromGlb(ModelId id) { return gFromGlb[int(id)]; }
 const BuiltModel* wolfModel() { return gWolfLoaded ? &gWolf : nullptr; }
+
+namespace {
+BuiltModel gCreatures[int(CreatureKind::Count)];
+bool gCreatureLoaded[int(CreatureKind::Count)] = {};
+}  // namespace
+
+int loadCreatureModels(Renderer& r, const std::string& dir) {
+    int loaded = 0;
+    for (int k = 0; k < int(CreatureKind::Count); ++k) {
+        const CreatureRig& rig = creatureRig(CreatureKind(k));
+        gCreatureLoaded[k] = false;
+        if (!rig.loaded()) continue;
+        std::string error;
+        if (!loadCharacterGlb(r, dir + "/" + creatureFile(CreatureKind(k)) + ".glb", rig.joints, rig.count, gCreatures[k], error)) {
+            std::fprintf(stderr, "%s\n", error.c_str());
+            continue;
+        }
+        gCreatureLoaded[k] = true;
+        ++loaded;
+    }
+    return loaded;
+}
+
+const BuiltModel* creatureModel(CreatureKind k) { return gCreatureLoaded[int(k)] ? &gCreatures[int(k)] : nullptr; }
 
 void uploadPropMeshes(Renderer& r) {
     PropLibrary& lib = propLibrary();

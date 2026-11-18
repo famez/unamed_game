@@ -24,6 +24,8 @@ set(LOGIC_SOURCES
     src/actors/physics.cpp
     src/game/items.cpp
     src/actors/enemy.cpp
+    src/actors/creature.cpp
+    src/game/creatures.cpp
     src/game/game.cpp
     src/game/combat.cpp
     src/game/hit_fx.cpp

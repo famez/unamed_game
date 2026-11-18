@@ -187,7 +187,8 @@ void Game::updateEnemy(Enemy& e, float dt) {
             faceHero = true;
             if (e.stateTime > d.windup) enemyStartAttack(e);
             else if (e.stateTime <= edt)
-                sound(Sfx::EnemyWindup, e.center(), 0.6f, e.kind == EnemyKind::Brute ? 0.7f : e.kind == EnemyKind::Hound ? 1.3f : 1.0f);
+                sound(Sfx::EnemyWindup, e.center(), 0.6f,
+                      e.kind == EnemyKind::Brute ? 0.7f : e.kind == EnemyKind::Hound ? 1.3f : e.kind == EnemyKind::Crab ? 0.85f : 1.0f);
             break;
         case AiState::Attack: {
             Vec3 heroChest = hero_.body.pos + Vec3{0, 0.9f, 0};
@@ -199,8 +200,10 @@ void Game::updateEnemy(Enemy& e, float dt) {
                 e.knock = dirHero * 6.5f;
                 sound(Sfx::Slash, e.center(), 0.7f, 0.8f);
             }
-            if (e.kind == EnemyKind::Dazzled || e.kind == EnemyKind::Hound) {
-                Vec3 aim = e.kind == EnemyKind::Hound ? e.center() + e.forward() * 0.5f : e.center();
+            if (e.kind == EnemyKind::Dazzled || e.kind == EnemyKind::Hound || e.kind == EnemyKind::Crab) {
+                Vec3 aim = e.kind == EnemyKind::Hound  ? e.center() + e.forward() * 0.5f
+                           : e.kind == EnemyKind::Crab ? e.center() + e.forward() * (0.45f * e.size)  // las pinzas, por delante
+                                                       : e.center();
                 if (!e.attackHit && length(aim - heroChest) < 0.95f + e.body.radius) {
                     e.attackHit = true;
                     hurtHero(e.forward(), d.damage * (e.boss ? 1.6f : 1.0f), d.knock, &e);
@@ -251,12 +254,21 @@ void Game::updateEnemy(Enemy& e, float dt) {
     }
 
     // Orientación: hacia el jugador o hacia donde camina.
+    if (e.kind == EnemyKind::Crab && e.state == AiState::Chase && dist > 3.2f) faceHero = false;  // de lado (abajo)
     if (faceHero) {
         float target = std::atan2(dirHero.x, dirHero.z);
         e.yaw = wrapAngle(e.yaw + clampf(wrapAngle(target - e.yaw), -8.0f * edt, 8.0f * edt));
     } else if (length(desired) > 0.1f && e.state == AiState::Idle) {
         float target = std::atan2(desired.x, desired.z);
         e.yaw = wrapAngle(e.yaw + clampf(wrapAngle(target - e.yaw), -4.0f * edt, 4.0f * edt));
+    }
+    // El cangrejo anda de lado: lejos, avanza con el costado por delante (y se le puede dar
+    // por ahí); de cerca encara al Prismero con las pinzas y el caparazón.
+    if (e.kind == EnemyKind::Crab && length(desired) > 0.1f && (e.state == AiState::Idle || (e.state == AiState::Chase && dist > 3.2f))) {
+        float along = std::atan2(desired.x, desired.z);
+        float a = wrapAngle(along + kPi * 0.5f), b = wrapAngle(along - kPi * 0.5f);
+        float target = std::fabs(wrapAngle(a - e.yaw)) < std::fabs(wrapAngle(b - e.yaw)) ? a : b;
+        e.yaw = wrapAngle(e.yaw + clampf(wrapAngle(target - e.yaw), -10.0f * edt, 10.0f * edt));
     }
     e.phase += (d.flying ? 14.0f : 2.0f + length(desired) * 3.0f) * edt;
 
@@ -321,6 +333,10 @@ void Game::enemyStartAttack(Enemy& e) {
             spawnSparks(origin, aim, 8, rgba(255, 240, 200), 2.0f);
             break;
         }
+        case EnemyKind::Crab:  // un paso corto al frente con el pinzazo
+            e.knock = e.forward() * std::min(6.0f, dist * 3.0f);
+            sound(Sfx::Slash, e.center(), 0.6f, 0.6f);
+            break;
         case EnemyKind::Moth:
         case EnemyKind::Firefly:  // los enjambres atacan a su manera (swarm.cpp)
         case EnemyKind::Count: break;

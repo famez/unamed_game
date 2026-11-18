@@ -122,7 +122,15 @@ Especiales de combate: atacar corriendo = **embestida**; atacar con la guardia =
 - **Criaturas de las farolas**: **polillas de tinta** (enjambres que van a la farola
   encendida más cercana y la apagan si no las espantas en 10 s; mueren de un golpe) y
   **luciérnagas de cristal** (salen de las farolas rotas, se lanzan contra ti y al morir
-  estallan, encienden las farolas apagadas cercanas y queman a los Grises de sombra).
+  estallan, encienden las farolas apagadas cercanas y queman a los Grises de sombra), y
+  **cangrejos de cristal** (en el agua: andan de lado y el caparazón para lo que llega de
+  frente; hay que rodearlos, rematarlos o aturdirlos).
+- **El bestiario** (`assets/models/bestiario`, cada uno con su esqueleto, ver
+  `docs/historia.md`): la **Mechita** acompaña a Vela y su llama es su vida; el **Hollinete**
+  ronda los tejados; el **Búho de cobre** vigila desde una farola (F: señala a los Grises);
+  el **Topo minero** (cueva) y el **Caracol mercader** (mercado) abren el taller; el
+  **Larguero** vuelve a encender las farolas apagadas de los mapas grandes; la **Ballena de
+  niebla** cruza el cielo. El visor (`--visor`) las anima: quieta, anda y lo suyo.
 - **Música «Farolas»**: el tema de Vela y Hollín (en la plaza y los mapas abiertos) suena en
   dos capas, luz y sombra, que se cruzan al cambiar de forma.
 - **Enemigos de luz y de sombra** (todos fueron personas): *Deslumbrado* (figura alta y

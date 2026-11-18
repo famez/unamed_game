@@ -6,6 +6,7 @@
 
 #include "actors/brain.h"
 #include "actors/character.h"
+#include "actors/creature.h"
 #include "render/debug_draw.h"
 #include "actors/enemy.h"
 #include "game/items.h"
@@ -445,6 +446,39 @@ struct Npc {
     uint32_t seed = 1;
 };
 
+// Criatura del bestiario en el escenario (game/creatures.cpp). Cada especie a lo suyo: la
+// Mechita sigue a Vela (su llama es la vida de Vela), el Hollinete ronda los tejados y salta
+// a otro si se le acerca, el Búho de cobre vigila desde una farola (y vuela a otra si se la
+// apagan; F: señala a los Grises), el Topo minero y el Caracol mercader venden (F: taller),
+// el Larguero vuelve a encender las farolas que se apagan y la Ballena de niebla cruza el cielo.
+struct Creature {
+    CreatureKind kind = CreatureKind::Mechita;
+    Vec3 pos;            // los pies (la ballena: el origen de su modelo, en el aire)
+    Vec3 home;           // donde vive: su tejado, su farola, su puesto, el centro de su vuelta
+    AABB area{};         // el gato: su tejado (por dónde anda)
+    Vec3 from, to;       // salto o vuelo en curso (gato, búho)
+    float hop = -1;      // segundos del salto o vuelo en curso (< 0: no salta)
+    float hopTime = 1;   // lo que dura
+    float yaw = 0;
+    float look = 0;      // giro de la cabeza respecto al cuerpo
+    float lookTarget = 0;
+    float speed = 0;     // lo que anda ahora (m/s)
+    float phase = 0;     // ciclo de pasos o de aleteo
+    float timer = 0;     // espera, paseo, encendido...
+    float hide = 0;      // 0 a la vista, 1 escondida (la Mechita con Vela dentro de la luz o la sombra; el caracol en su concha)
+    float pointTime = 0; // el búho: segundos que sigue señalando
+    Vec3 pointAt;
+    int lamp = -1;       // el búho: su farola; el Larguero: la que va a encender
+    float lighting = -1; // el Larguero: segundos encendiendo una farola (< 0: no)
+    Body body;           // los que andan con colisiones (caracol, Larguero)
+    uint32_t seed = 1;
+    std::vector<std::string> lines;
+    int line = 0;
+    Pose pose;
+    Mat4 joints[kMaxJoints] = {};
+    Mat4 prevJoints[kMaxJoints] = {};
+};
+
 // Pieza .glb colocada en el escenario (game/props.h).
 struct PropInstance {
     int def;
@@ -576,6 +610,7 @@ public:
     float viewDistance() const { return viewDistance_; }
     const std::vector<PropInstance>& placedProps() const { return props_; }
     const std::vector<Npc>& npcs() const { return npcs_; }
+    const std::vector<Creature>& creatures() const { return creatures_; }
     bool takeShopRequest() {
         bool r = shopRequest_;
         shopRequest_ = false;
@@ -669,6 +704,15 @@ private:
     std::vector<Spawn> deferredSpawns_;  // aparecen en el próximo paso (no en mitad de un recorrido de enemies_)
     void compactEnemies();
     void drawNpcs(Renderer& r, const ViewInfo& view, float alpha) const;
+    // Criaturas del bestiario (creatures.cpp): se ponen tras los vecinos y viven aparte.
+    void placeCreatures();
+    void addCreature(CreatureKind kind, Vec3 pos, float yaw = 0);
+    void updateCreatures(float dt);
+    void animateCreature(Creature& c);
+    void talkToCreature(Creature& c);
+    bool lampSwitchedOff(int lamp) const;  // su interruptor está apagado (no se enciende sola)
+    std::vector<AABB> roofSpots() const;   // tejados donde puede andar un gato
+    void drawCreatures(Renderer& r, const ViewInfo& view, float alpha) const;
     void addTorch(Vec3 base);
     void addCrystal(Vec3 base, uint32_t color);
     void addPaperLantern(Vec3 a, Vec3 b, float y, uint32_t color);
@@ -691,7 +735,7 @@ private:
     void traceBeams();
     // Interacción con lo más cercano (cápsula, nodo, farol, objeto, espejo). -1 si no hay nada.
     struct InteractTarget {
-        int kind = -1;  // 0 cápsula, 1 nodo, 2 farol, 3 objeto, 4 espejo, 5 interruptor
+        int kind = -1;  // 0 cápsula, 1 nodo, 2 farol, 3 objeto, 4 espejo, 5 interruptor, 6 vecino, 7 criatura
         int index = -1;
         std::string label;
     };
@@ -815,6 +859,8 @@ private:
     std::vector<Decor> decor_;
     std::vector<PropInstance> props_;
     std::vector<Npc> npcs_;
+    std::vector<Creature> creatures_;
+    std::vector<AABB> roofs_;  // tejados a los que puede saltar el gato
     // Lo último que ha dicho un vecino (subtítulo que no para el juego).
     std::string npcSpeaker_, npcLine_;
     float npcLineTime_ = 0;

@@ -302,6 +302,7 @@ void Game::draw(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const DrawFlags
     drawHero(dd, solid, f, alpha);
     drawGhosts(solid, dd, alpha);
     if (solid) drawNpcs(*solid, view, alpha);
+    if (solid) drawCreatures(*solid, view, alpha);
     drawEnemies(dd, glow, solid, f, view, alpha);
     drawEffects(dd, glow, solid, view);
     drawStory(dd, glow, solid, view);
@@ -688,6 +689,51 @@ void Game::drawNpcs(Renderer& r, const ViewInfo& view, float alpha) const {
             for (int b = 0; b < JointCount; ++b) j[b] = lerpMat(j[b], idle[b], k);
         skinMatrices(*model, j, skin);
         r.skinned(model->mesh, skin, model->jointCount, 0, rgba(30, 26, 30));
+    }
+}
+
+void Game::drawCreatures(Renderer& r, const ViewInfo& view, float alpha) const {
+    const float* m = view.viewProj.m;
+    float hpFrac = maxHp_ > 0 ? clampf(hp_ / maxHp_, 0, 1) : 1;
+    for (const Creature& c : creatures_) {
+        const BuiltModel* model = creatureModel(c.kind);
+        const CreatureRig& rig = creatureRig(c.kind);
+        if (!model || (c.kind == CreatureKind::Mechita && c.hide > 0.99f)) continue;
+        // Lo grande se ve de lejos (la ballena, desde cualquier punto del mapa).
+        float reach = c.kind == CreatureKind::Ballena ? 400.0f : c.kind == CreatureKind::Larguero ? 160.0f : 75.0f;
+        float size = c.kind == CreatureKind::Ballena ? 6.0f : c.kind == CreatureKind::Larguero ? 2.0f : 0.6f;
+        Vec3 p = c.pos + Vec3{0, c.kind == CreatureKind::Ballena ? 4.0f : size * 0.5f, 0};
+        float d = length(p - view.eye);
+        if (d > reach) continue;
+        float x = m[0] * p.x + m[4] * p.y + m[8] * p.z + m[12], y = m[1] * p.x + m[5] * p.y + m[9] * p.z + m[13];
+        float w = m[3] * p.x + m[7] * p.y + m[11] * p.z + m[15];
+        float slack = 1.3f + size * 2.0f / std::max(d, 1.0f);
+        if (d > 4 && (w <= 0 || std::fabs(x / w) > slack || std::fabs(y / w) > slack + 0.3f)) continue;
+        Mat4 j[kMaxJoints], skin[kMaxJoints];
+        for (int k = 0; k < rig.count; ++k) j[k] = lerpMat(c.prevJoints[k], c.joints[k], alpha);
+        skinMatrices(*model, j, skin);
+        r.skinned(model->mesh, skin, model->jointCount, 0, rgba(30, 26, 30));
+        // Sus luces: la llama de la Mechita (es la vida de Vela: con poca, tiembla y mengua), el
+        // farolillo de la cola del gato, las lentes del búho, la lámpara del casco del topo, el
+        // puestito del caracol y el farol del Larguero.
+        auto bone = [&](const char* name, Vec3 off) {
+            int i = rig.find(name);
+            return transformPoint(j[i < 0 ? 0 : i], off);
+        };
+        switch (c.kind) {
+            case CreatureKind::Mechita: {
+                float flicker = 1.0f + (hpFrac < 0.3f ? 0.35f : 0.08f) * std::sin(time_ * 23.0f) * std::sin(time_ * 7.3f);
+                float k = (0.35f + 0.65f * hpFrac) * flicker * (1.0f - c.hide) * (shadowMode_ ? 0.6f : 1.0f);
+                r.light(bone("head", {0, 0.12f, 0}), Vec3{1.0f, 0.78f, 0.45f} * (1.2f * k), 1.0f + 2.2f * k);
+                break;
+            }
+            case CreatureKind::Hollinete: r.light(bone("tail2", {0, 0.08f, 0}), Vec3{1.0f, 0.8f, 0.5f} * 0.5f, 1.6f); break;
+            case CreatureKind::Buho: r.light(bone("head", {0, 0.05f, 0.1f}), Vec3{1.0f, 0.8f, 0.5f} * 0.35f, 1.4f); break;
+            case CreatureKind::Topo: r.light(bone("head", {0, 0.2f, 0.12f}), Vec3{1.0f, 0.95f, 0.85f} * 0.8f, 3.5f); break;
+            case CreatureKind::Caracol: r.light(bone("shell", {0, 0.35f, 0}), Vec3{1.0f, 0.82f, 0.55f} * 0.8f, 3.0f); break;
+            case CreatureKind::Larguero: r.light(bone("head", {0, 0.2f, 0}), Vec3{1.0f, 0.85f, 0.55f} * 1.0f, 4.5f); break;
+            default: break;
+        }
     }
 }
 

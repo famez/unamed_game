@@ -96,6 +96,34 @@ No son los atrapados: nacen de las farolas o de lo que las rodea.
   la apagan si nadie las espanta en diez segundos. Mueren de un golpe.
 - **Luciérnagas de cristal (luz).** Las chispas que se escapan de una farola rota. Rápidas y
   agresivas; al morir estallan y encienden lo que tocan: útiles contra la sombra.
+- **Cangrejos de cristal (sombra).** Viven en el agua: el río de la cueva, la orilla del
+  río del campo y la bahía. Se acercan de lado y, de cerca, encaran con las pinzas y el
+  caparazón, que para casi todo lo que llega de frente: hay que rodearlos, rematarlos o
+  aturdirlos con un bloqueo perfecto.
+
+## El bestiario
+
+Criaturas que no pelean (`assets/models/bestiario`, con su ficha y sus renders en
+`docs/bestiario/`). Cada una con su esqueleto y su tamaño, del medio palmo de la Mechita a
+los siete metros y medio de la ballena.
+
+- **Mechita.** Un espíritu de vela que va con Vela a todas partes. Su llama es la vida de
+  Vela: con poca, mengua y tiembla. Cuando Vela entra en una farola o se funde con la sombra,
+  se apaga y la espera.
+- **Hollinete.** Un gato de hollín con un farolillo en la cola. Ronda los tejados de la
+  ciudad, mira a Vela desde arriba y, si se le acercan, salta a otro tejado.
+- **Búho de cobre.** Un autómata que vigila desde una farola, con la cabeza a golpes secos.
+  Si le apagan la farola, vuela a otra encendida. Preguntado (F desde el pie de la farola),
+  señala con la cabeza a los Grises o cuenta las farolas apagadas.
+- **Topo minero.** El tendero de los túneles de la cueva: casco con lámpara, manos-pala y
+  pico. Cava hasta que Vela se acerca. F: el taller.
+- **Caracol mercader.** Una tienda ambulante por el mercado, con su puestito sobre la
+  concha. Si hay Grises cerca, o se le echan encima, se mete dentro. F: el taller.
+- **Larguero.** Un gigante farolero, amable y lento, por los mapas grandes: va a la farola
+  apagada más cercana (la rota no, ni la que tiene el interruptor bajado) y la vuelve a
+  encender con su farol. Deshace lo que hacen las polillas.
+- **Ballena de niebla.** Da vueltas despacio por el cielo de los sitios abiertos, con
+  farolillos colgando del vientre.
 
 ## Las dos que esperan
 
