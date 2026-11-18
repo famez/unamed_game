@@ -191,6 +191,7 @@ void Game::updateWolf(float dt) {
     wolf_.prevPos = wolf_.body.pos;
     for (int k = 0; k < kMaxJoints; ++k) wolf_.prevJoints[k] = wolf_.joints[k];
     wolf_.body.pos = base;
+    wolf_.body.vel = hero_.body.vel;  // de ella sale el paso de las patas
     wolf_.yaw = hero_.yaw;
     AiState want = isAttack(hero_.move()) ? AiState::Attack : hero_.speed > 0.5f ? AiState::Chase : AiState::Idle;
     if (want != wolf_.state) wolf_.stateTime = 0;

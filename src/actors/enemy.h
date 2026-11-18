@@ -92,6 +92,16 @@ struct Enemy {
     AiState lastState = AiState::Spawning;
     Vec3 lagPoint, lagVel;
     bool lagInit = false;
+    // Muelles de las articulaciones (la pose mostrada persigue a la calculada) y sacudida al
+    // recibir un golpe: el cuerpo se dobla hacia donde empuja y rebota; se aplasta un instante.
+    Vec3 springVel[kMaxJoints] = {};
+    Vec3 rootSpringVel;
+    bool springInit = false;
+    float squash = 0;
+    // Cuadrúpedos: velocidad suavizada (m/s) y fase (0..1) del ciclo de pasos, ligada a la
+    // distancia recorrida para que las patas no patinen.
+    float gaitSpeed = 0, legPhase = 0;
+    float leap = 0;  // 0..1: patas estiradas del salto
     Mat4 prevJoints[kMaxJoints] = {};
     Vec3 prevPos;
 
@@ -110,3 +120,5 @@ Enemy makeEnemy(EnemyKind kind, Vec3 pos, float yaw, float seed);
 Pose enemyBindPose(EnemyKind kind);
 // Pose según el estado y el tiempo; calcula también las matrices de las articulaciones.
 void animateEnemy(Enemy& e, float time, float dt);
+// Sacudida por un golpe que empuja hacia `push` (mundo); `strength` ~1 un golpe normal.
+void hitReaction(Enemy& e, Vec3 push, float strength);

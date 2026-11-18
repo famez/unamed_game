@@ -210,6 +210,58 @@ ArmKey sampleKeys(const MoveDef& d, float u) {
     return d.keys[d.keyCount - 1];
 }
 
+// Movimiento en látigo (acción superpuesta): el pecho va un poco por delante del hombro, y el
+// codo y la muñeca, un poco por detrás. Cada parte llega a la pose clave en un instante
+// distinto y el golpe se desenrolla del tronco a la punta del arma.
+ArmKey sampleOverlap(const MoveDef& d, float u, float duration) {
+    // El desfase en segundos (unos 15 ms por articulación), pasado a fracción del golpe.
+    float lag = clampf(0.016f / std::max(duration, 0.05f), 0.0f, 0.05f);
+    ArmKey k = sampleKeys(d, u);
+    ArmKey lead = sampleKeys(d, std::min(1.0f, u + lag));
+    ArmKey elbow = sampleKeys(d, std::max(0.0f, u - lag));
+    ArmKey wrist = sampleKeys(d, std::max(0.0f, u - 2.0f * lag));
+    k.chestY = lead.chestY;
+    k.elbowX = elbow.elbowX;
+    k.wristX = wrist.wristX;
+    return k;
+}
+
+// Curva suave en lugar de max(0, x): sin el pico en el cero (la rodilla no da tirones).
+float softPositive(float x, float k = 0.12f) { return 0.5f * (x + std::sqrt(x * x + k * k)) - 0.5f * k; }
+
+// Metros que avanza el cuerpo en un ciclo de pasos (dos pisadas): andando, zancadas cortas;
+// corriendo, largas; a tope, aún más (sin que los pies se aceleren tanto).
+float strideLength(float speed) {
+    float run = clampf(speed / Character::kRunSpeed, 0, 1);
+    float sprint = clampf((speed - Character::kRunSpeed) / (Character::kSprintSpeed - Character::kRunSpeed), 0, 1);
+    return lerpf(1.5f, 2.5f, smoothstep01(run)) + 0.8f * sprint;
+}
+
+// Muelle de cada articulación: frecuencia (rad/s) y amortiguamiento (1 = sin rebote).
+// Las piernas, firmes (los pies no patinan); la cabeza y los brazos, más sueltos.
+struct JointSpring {
+    float omega, zeta;
+};
+const JointSpring kSprings[JointCount] = {
+    {32, 1.0f},   // Pelvis
+    {22, 0.75f},  // Spine
+    {20, 0.7f},   // Chest
+    {17, 0.7f},   // Neck
+    {15, 0.65f},  // Head
+    {24, 0.7f}, {24, 0.65f}, {26, 0.6f},  // brazo izquierdo
+    {24, 0.7f}, {24, 0.65f}, {26, 0.6f},  // brazo derecho
+    {38, 1.0f}, {38, 1.0f}, {34, 1.0f}, {34, 1.0f},  // pierna izquierda
+    {38, 1.0f}, {38, 1.0f}, {34, 1.0f}, {34, 1.0f},  // pierna derecha
+};
+
+// Paso implícito de un muelle amortiguado hacia `target` (estable con cualquier dt).
+float springStep(float x, float& v, float target, float omega, float zeta, float dt, bool angle) {
+    float diff = angle ? wrapAngle(target - x) : target - x;
+    v = (v + omega * omega * dt * diff) / (1.0f + 2.0f * zeta * omega * dt + omega * omega * dt * dt);
+    x += v * dt;
+    return angle ? wrapAngle(x) : x;
+}
+
 // Mezcla la pose de un brazo sobre la de locomoción con peso `w`. El izquierdo, en espejo
 // (se invierten los giros en Y y Z, y la torsión del pecho).
 void applyArm(Vec3* r, const ArmKey& k, float w, bool left = false) {
@@ -248,6 +300,7 @@ void Character::teleport(Vec3 pos, float newYaw) {
     yaw = prevYaw_ = newYaw;
     speed = 0;
     secondaryInit_ = false;
+    springInit_ = false;
 }
 
 bool Character::guarding() const {
@@ -396,8 +449,22 @@ bool Character::dodge(Vec3 dir) {
     return true;
 }
 
-void Character::flinch(float seconds) {
+void Character::flinch(float seconds, Vec3 push) {
     hurtTimer_ = seconds;
+    // Sacudida: el tronco y la cabeza salen despedidos hacia donde empuja el golpe y los
+    // muelles los devuelven con un rebote.
+    Vec3 p = flat(push);
+    if (length(p) > 0.01f) {
+        p = normalize(p);
+        Vec3 right{std::cos(yaw), 0, -std::sin(yaw)};  // +X del personaje
+        float back = -dot(p, forward()), side = dot(p, right);
+        springVel_[Spine].x -= 7.0f * back;
+        springVel_[Neck].x -= 9.0f * back;
+        springVel_[Spine].z -= 6.0f * side;
+        springVel_[Head].z -= 8.0f * side;
+        springVel_[ShoulderL].z += 6.0f;
+        springVel_[ShoulderR].z -= 6.0f;
+    }
     move_ = Move::None;
     queued_ = false;
     dashTime_ = 0;
@@ -558,7 +625,7 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
     // La fase avanza con la distancia recorrida (solo pisando suelo): los pies no patinan.
     // Al girar casi parado da pasitos: la fase también avanza con el giro.
     float spin = speed < kRunSpeed ? std::fabs(wrapAngle(yaw - prevYaw_)) * 0.35f : 0.0f;
-    if (body.grounded) phase_ = std::fmod(phase_ + (speed * dt + spin) * 2.0f * kPi / 2.6f, 2.0f * kPi);
+    if (body.grounded) phase_ = std::fmod(phase_ + (speed * dt + spin) * 2.0f * kPi / strideLength(speed), 2.0f * kPi);
     airBlend_ = moveTowards(airBlend_, body.grounded ? 0.0f : 1.0f, 7.0f * dt);
 
     // Inclinación por aceleración y por giro, filtradas para que no tiemblen.
@@ -629,8 +696,9 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
     Pose target;
     animate(target);
     pose = blendTime_ >= blendDur_ ? target : lerpPose(blendFrom_, target, smoothstep01(blendTime_ / blendDur_), JointCount);
+    applySprings(dt);
     // Animación limitada en los golpes: poses mantenidas a 20 fps.
-    if (isAttack(move_) || move_ == Move::Cast) {
+    if (kLimitedAnimation && (isAttack(move_) || move_ == Move::Cast)) {
         holdTimer_ -= dt;
         if (!stepping_ || holdTimer_ <= 0) {
             heldPose_ = pose;
@@ -643,6 +711,41 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
     }
     computeWorldMatrices(pose, modelMatrix(), joints);
     updateSecondary(dt);
+}
+
+// La pose mostrada persigue a la calculada con un muelle por articulación. Golpeando, el brazo
+// del arma va más rápido (y con algo más de rebote: el arma se pasa y vuelve); en la voltereta,
+// tumbado o derrotado, todo va firme para que el cuerpo no se deforme.
+void Character::applySprings(float dt) {
+    if (!springInit_ || dt <= 0) {
+        springInit_ = true;
+        sprung_ = pose;
+        for (Vec3& v : springVel_) v = {};
+        rootSpringVel_ = {};
+        return;
+    }
+    bool striking = isAttack(move_);
+    bool firm = rolling() || downTimer >= 0 || lying > 0.01f || flipTime_ >= 0;
+    const MoveDef& d = kMoves[int(move_)];
+    Joint sh = d.leftArm ? ShoulderL : ShoulderR, el = d.leftArm ? ElbowL : ElbowR, wr = d.leftArm ? WristL : WristR;
+    for (int j = 0; j < JointCount; ++j) {
+        float omega = kSprings[j].omega, zeta = kSprings[j].zeta;
+        if (striking && (j == sh || j == el || j == wr)) omega *= 1.7f, zeta *= 0.85f;
+        else if (striking && (j == Spine || j == Chest)) omega *= 1.3f;
+        if (firm) omega = std::max(omega, 45.0f), zeta = 1.0f;
+        Vec3& x = sprung_.rotation[j];
+        Vec3& v = springVel_[j];
+        const Vec3& t = pose.rotation[j];
+        x.x = springStep(x.x, v.x, t.x, omega, zeta, dt, true);
+        x.y = springStep(x.y, v.y, t.y, omega, zeta, dt, true);
+        x.z = springStep(x.z, v.z, t.z, omega, zeta, dt, true);
+    }
+    Vec3& ro = sprung_.rootOffset;
+    float ow = firm ? 45.0f : 30.0f;
+    ro.x = springStep(ro.x, rootSpringVel_.x, pose.rootOffset.x, ow, 0.9f, dt, false);
+    ro.y = springStep(ro.y, rootSpringVel_.y, pose.rootOffset.y, ow, 0.9f, dt, false);
+    ro.z = springStep(ro.z, rootSpringVel_.z, pose.rootOffset.z, ow, 0.9f, dt, false);
+    pose = sprung_;
 }
 
 // Pelo: un punto con muelle que persigue a la cabeza (su retraso inclina los mechones).
@@ -711,55 +814,71 @@ void Character::animate(Pose& out) const {
 
     float run = clampf(speed / kRunSpeed, 0, 1) * (1.0f - airBlend_);
     float sprint = clampf((speed - kRunSpeed) / (kSprintSpeed - kRunSpeed), 0, 1) * (1.0f - airBlend_);
+    // Andar o correr: por debajo de ~3 m/s anda (rodillas casi rectas, sin fase de vuelo,
+    // brazos sueltos y el tronco derecho); por encima, corre.
+    float gait = smoothstep01((speed - 2.0f) / 2.5f);
     // Andando con la guardia (o cargando) se puede ir hacia atrás o de lado: el ciclo de
     // piernas se invierte hacia atrás y se abre de lado.
     float along = dot(moveDir_, forward());
     float back = along < -0.3f ? -1.0f : 1.0f;
     float s = std::sin(phase_) * back, c = std::cos(phase_);
-    // Rebote: dos veces por ciclo (una por pisada), con el punto bajo al apoyar.
-    float bounce = std::fabs(std::sin(phase_));
+    // Rebote: dos veces por ciclo (una por pisada), suave, con el punto bajo justo después de
+    // apoyar el pie (el cuerpo cae sobre la pierna y luego se impulsa).
+    float bounce = 0.5f - 0.5f * std::cos(2.0f * phase_ - 0.5f);
 
-    // Carrera: piernas en oposición de fase, rodilla flexionada al adelantar la pierna.
+    // Piernas en oposición de fase. La rodilla se dobla al pasar la pierna hacia delante
+    // (mucho más corriendo: el talón sube hacia el glúteo) y se estira al apoyar; el tobillo
+    // apunta la punta al despegar y la levanta al recibir el suelo con el talón.
     // Girando en el sitio: pasitos cortos (levanta un poco las rodillas por turnos).
     float shuffle = turnStep_ * (1.0f - run) * (1.0f - airBlend_);
-    float legSwing = 0.85f * run + 0.25f * shuffle, kneeBend = 1.6f * run + 0.7f * shuffle;
+    float legSwing = lerpf(0.5f, 0.85f, gait) * run + 0.25f * shuffle;
+    float kneeBend = lerpf(0.7f, 1.7f, gait) * run + 0.7f * shuffle;
+    float sL = std::sin(phase_ + 0.35f) * back, sR = -sL;  // la rodilla va algo por delante de la cadera
     r[HipL].x = -legSwing * s - 0.1f * run;
     r[HipR].x = legSwing * s - 0.1f * run;
-    r[KneeL].x = kneeBend * std::max(0.0f, c) + 0.15f * run + 0.05f;
-    r[KneeR].x = kneeBend * std::max(0.0f, -c) + 0.15f * run + 0.05f;
-    r[AnkleL].x = -0.5f * (r[HipL].x + r[KneeL].x) * run + 0.2f * run * std::max(0.0f, -s);
-    r[AnkleR].x = -0.5f * (r[HipR].x + r[KneeR].x) * run + 0.2f * run * std::max(0.0f, s);
+    r[KneeL].x = kneeBend * softPositive(c) + lerpf(0.06f, 0.18f, gait) * run + 0.05f;
+    r[KneeR].x = kneeBend * softPositive(-c) + lerpf(0.06f, 0.18f, gait) * run + 0.05f;
+    r[AnkleL].x = (-0.45f * (r[HipL].x + r[KneeL].x) + 0.35f * softPositive(-sL) - 0.15f * softPositive(sL)) * run;
+    r[AnkleR].x = (-0.45f * (r[HipR].x + r[KneeR].x) + 0.35f * softPositive(-sR) - 0.15f * softPositive(sR)) * run;
+    r[ToeL].x = -0.4f * softPositive(-s) * run;  // la punta se dobla al despegar
+    r[ToeR].x = -0.4f * softPositive(s) * run;
     r[HipL].z = 0.04f;
     r[HipR].z = -0.04f;
 
-    // Brazo libre al contrario que su pierna; el del arma la lleva atrás al correr.
-    r[ShoulderL].x = 0.9f * run * s;
+    // Brazos al contrario que su pierna, un pelín retrasados (siguen al tronco, no lo
+    // mueven); el codo se dobla más al ir hacia delante. El del arma la lleva atrás al correr.
+    float sa = std::sin(phase_ - 0.25f) * back;
+    float armSwing = lerpf(0.45f, 0.9f, gait) * run;
+    r[ShoulderL].x = armSwing * sa;
     r[ShoulderL].z = 0.1f + 0.15f * run;
-    r[ElbowL].x = -0.25f - 1.1f * run + 0.25f * run * s;
-    r[ShoulderR].x = lerpf(-0.3f, 0.6f, run) - 0.25f * run * s;
+    r[ElbowL].x = -0.25f - lerpf(0.35f, 1.1f, gait) * run - 0.3f * run * softPositive(-sa);
+    r[ShoulderR].x = lerpf(-0.3f, 0.6f, run) - 0.25f * run * sa;
     r[ShoulderR].z = -0.15f - 0.25f * run;
     r[ElbowR].x = lerpf(-1.3f, -0.5f, run);
     r[WristR].x = lerpf(0.75f, 0.9f, run);  // en reposo la hoja apunta al frente y abajo; corriendo, atrás
 
     // Sin el arma en la mano (explorando): el brazo derecho se balancea como el izquierdo.
     float unarmed = 1.0f - armedBlend_;
-    r[ShoulderR].x = lerpf(r[ShoulderR].x, -0.9f * run * s, unarmed);
+    r[ShoulderR].x = lerpf(r[ShoulderR].x, -armSwing * sa, unarmed);
     r[ShoulderR].z = lerpf(r[ShoulderR].z, -0.1f - 0.15f * run, unarmed);
-    r[ElbowR].x = lerpf(r[ElbowR].x, -0.25f - 1.1f * run - 0.25f * run * s, unarmed);
+    r[ElbowR].x = lerpf(r[ElbowR].x, -0.25f - lerpf(0.35f, 1.1f, gait) * run - 0.3f * run * softPositive(sa), unarmed);
     r[WristR].x = lerpf(r[WristR].x, 0.0f, unarmed);
 
     // Torso: inclinado al correr (más al acelerar), ladeado en las curvas, con torsión
-    // pelvis/pecho contrapuesta y la cabeza compensando para mirar al frente.
-    r[Spine].x = 0.28f * run + lean_;
+    // pelvis/pecho contrapuesta y la cabeza compensando para mirar al frente. La cadera cae
+    // hacia el lado de la pierna que se levanta y se desplaza sobre la que apoya.
+    r[Spine].x = lerpf(0.06f, 0.28f, gait) * run + lean_;
     r[Spine].z = bank_;
-    r[Pelvis].z = -bank_ * 0.4f;
-    r[Pelvis].y = 0.14f * s * run;
-    r[Chest].y = -0.22f * s * run;
+    r[Pelvis].z = -bank_ * 0.4f + 0.06f * s * run;
+    r[Spine].z -= 0.04f * s * run;  // el tronco compensa la caída de la cadera
+    r[Pelvis].y = lerpf(0.1f, 0.16f, gait) * s * run;
+    r[Chest].y = -lerpf(0.12f, 0.24f, gait) * sa * run;
     r[Chest].x = 0.04f * run * bounce;
-    r[Neck].x = -0.6f * r[Spine].x;
-    r[Neck].z = -0.6f * bank_;
+    r[Neck].x = -0.6f * r[Spine].x - 0.04f * run * bounce;
+    r[Neck].z = -0.6f * bank_ - 0.5f * r[Pelvis].z;
     r[Head].y = -(r[Pelvis].y + r[Chest].y);
-    out.rootOffset.y = -0.06f * run * (1.0f - bounce) + 0.02f * run;
+    out.rootOffset.y = -lerpf(0.025f, 0.065f, gait) * run * (1.0f - bounce) + 0.02f * run;
+    out.rootOffset.x = 0.02f * s * run * (1.0f - gait);  // andando, el peso pasa de un pie a otro
     // Corriendo a tope: más inclinado, zancada larga y brazos echados atrás.
     r[Spine].x += 0.25f * sprint;
     r[HipL].x *= 1.0f + 0.3f * sprint;
@@ -903,7 +1022,7 @@ void Character::animate(Pose& out) const {
         float wIn = d.blendIn > 0 ? u / d.blendIn : 1.0f;
         float wOut = d.blendOut > 0 ? (1.0f - u) / d.blendOut : 1.0f;
         float w = clampf(std::min(wIn, wOut), 0, 1);
-        ArmKey k = sampleKeys(d, u);
+        ArmKey k = sampleOverlap(d, u, moveDuration(move_, attackSpeed));
         applyArm(r, k, w, d.leftArm);
         if (moveSet == MoveSet::Fists && !d.leftArm && move_ != Move::Cast)  // guardia con el otro puño
             applyArm(r, {0, -0.6f, 0, -0.1f, -1.9f, 0, 0, Smooth}, w * 0.8f, true);

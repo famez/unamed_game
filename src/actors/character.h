@@ -33,6 +33,11 @@ inline bool isFinisher(Move m) {
 // golpe seco, rebote). Para que nada cambie de golpe:
 //   - al cambiar de estado (golpe, voltereta, aterrizaje...) la pose se funde desde la
 //     anterior en una fracción de segundo;
+//   - cada articulación sigue a su pose con un muelle amortiguado (las piernas, firmes; el
+//     tronco, los brazos y la cabeza, con algo de retraso y de rebote): los cambios bruscos se
+//     redondean y los golpes tienen inercia;
+//   - en los golpes el cuerpo se mueve en látigo: la cadera y el pecho se adelantan, y el
+//     codo y la muñeca llegan un poco después que el hombro;
 //   - el cuerpo se inclina al acelerar y al girar, y se aplasta al aterrizar;
 //   - el pelo y la cinta de la espalda se mueven por inercia (muelles y Verlet).
 class Character {
@@ -114,8 +119,9 @@ public:
     float guardTime() const { return guardTime_; }  // segundos con la guardia levantada
     // Empujón recibido (m/s), se frena solo.
     void push(Vec3 v) { knock_ += v; }
-    // Golpe recibido: interrumpe lo que haga y se encoge un momento.
-    void flinch(float seconds);
+    // Golpe recibido: interrumpe lo que haga y se encoge un momento. `push`: hacia dónde
+    // empuja el golpe (mundo); el tronco se dobla hacia ese lado y rebota.
+    void flinch(float seconds, Vec3 push = {});
     // Movimiento cuyo instante de impacto acaba de pasar (o None), una sola vez.
     Move takeImpact();
 
@@ -191,8 +197,15 @@ private:
     float drawTime_ = 1.0f, armedBlend_ = 1.0f;
     bool alert_ = false;
     float alertBlend_ = 0;
+    // Muelles de las articulaciones: la pose mostrada persigue a la calculada.
+    Pose sprung_;
+    Vec3 springVel_[JointCount] = {};
+    Vec3 rootSpringVel_;
+    bool springInit_ = false;
+    void applySprings(float dt);
     // Animación limitada (como el anime): en los golpes la pose se renueva a 20 fps y se
-    // mantiene entre medias; el cuerpo se sigue desplazando con suavidad.
+    // mantiene entre medias. Desactivada: con los muelles, los golpes fluyen.
+    static constexpr bool kLimitedAnimation = false;
     bool stepping_ = false;
     Pose heldPose_;
     float holdTimer_ = 0;

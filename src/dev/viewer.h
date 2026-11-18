@@ -10,5 +10,6 @@
 #include "render/text.h"
 
 // Abre el visor con el fichero `path` hasta cerrar la ventana o pulsar Esc. Entiende también
-// --anim N (animación inicial), --noche, --cerca (la cara) y --screenshot FICHERO SEG [N] (guarda N fotogramas y sale).
+// --anim N (animación inicial), --noche, --cerca (la cara), --camyaw RAD (desde dónde mira la cámara) y
+// --screenshot FICHERO SEG [N] (guarda N fotogramas, a paso fijo de 1/30 s, y sale).
 int runViewer(const char* path, Renderer& renderer, DebugDraw& lines, UiLayer& ui, int argc, char** argv);

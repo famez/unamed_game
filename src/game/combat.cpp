@@ -628,7 +628,7 @@ void Game::hurtHero(Vec3 dir, float damage, float knock, Enemy* source) {
     heroInvuln_ = kInvulnAfterHit;
     heroFlash_ = 0.25f;
     shake_ = std::max(shake_, 0.25f);
-    if (form_ != Form::Wolf) hero_.flinch(0.35f);
+    if (form_ != Form::Wolf) hero_.flinch(0.35f, dir);
     hero_.push(dir * knock + Vec3{0, form_ == Form::Wolf ? 0.0f : 2.0f, 0});
     spawnSparks(chest, dir, 10, rgba(255, 90, 90), 3.0f);
     if (hp_ <= 0) defeatHero();

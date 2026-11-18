@@ -198,7 +198,7 @@ bool load(Renderer& r, const std::string& path, Loaded& out, std::string& error)
 
 // Animaciones del visor.
 const char* const kHumanAnims[] = {"Quieta", "Andar", "Correr", "Combo", "Saltar", "Esquivar", "Guardia"};
-const char* const kEnemyAnims[] = {"Quieto", "Persigue", "Ataque", "Aturdido", "Aparece", "Muere"};
+const char* const kEnemyAnims[] = {"Quieto", "Persigue", "Ataque", "Aturdido", "Aparece", "Muere", "Anda", "Trota"};
 
 struct Orbit {
     float yaw = 2.6f, pitch = 0.18f, distance = 3.6f, height = 0.9f;
@@ -251,6 +251,7 @@ int runViewer(const char* pathArg, Renderer& renderer, DebugDraw& lines, UiLayer
     const std::string path = pathArg;
     int anim = 0;
     bool startNight = false, closeUp = false;  // --cerca: la cámara en la cara
+    float startYaw = -100;                     // --camyaw: desde dónde mira la cámara (radianes)
     const char* shotPath = nullptr;
     float shotTime = 0;
     int shotCount = 1, shotIndex = 0;
@@ -258,6 +259,7 @@ int runViewer(const char* pathArg, Renderer& renderer, DebugDraw& lines, UiLayer
         if (std::strcmp(argv[i], "--anim") == 0 && i + 1 < argc) anim = std::max(0, std::atoi(argv[i + 1]) - 1);
         if (std::strcmp(argv[i], "--noche") == 0) startNight = true;
         if (std::strcmp(argv[i], "--cerca") == 0) closeUp = true;
+        if (std::strcmp(argv[i], "--camyaw") == 0 && i + 1 < argc) startYaw = float(std::atof(argv[i + 1]));
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 2 < argc) {
             shotPath = argv[i + 1];
             shotTime = float(std::atof(argv[i + 2]));
@@ -315,11 +317,13 @@ int runViewer(const char* pathArg, Renderer& renderer, DebugDraw& lines, UiLayer
     Orbit cam;
     frame(cam);
     if (closeUp && model.humanoid) cam.height = 1.55f, cam.distance = 0.9f, cam.pitch = 0.05f;
+    if (startYaw > -50) cam.yaw = startYaw;
     Vec3 focus{0, 0, 0}, pan{};
     bool paused = false, skeleton = false, night = startNight;
     float lastMouseX = 0, lastMouseY = 0;
     Input input;
     const double start = platform::timeSeconds();
+    double viewTime = 0;
     double prev = start, acc = 0;
     platform::setMouseCaptured(false);
     platform::setTitle(("Visor · " + stemOf(path) + ".glb").c_str());
@@ -328,6 +332,8 @@ int runViewer(const char* pathArg, Renderer& renderer, DebugDraw& lines, UiLayer
         double now = platform::timeSeconds();
         double frameDt = std::min(0.1, now - prev);
         prev = now;
+        if (shotPath && shotCount > 1) frameDt = 1.0 / 30.0;  // tira de fotogramas: a paso fijo (30 por segundo de animación)
+        viewTime += frameDt;
         if (!platform::pumpEvents(input)) break;
         if (input.wasPressed(Key::Escape)) break;
 
@@ -430,8 +436,12 @@ int runViewer(const char* pathArg, Renderer& renderer, DebugDraw& lines, UiLayer
                     case 3: want = AiState::Stagger; break;
                     case 4: want = std::fmod(animTime, 2.0f) < 1.2f ? AiState::Spawning : AiState::Idle; break;
                     case 5: want = std::fmod(animTime, 1.6f) < 0.8f ? AiState::Dying : AiState::Idle; break;
+                    case 6: case 7: want = AiState::Idle; break;
                     default: break;
                 }
+                // En cinta: se mueve sin desplazarse (la velocidad decide el paso de las patas).
+                float pace = anim == 1 ? d.speed : anim == 6 ? 1.1f : anim == 7 ? 3.0f : 0.0f;
+                enemy.body.vel = enemy.forward() * pace;
                 if (want != enemy.state) enemy.state = want, enemy.stateTime = 0, enemy.blendTime = 0, enemy.attackHit = false;
                 enemy.stateTime += kStep;
                 float moving = enemy.state == AiState::Chase ? 1.0f : 0.25f;
@@ -637,7 +647,7 @@ int runViewer(const char* pathArg, Renderer& renderer, DebugDraw& lines, UiLayer
         ui.flush(ortho(0, uw, uh, 0, -1, 1));
         glDisable(GL_BLEND);
 
-        if (shotPath && now - start >= shotTime) {
+        if (shotPath && viewTime >= shotTime) {
             if (shotCount == 1) {
                 savePpm(shotPath, w, h);
             } else {
