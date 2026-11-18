@@ -592,11 +592,12 @@ void Game::loadLevel(LevelId id) {
         case LevelId::Neon: buildNeon(); break;
         case LevelId::Cafetero: buildCafetero(); break;
         case LevelId::Rio: buildRio(); break;
+        case LevelId::Copas: buildCopas(); break;
         case LevelId::Count: break;
     }
     // Los mapas grandes: la Ciudad Neón a todo color; los demás, en el atardecer detenido con
     // poco color (vuelve al encender sus nodos y al disipar Grises).
-    if (id == LevelId::Neon) croma_ = cromaShown_ = 1.0f;
+    if (id == LevelId::Neon || id == LevelId::Copas) croma_ = cromaShown_ = 1.0f;  // la ciudad de las copas no se paró
     else if (world_.terrain) croma_ = cromaShown_ = 0.3f;
     if (freePlay_)  // sin guion que los arme, los combates de jefe esperan desde el principio
         for (Encounter& en : encounters_) en.armed = true;

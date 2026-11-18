@@ -15,7 +15,8 @@ float Game::random01() {
 
 void Game::rebuildSolids() {
     world_.solids.clear();
-    for (const Block& b : blocks_) world_.solids.push_back(b.box);
+    for (const Block& b : blocks_)
+        if (b.color != 0) world_.solids.push_back(b.box);
     for (const Crate& c : crates_)
         if (!c.broken) world_.solids.push_back(c.box);
     world_.solids.insert(world_.solids.end(), propSolids_.begin(), propSolids_.end());
@@ -24,6 +25,8 @@ void Game::rebuildSolids() {
     // cámara se apartara de ellas, saltaría de un fotograma a otro al moverse cerca).
     world_.buildGrid();
     cameraWorld_ = world_;
+    for (const Block& b : blocks_)  // las invisibles (cuerdas, tablas sueltas) no apartan la cámara
+        if (b.color == 0) world_.solids.push_back(b.box);
     for (const Gate& g : gates_)
         if (g.closed) world_.solids.push_back(g.box);
     world_.buildGrid();
@@ -346,7 +349,7 @@ void Game::updateEffects(float dt) {
     particles_.erase(std::remove_if(particles_.begin(), particles_.end(), [](const Particle& p) { return p.life <= 0; }),
                      particles_.end());
     // Surtidor de la fuente (la de los escenarios de la ciudad parada, en el centro).
-    if (!world_.terrain && level_ != LevelId::Neon && random01() < dt * 40.0f && particles_.size() < kMaxParticles) {
+    if (!world_.terrain && level_ != LevelId::Neon && level_ != LevelId::Copas && random01() < dt * 40.0f && particles_.size() < kMaxParticles) {
         float a = random01() * 2.0f * kPi, r = randRange(1.2f, 2.0f);
         particles_.push_back({{0, 2.3f, 0}, {std::cos(a) * r, randRange(2.5f, 3.5f), std::sin(a) * r}, 0.9f, 0.9f,
                               0.05f, rgba(170, 225, 255), 9.8f, false});

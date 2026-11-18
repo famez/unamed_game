@@ -200,6 +200,27 @@ void Game::placeCitizens() {
             add("nino_sombras", heroStart_ + Vec3{-2, 0, 8}, "Niño de las sombras", NpcRole::Townsfolk,
                 {"¡No pises la mía! …La sombra, digo."}, 5);
             break;
+        case LevelId::Copas:  // la aldea de las copas: la posada, la polea, el jardín y el mirador
+            add("cocinero", {-5.5f, 0, -2.6f}, "Posadero", NpcRole::Inn,
+                {"Sube, sube. Aquí arriba la sopa tarda en enfriarse.", "Duerme. Las ramas crujen, pero aguantan. Llevan siglos aguantando.",
+                 "Nadie se cae de mi posada. Bueno. Casi nadie."}, 2);
+            add("vendedora", {-6.5f, 0, 6.0f}, "Tetera", NpcRole::Townsfolk,
+                {"Té de corteza. Sabe a lluvia vieja.", "Antes subían los del suelo a comprarlo. Ya no sube nadie."}, 1.5f);
+            add("nino_sombras", {2.5f, 0, -5}, "Niño de las cuerdas", NpcRole::Townsfolk,
+                {"¡No mires abajo! …Yo tampoco miro.", "Si escupes desde el mirador, no se oye caer.",
+                 "Mi madre dice que la niebla tiene fondo. Yo creo que no."}, 6);
+            add("musica", {-3.5f, 0, 7.0f}, "Música del tronco", NpcRole::Townsfolk,
+                {"Aquí el viento afina solo.", "Toco para el árbol. Él no aplaude, pero tampoco se va."}, 1);
+            add("aceitero", {31.5f, -1.5f, -6.2f}, "Hombre de la polea", NpcRole::Shop,
+                {"Todo lo que sube, lo subo yo. Con esta polea y con estos brazos.",
+                 "La cesta tarda una hora en llegar al fondo. A veces vuelve con algo."}, 2);
+            add("recolectora", {-26, 1.5f, 6.6f}, "Jardinera", NpcRole::Townsfolk,
+                {"Las raíces no llegan al suelo. Beben niebla.", "Riego por la mañana. Cuando había mañanas.",
+                 "Ese cerezo lo subí en una maceta. Ahora la maceta es él."}, 3);
+            add("relojero", {-1.2f, 8.0f, 32.2f}, "Vigía", NpcRole::Townsfolk,
+                {"Desde aquí se ve el fondo. No mires mucho rato.", "Abajo hay un río. Lo he oído; verlo, nunca.",
+                 "Cuando sopla, el mirador se mueve un palmo. Te acostumbras. O no."}, 1);
+            break;
         case LevelId::Cueva:
             add("barquero", heroStart_ + Vec3{3, 0, 4}, "Barquero", NpcRole::Townsfolk,
                 {"Al otro lado no hay farolas. Por eso se cruza en silencio."}, 2);

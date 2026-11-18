@@ -200,6 +200,18 @@ vuelve al selector.
     con el teleférico, la favela encendida en la ladera y la estatua del cerro) es telón de
     fondo: se ve, no se pisa. El borde de las zonas es un recinto en el terreno
     (`Terrain::fence`) que nadie cruza hacia fuera; las peñas, las casas y las laderas lo tapan.
+  - **Las Copas** (`--nivel copas`, al anochecer): una aldea en lo alto de árboles gigantes
+    cuyos troncos se pierden en un mar de nubes. Cuatro rincones, cada uno en su árbol: **el
+    Tronco Mayor** (la plaza de tablas con la posada, que cura y guarda, dos casitas, un puesto de
+    té, guirnaldas de luces y una escalera de caracol por el tronco hasta un balcón), **los
+    Talleres** (más abajo, con la grúa de la polea y su cuerda bajando al vacío), **el Jardín
+    colgante** (macetas y un cerezo en su jardinera) y **el Mirador** (diminuto, arriba del todo,
+    con el catalejo y la barandilla baja). Los unen pasarelas colgantes que se comban, con huecos
+    entre las tablas y alguna que falta; las barandillas paran al que anda, no al que salta, y
+    quien cae vuelve al último sitio seguro. Vecinos con los que hablar (F): el posadero, la
+    tetera, el niño de las cuerdas, la música del tronco, el hombre de la polea (abre el
+    taller), la jardinera y el vigía. Alrededor, otros árboles con casas encendidas como telón
+    de fondo. Piezas en `tools/props/copas.py`.
   - **Habitantes** (`assets/models/habitantes`): pasean por su zona de cada mapa, se paran
     en su pose de reposo y miran a la protagonista si se acerca.
 

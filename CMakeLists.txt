@@ -33,6 +33,7 @@ set(LOGIC_SOURCES
     src/game/levels_night.cpp
     src/game/levels_open.cpp
     src/game/levels_rio.cpp
+    src/game/levels_copas.cpp
     src/game/npcs.cpp
     src/game/wild.cpp
     src/game/swarm.cpp

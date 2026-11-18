@@ -462,7 +462,7 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
     std::vector<AABB> hidden;
     for (const Block& b : blocks_) {
         Vec3 h = b.box.halfExtents();
-        if (h.x > 0.6f || h.z > 0.6f) continue;
+        if (h.x > 0.6f || h.z > 0.6f || b.color == 0) continue;
         AABB grown{b.box.min - Vec3{0.25f, 0, 0.25f}, b.box.max + Vec3{0.25f, 3.0f, 0.25f}};
         RayHit hit;
         if (segmentVsAABB(view.eye, heroChest, grown, hit)) hidden.push_back(b.box);
@@ -473,7 +473,7 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
         return false;
     };
     for (const Block& b : blocks_)
-        if (!isHidden(b.box.center())) solid->box(id, b.box.center(), b.box.halfExtents(), b.color, b.material);
+        if (b.color != 0 && !isHidden(b.box.center())) solid->box(id, b.box.center(), b.box.halfExtents(), b.color, b.material);
     for (const Decor& d : decor_) {
         if (!hidden.empty() && isHidden(translationOf(d.transform) + d.center)) continue;
         if (d.sphere)

@@ -188,7 +188,7 @@ struct Companion {
 // suena su escena y empieza la siguiente.
 
 // Campo, Neon, Cafetero y Rio: mapas grandes (terreno con relieve y piezas .glb de assets/props).
-enum class LevelId { Plaza, Mercado, Puente, Prueba, Selva, Cueva, Callejones, Campo, Neon, Cafetero, Rio, Count };
+enum class LevelId { Plaza, Mercado, Puente, Prueba, Selva, Cueva, Callejones, Campo, Neon, Cafetero, Rio, Copas, Count };
 
 // Modos de prueba (sin historia, con vida, Luz y Sombra infinitas): un escenario aleatorio
 // con Grises sin fin, un archipiélago de islas flotantes para practicar el viaje por la luz,
@@ -376,7 +376,7 @@ struct Tutorial {
 // Bloque sólido del escenario con su aspecto.
 struct Block {
     AABB box;
-    uint32_t color;
+    uint32_t color;  // 0: invisible (solo choca; lo que se ve es decoración)
     Material material;
 };
 
@@ -601,6 +601,7 @@ private:
     void buildNeon();
     void buildCafetero();
     void buildRio();
+    void buildCopas();
     // Mapas grandes: terreno de `size` m de lado con puntos cada `cell` m (alturas a cero).
     void makeTerrain(float size, float cell);
     // Pinta un punto del terreno (color y material del suelo).

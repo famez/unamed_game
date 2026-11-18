@@ -159,6 +159,29 @@ int main() {
                       t.fenceAt(p.x, p.z));
             }
         }
+        {  // Las Copas: por la escalera del tronco y la pasarela larga se llega al mirador; las
+            // barandillas paran al que anda, y el que cae al vacío vuelve a un sitio seguro
+            Game c = fresh();
+            c.loadLevel(LevelId::Copas);
+            run(c, 0.5f);
+            CHECK(c.hero_.body.grounded && std::fabs(c.hero_.body.pos.y) < 0.05f && c.npcs_.size() >= 7,
+                  "copas: la protagonista en la plaza del tronco (y=%.2f) y %zu vecinos", c.hero_.body.pos.y, c.npcs_.size());
+            place(c, {0, 6.1f, 4.5f});  // en el balcón del tronco
+            Controls n;
+            n.move = {0, 0, 1};
+            run(c, 9.0f, n);
+            CHECK(c.hero_.body.pos.z > 30.5f && std::fabs(c.hero_.body.pos.y - 8.0f) < 0.2f,
+                  "copas: la pasarela larga llega al mirador (z=%.1f, y=%.2f)", c.hero_.body.pos.z, c.hero_.body.pos.y);
+            place(c, {6, 0.1f, 1});
+            Controls e;
+            e.move = {1, 0, 0};
+            run(c, 4.0f, e);
+            CHECK(c.hero_.body.pos.x > 9.0f && c.hero_.body.pos.x < 10.0f && c.hero_.body.pos.y > -0.1f,
+                  "copas: la barandilla para al que anda (x=%.1f)", c.hero_.body.pos.x);
+            place(c, {0, 0.1f, -14});  // fuera de la plaza, sobre el vacío
+            run(c, 4.0f);
+            CHECK(c.hero_.body.pos.y > -1.0f && c.hp_ < c.maxHp_, "copas: quien cae vuelve a un sitio seguro (y=%.1f)", c.hero_.body.pos.y);
+        }
         {  // Habitantes: pasean por su zona, sin hundirse ni salir volando
             Game h = fresh();
             h.loadLevel(LevelId::Cafetero);
