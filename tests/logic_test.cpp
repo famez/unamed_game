@@ -128,7 +128,7 @@ int main() {
         int casa = propLibrary().find("casa_campo");
         CHECK(casa >= 0 && !propLibrary()[size_t(casa)].colliders.empty() && !propLibrary()[size_t(casa)].lights.empty(),
               "casa_campo: con caja de colisión y farol");
-        for (LevelId id : {LevelId::Campo, LevelId::Neon, LevelId::Cafetero}) {
+        for (LevelId id : {LevelId::Campo, LevelId::Neon, LevelId::Cafetero, LevelId::Rio}) {
             Game g = fresh();
             g.loadLevel(id);
             run(g, 1.0f);
@@ -139,6 +139,25 @@ int main() {
             CHECK(g.props_.size() > 150 && b.grounded && std::fabs(b.pos.y - floor) < 0.05f && propLamps > 5,
                   "%s: %zu piezas, %zu farolas de piezas, la protagonista en el suelo (y=%.2f, suelo %.2f)", g.levelName_.c_str(),
                   g.props_.size(), propLamps, b.pos.y, floor);
+        }
+        {  // La bahía es un diorama cerrado: ni el mar ni el borde del mirador dejan salir
+            Game r = fresh();
+            r.loadLevel(LevelId::Rio);
+            const Terrain& t = *r.world_.terrain;
+            struct Walk {
+                Vec3 from, dir;
+                const char* what;
+            };
+            for (Walk w : {Walk{{0, 0, -22}, {0, 0, -1}, "mar adentro"}, Walk{{-28, 0, -22.5f}, {1, 0, 0}, "del mirador a la playa"},
+                           Walk{{0, 0, 5}, {0, 0, 1}, "bajo los arcos"}, Walk{{-23.5f, 0, 5}, {-1, 0, 0}, "fuera de la escalera"}}) {
+                place(r, {w.from.x, r.world_.groundAt(w.from.x, w.from.z) + 2.0f, w.from.z});
+                Controls c;
+                c.move = w.dir;
+                run(r, 5.0f, c);
+                Vec3 p = r.hero_.body.pos;
+                CHECK(t.fenceAt(p.x, p.z) < 0.1f, "bahía: %s se queda dentro del recinto (%.1f, %.1f; fuera %.2f m)", w.what, p.x, p.z,
+                      t.fenceAt(p.x, p.z));
+            }
         }
         {  // Habitantes: pasean por su zona, sin hundirse ni salir volando
             Game h = fresh();

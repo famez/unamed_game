@@ -58,6 +58,14 @@ inline float distToPath(Vec3 p, const std::vector<Vec3>& path, Vec3* closest = n
     return best;
 }
 
+// Distancias con signo en el plano XZ (negativas dentro), para tallar zonas en el relieve.
+inline float sdBox(Vec3 p, Vec3 c, float hx, float hz, float round = 0) {
+    float qx = std::fabs(p.x - c.x) - hx + round, qz = std::fabs(p.z - c.z) - hz + round;
+    float ox = std::max(qx, 0.0f), oz = std::max(qz, 0.0f);
+    return std::sqrt(ox * ox + oz * oz) + std::min(std::max(qx, qz), 0.0f) - round;
+}
+inline float sdCircle(Vec3 p, Vec3 c, float r) { return length(flat(p - c)) - r; }
+
 inline float smoothFalloff(float d, float r) { return d >= r ? 0.0f : 1.0f - smoothstep01(d / r); }
 
 }  // namespace maptools

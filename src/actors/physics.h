@@ -33,10 +33,14 @@ struct Terrain {
     float cell = 2;        // distancia entre puntos (m)
     int nx = 0, nz = 0;    // puntos en cada eje
     std::vector<float> heights;  // nx * nz, por filas de z
+    // Recinto (opcional, misma rejilla): distancia con signo a la zona por la que se anda
+    // (negativa dentro). Nadie lo cruza hacia fuera; los mapas lo usan en lugar de muros.
+    std::vector<float> fence;
 
     float& at(int ix, int iz) { return heights[size_t(iz) * size_t(nx) + size_t(ix)]; }
     float at(int ix, int iz) const { return heights[size_t(iz) * size_t(nx) + size_t(ix)]; }
     float heightAt(float x, float z) const;
+    float fenceAt(float x, float z) const;  // -1e9 sin recinto
     Vec3 normalAt(float x, float z) const;
 };
 

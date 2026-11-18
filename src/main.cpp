@@ -710,8 +710,13 @@ int main(int argc, char** argv) {
         if (flyover) {  // --vuelo: vueltas alrededor del centro, acercándose y alejándose
             float tt = game.time();
             float r = 95.0f + 55.0f * std::sin(tt * 0.09f), hgt = 22.0f + 16.0f * std::sin(tt * 0.13f + 1.0f), a = tt * 0.11f;
-            if (game.level() == LevelId::Neon || game.level() == LevelId::Rio) hgt += 34;  // por encima de las torres
+            if (game.level() == LevelId::Neon) hgt += 34;  // por encima de las torres
             look = {0, 6.0f, 0};
+            if (game.level() == LevelId::Rio) {  // el diorama de la bahía: de cerca
+                r = 46.0f + 12.0f * std::sin(tt * 0.09f), hgt = 20.0f + 8.0f * std::sin(tt * 0.13f + 1.0f);
+                look = {-6, 4.0f, -8};
+            }
+            a += camYaw0;  // --camyaw: desde qué lado empieza
             eye = look + Vec3{std::cos(a) * r, hgt, std::sin(a) * r};
             // Siempre por encima del relieve (los morros pasan de 80 m), con la transición suave.
             float floor = 0;

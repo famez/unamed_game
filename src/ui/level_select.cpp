@@ -15,7 +15,7 @@ const LevelSelect::Entry kEntries[] = {
     {"Mapa · Campo abierto", "Valle de día: colinas, río, granja, molinos y un pinar", false, LevelId::Campo},
     {"Mapa · Ciudad Neón", "De noche: torres, letreros, vía elevada y un santuario", false, LevelId::Neon},
     {"Mapa · Pueblo cafetero", "Plaza, casas de bahareque de colores y cafetales en la loma", false, LevelId::Cafetero},
-    {"Mapa · Ciudad de la Bahía", "Al estilo de Río: playa, favela en el morro, la estatua del cerro", false, LevelId::Rio},
+    {"Mapa · Ciudad de la Bahía", "Diorama al estilo de Río: la caleta, la plaza de los arcos y el mirador", false, LevelId::Rio},
 };
 constexpr int kCount = int(sizeof(kEntries) / sizeof(kEntries[0]));
 
