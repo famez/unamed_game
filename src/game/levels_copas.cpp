@@ -47,9 +47,11 @@ void Game::buildCopas() {
     Rng rng{4242};
 
     auto beam = [&](Vec3 a, Vec3 b, float w, uint32_t col) { addDecor(along(a, b), {}, {w, length(b - a) * 0.5f, w}, col, Material::Cloth, false); };
-    // Árbol gigante: tronco que baja a la niebla (su copa queda `crown` metros por encima).
+    // Árbol gigante: tronco que baja a la niebla (su copa queda `crown` metros por encima). El
+    // tronco gira solo de cuarto en cuarto: girado de otro modo, su caja de choque (alineada con
+    // los ejes) crecería hasta tapar los peldaños de la escalera en las diagonales.
     auto giant = [&](Vec3 base, float top, float scl, const char* crown, float crownScl) {
-        addProp("tronco_gigante", {base.x, top - 150.0f * scl, base.z}, rng.range(0, 6.28f), scl, false);
+        addProp("tronco_gigante", {base.x, top - 150.0f * scl, base.z}, float(rng.pick(4)) * kPi * 0.5f, scl, false);
         if (crown) addProp(crown, {base.x, top - 1.0f, base.z}, rng.range(0, 6.28f), crownScl, false);
     };
     // Plataforma de tablas (arriba en y = top), con vigas que la apoyan en el tronco.

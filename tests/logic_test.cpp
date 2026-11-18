@@ -182,6 +182,22 @@ int main() {
             run(c, 0.5f);
             CHECK(c.hero_.body.grounded && std::fabs(c.hero_.body.pos.y) < 0.05f && c.npcs_.size() >= 7,
                   "copas: la protagonista en la plaza del tronco (y=%.2f) y %zu vecinos", c.hero_.body.pos.y, c.npcs_.size());
+            {  // la escalera de caracol se sube andando, siguiendo los peldaños
+                place(c, {std::sin(0.6f) * 3.7f, 0.1f, std::cos(0.6f) * 3.7f});
+                float best = 0;
+                for (int i = 0; i < 60 * 25; ++i) {
+                    Vec3 p = c.hero_.body.pos;
+                    float a = std::atan2(p.x, p.z);
+                    if (a < 0) a += 2 * kPi;
+                    Controls s;
+                    Vec3 next{std::sin(a + 0.35f) * 3.7f, 0, std::cos(a + 0.35f) * 3.7f};
+                    Vec3 to = best > 5.9f || a > 5.35f ? Vec3{0, 0, 4.0f} : next;  // arriba: al balcón
+                    s.move = normalize(flat(to - p));
+                    c.update(dt, s);
+                    best = std::max(best, c.hero_.body.pos.y);
+                }
+                CHECK(c.hero_.body.pos.y > 5.9f, "copas: la escalera del tronco se sube andando (y=%.2f, lo más alto %.2f)", c.hero_.body.pos.y, best);
+            }
             place(c, {0, 6.1f, 4.5f});  // en el balcón del tronco
             Controls n;
             n.move = {0, 0, 1};
