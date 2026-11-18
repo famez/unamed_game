@@ -51,6 +51,16 @@ float Terrain::heightAt(float x, float z) const {
     return h11 + (h01 - h11) * (1 - u) + (h10 - h11) * (1 - v);
 }
 
+float Terrain::fenceAt(float x, float z) const {
+    if (fence.empty() || nx < 2 || nz < 2) return -1e9f;
+    float fx = std::clamp((x - x0) / cell, 0.0f, float(nx - 1) - 1e-4f);
+    float fz = std::clamp((z - z0) / cell, 0.0f, float(nz - 1) - 1e-4f);
+    int ix = int(fx), iz = int(fz);
+    float u = fx - float(ix), v = fz - float(iz);
+    auto f = [&](int i, int k) { return fence[size_t(k) * size_t(nx) + size_t(i)]; };
+    return (f(ix, iz) * (1 - u) + f(ix + 1, iz) * u) * (1 - v) + (f(ix, iz + 1) * (1 - u) + f(ix + 1, iz + 1) * u) * v;
+}
+
 Vec3 Terrain::normalAt(float x, float z) const {
     float e = cell * 0.5f;
     float dx = heightAt(x + e, z) - heightAt(x - e, z), dz = heightAt(x, z + e) - heightAt(x, z - e);
@@ -108,10 +118,24 @@ void moveBody(Body& b, const World& w, float dt, float stepHeight) {
     float reach = b.radius + (std::fabs(b.vel.x) + std::fabs(b.vel.z)) * dt + 0.5f;
     const std::vector<int>& candidates = near(w, b.pos - Vec3{reach, 0, reach}, b.pos + Vec3{reach, 0, reach});
 
+    // El recinto del mapa: no deja salir (sí volver hacia dentro si algo lo ha sacado).
+    auto fenced = [&](float& axisPos, float& axisVel, float before) {
+        if (!w.terrain || w.terrain->fence.empty()) return;
+        float now = axisPos;
+        float d = w.terrain->fenceAt(b.pos.x, b.pos.z);
+        axisPos = before;
+        float d0 = w.terrain->fenceAt(b.pos.x, b.pos.z);
+        axisPos = now;
+        if (d + b.radius > 0 && d > d0) axisPos = before, axisVel = 0;
+    };
+    float x0 = b.pos.x;
     b.pos.x += b.vel.x * dt;
     resolveHorizontal(b, w, 0, wasGrounded, stepHeight, candidates);
+    fenced(b.pos.x, b.vel.x, x0);
+    float z0 = b.pos.z;
     b.pos.z += b.vel.z * dt;
     resolveHorizontal(b, w, 2, wasGrounded, stepHeight, candidates);
+    fenced(b.pos.z, b.vel.z, z0);
 
     b.grounded = false;
     b.pos.y += b.vel.y * dt;

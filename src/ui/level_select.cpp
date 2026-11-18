@@ -2,7 +2,7 @@
 
 namespace {
 
-constexpr float kPanelW = 760, kItemH = 44, kItemGap = 4, kTop = 120;
+constexpr float kPanelW = 760, kItemH = 42, kItemGap = 3, kTop = 120;
 
 const LevelSelect::Entry kEntries[] = {
     {"Patio de combate", "Grises sin fin de las dos familias, farolas, portales y oscuridad", true, LevelId::Prueba},
@@ -15,7 +15,8 @@ const LevelSelect::Entry kEntries[] = {
     {"Mapa · Campo abierto", "Valle de día: colinas, río, granja, molinos y un pinar", false, LevelId::Campo},
     {"Mapa · Ciudad Neón", "De noche: torres, letreros, vía elevada y un santuario", false, LevelId::Neon},
     {"Mapa · Pueblo cafetero", "Plaza, casas de bahareque de colores y cafetales en la loma", false, LevelId::Cafetero},
-    {"Mapa · Ciudad de la Bahía", "Al estilo de Río: playa, favela en el morro, la estatua del cerro", false, LevelId::Rio},
+    {"Mapa · Ciudad de la Bahía", "Diorama al estilo de Río: la caleta, la plaza de los arcos y el mirador", false, LevelId::Rio},
+    {"Mapa · Las Copas", "Una aldea en lo alto de árboles gigantes: pasarelas, la posada y vértigo", false, LevelId::Copas},
 };
 constexpr int kCount = int(sizeof(kEntries) / sizeof(kEntries[0]));
 

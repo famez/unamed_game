@@ -128,7 +128,7 @@ int main() {
         int casa = propLibrary().find("casa_campo");
         CHECK(casa >= 0 && !propLibrary()[size_t(casa)].colliders.empty() && !propLibrary()[size_t(casa)].lights.empty(),
               "casa_campo: con caja de colisión y farol");
-        for (LevelId id : {LevelId::Campo, LevelId::Neon, LevelId::Cafetero}) {
+        for (LevelId id : {LevelId::Campo, LevelId::Neon, LevelId::Cafetero, LevelId::Rio}) {
             Game g = fresh();
             g.loadLevel(id);
             run(g, 1.0f);
@@ -155,6 +155,48 @@ int main() {
             CHECK(g.chests_.size() >= 8 && grounded == int(g.chests_.size()) && before >= 30 && placed() == before,
                   "campo: %zu cápsulas (%d en el suelo), %zu objetos sueltos y siguen %zu pasado un minuto", g.chests_.size(), grounded,
                   before, placed());
+        }
+        {  // La bahía es un diorama cerrado: ni el mar ni el borde del mirador dejan salir
+            Game r = fresh();
+            r.loadLevel(LevelId::Rio);
+            const Terrain& t = *r.world_.terrain;
+            struct Walk {
+                Vec3 from, dir;
+                const char* what;
+            };
+            for (Walk w : {Walk{{0, 0, -22}, {0, 0, -1}, "mar adentro"}, Walk{{-28, 0, -22.5f}, {1, 0, 0}, "del mirador a la playa"},
+                           Walk{{0, 0, 5}, {0, 0, 1}, "bajo los arcos"}, Walk{{-23.5f, 0, 5}, {-1, 0, 0}, "fuera de la escalera"}}) {
+                place(r, {w.from.x, r.world_.groundAt(w.from.x, w.from.z) + 2.0f, w.from.z});
+                Controls c;
+                c.move = w.dir;
+                run(r, 5.0f, c);
+                Vec3 p = r.hero_.body.pos;
+                CHECK(t.fenceAt(p.x, p.z) < 0.1f, "bahía: %s se queda dentro del recinto (%.1f, %.1f; fuera %.2f m)", w.what, p.x, p.z,
+                      t.fenceAt(p.x, p.z));
+            }
+        }
+        {  // Las Copas: por la escalera del tronco y la pasarela larga se llega al mirador; las
+            // barandillas paran al que anda, y el que cae al vacío vuelve a un sitio seguro
+            Game c = fresh();
+            c.loadLevel(LevelId::Copas);
+            run(c, 0.5f);
+            CHECK(c.hero_.body.grounded && std::fabs(c.hero_.body.pos.y) < 0.05f && c.npcs_.size() >= 7,
+                  "copas: la protagonista en la plaza del tronco (y=%.2f) y %zu vecinos", c.hero_.body.pos.y, c.npcs_.size());
+            place(c, {0, 6.1f, 4.5f});  // en el balcón del tronco
+            Controls n;
+            n.move = {0, 0, 1};
+            run(c, 9.0f, n);
+            CHECK(c.hero_.body.pos.z > 30.5f && std::fabs(c.hero_.body.pos.y - 8.0f) < 0.2f,
+                  "copas: la pasarela larga llega al mirador (z=%.1f, y=%.2f)", c.hero_.body.pos.z, c.hero_.body.pos.y);
+            place(c, {6, 0.1f, 1});
+            Controls e;
+            e.move = {1, 0, 0};
+            run(c, 4.0f, e);
+            CHECK(c.hero_.body.pos.x > 9.0f && c.hero_.body.pos.x < 10.0f && c.hero_.body.pos.y > -0.1f,
+                  "copas: la barandilla para al que anda (x=%.1f)", c.hero_.body.pos.x);
+            place(c, {0, 0.1f, -14});  // fuera de la plaza, sobre el vacío
+            run(c, 4.0f);
+            CHECK(c.hero_.body.pos.y > -1.0f && c.hp_ < c.maxHp_, "copas: quien cae vuelve a un sitio seguro (y=%.1f)", c.hero_.body.pos.y);
         }
         {  // Habitantes: pasean por su zona, sin hundirse ni salir volando
             Game h = fresh();

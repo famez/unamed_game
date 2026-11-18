@@ -229,7 +229,7 @@ bool Game::devFreeSpot(Vec3& p, float radius) const {
             return false;
         for (const AABB& s : world_.solids)
             if (q.x > s.min.x - radius && q.x < s.max.x + radius && q.z > s.min.z - radius && q.z < s.max.z + radius &&
-                s.max.y > 0.3f)
+                s.max.y > q.y + 0.3f && s.min.y < q.y + 2.0f)  // a la altura del cuerpo (no el suelo ni lo de arriba)
                 return false;
         return true;
     };
@@ -237,7 +237,6 @@ bool Game::devFreeSpot(Vec3& p, float radius) const {
         for (int k = 0; k < 12; ++k) {
             float a = float(k) / 12.0f * 2.0f * kPi, d = 0.5f * float(ring);
             Vec3 q = p + Vec3{std::cos(a) * d, 0, std::sin(a) * d};
-            q.y = 0;
             if (free(q)) {
                 p = q;
                 return true;

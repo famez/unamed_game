@@ -251,6 +251,7 @@ int main(int argc, char** argv) {
                         : std::strcmp(n, "neon") == 0       ? LevelId::Neon
                         : std::strcmp(n, "cafetero") == 0   ? LevelId::Cafetero
                         : std::strcmp(n, "rio") == 0        ? LevelId::Rio
+                        : std::strcmp(n, "copas") == 0      ? LevelId::Copas
                                                             : LevelId::Plaza;
             levelGiven = true;
         }
@@ -355,7 +356,7 @@ int main(int argc, char** argv) {
             if (i + 1 < argc && argv[i + 1][0] != '-') shotCount = std::atoi(argv[++i]);  // frames seguidos
         }
     }
-    cam.yaw = camYaw0;
+    cam.yaw = camYaw0 + game.hero().yaw;  // detrás de la protagonista
     const double startTime = platform::timeSeconds();
     int botStep = 0;
     PauseMenu menu;
@@ -426,6 +427,7 @@ int main(int argc, char** argv) {
                 startGame();
                 game.setTestCheats(menu.infHp, menu.infPower);
                 cam = OrbitCamera{};
+                cam.yaw = game.hero().yaw;
                 cam.target = game.hero().body.pos + Vec3{0, 1.0f, 0};
                 platform::setMouseCaptured(true);
             }
@@ -452,6 +454,7 @@ int main(int argc, char** argv) {
                     startGame();
                     game.setTestCheats(menu.infHp, menu.infPower);
                     cam = OrbitCamera{};
+                    cam.yaw = game.hero().yaw;
                     cam.target = game.hero().body.pos + Vec3{0, 1.0f, 0};
                     closeMenu();
                     break;
@@ -719,8 +722,17 @@ int main(int argc, char** argv) {
         if (flyover) {  // --vuelo: vueltas alrededor del centro, acercándose y alejándose
             float tt = game.time();
             float r = 95.0f + 55.0f * std::sin(tt * 0.09f), hgt = 22.0f + 16.0f * std::sin(tt * 0.13f + 1.0f), a = tt * 0.11f;
-            if (game.level() == LevelId::Neon || game.level() == LevelId::Rio) hgt += 34;  // por encima de las torres
+            if (game.level() == LevelId::Neon) hgt += 34;  // por encima de las torres
             look = {0, 6.0f, 0};
+            if (game.level() == LevelId::Rio) {  // el diorama de la bahía: de cerca
+                r = 46.0f + 12.0f * std::sin(tt * 0.09f), hgt = 20.0f + 8.0f * std::sin(tt * 0.13f + 1.0f);
+                look = {-6, 4.0f, -8};
+            }
+            if (game.level() == LevelId::Copas) {  // la aldea de las copas: de cerca, entre los troncos
+                r = 38.0f + 10.0f * std::sin(tt * 0.09f), hgt = 10.0f + 8.0f * std::sin(tt * 0.13f + 1.0f);
+                look = {0, 2.0f, 12};
+            }
+            a += camYaw0;  // --camyaw: desde qué lado empieza
             eye = look + Vec3{std::cos(a) * r, hgt, std::sin(a) * r};
             // Siempre por encima del relieve (los morros pasan de 80 m), con la transición suave.
             float floor = 0;
@@ -884,7 +896,7 @@ int main(int argc, char** argv) {
             for (const Npc& n : game.npcs())
                 if (n.role == NpcRole::Inn) innDist = std::min(innDist, length(n.body.body.pos - game.hero().body.pos));
             atInn = innDist < (atInn ? 10.0f : 7.0f);
-            bool farolas = lv == LevelId::Plaza || lv == LevelId::Campo || lv == LevelId::Cafetero || lv == LevelId::Rio;
+            bool farolas = lv == LevelId::Plaza || lv == LevelId::Campo || lv == LevelId::Cafetero || lv == LevelId::Rio || lv == LevelId::Copas;
             TrackId track = selector.open ? TrackId::PianoNocturno
                             : game.chapterEnded() ? TrackId::PianoUltimoFarol
                             : memoryHold > 0 ? TrackId::PianoVelaHollin

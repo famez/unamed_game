@@ -190,13 +190,28 @@ vuelve al selector.
     alto de una loma, plaza empedrada con iglesia, kiosco, bancas, palmas y yipaos; calles de
     casas de bahareque con zócalos, puertas y balcones de colores; alrededor, cafetales con
     plataneras de sombrío, un guadual en la cañada y palmas de cera en los cerros.
-  - **Ciudad de la Bahía** (`--nivel rio`; al estilo de Río de Janeiro, pero en el tono del
-    juego: la playa vacía con las sombrillas cerradas y las ventanas de la favela encendidas): playa en
-    media luna con el paseo de ondas blancas y negras, cocoteros, quioscos, sombrillas y
-    puestos de socorrista; la avenida con los edificios frente al mar y manzanas detrás; los
-    arcos con el tranvía amarillo; la favela de casas de colores con su depósito de agua en el
-    morro, con escaleras de azulejos; la estatua de brazos abiertos en lo alto del cerro; y en
-    la bahía, el Pan de Azúcar y el morro de Urca unidos por el teleférico.
+  - **Ciudad de la Bahía** (`--nivel rio`; al estilo de Río, pero como un diorama: pocas
+    zonas pequeñas y cerradas, a pocos pasos una de otra, talladas en los morros): **la
+    Caleta**, una playa recogida entre dos peñas con el cocotero del islote en el centro, las
+    sombrillas cerradas y las barcas; **el Largo de los Arcos**, una plaza pequeña tras el paseo
+    de ondas, cerrada por casas, con los arcos y el tranvía al fondo y un músico debajo; y **la
+    Ladeira**, un callejón por detrás de las casas con la escalera de azulejos que sube al
+    **Mirador** del almendro viejo, sobre la caleta. Lo lejano (el mar, el Pan de Azúcar y Urca
+    con el teleférico, la favela encendida en la ladera y la estatua del cerro) es telón de
+    fondo: se ve, no se pisa. El borde de las zonas es un recinto en el terreno
+    (`Terrain::fence`) que nadie cruza hacia fuera; las peñas, las casas y las laderas lo tapan.
+  - **Las Copas** (`--nivel copas`, al anochecer): una aldea en lo alto de árboles gigantes
+    cuyos troncos se pierden en un mar de nubes. Cuatro rincones, cada uno en su árbol: **el
+    Tronco Mayor** (la plaza de tablas con la posada, que cura y guarda, dos casitas, un puesto de
+    té, guirnaldas de luces y una escalera de caracol por el tronco hasta un balcón), **los
+    Talleres** (más abajo, con la grúa de la polea y su cuerda bajando al vacío), **el Jardín
+    colgante** (macetas y un cerezo en su jardinera) y **el Mirador** (diminuto, arriba del todo,
+    con el catalejo y la barandilla baja). Los unen pasarelas colgantes que se comban, con huecos
+    entre las tablas y alguna que falta; las barandillas paran al que anda, no al que salta, y
+    quien cae vuelve al último sitio seguro. Vecinos con los que hablar (F): el posadero, la
+    tetera, el niño de las cuerdas, la música del tronco, el hombre de la polea (abre el
+    taller), la jardinera y el vigía. Alrededor, otros árboles con casas encendidas como telón
+    de fondo. Piezas en `tools/props/copas.py`.
   - **Habitantes** (`assets/models/habitantes`): pasean por su zona de cada mapa, se paran
     en su pose de reposo y miran a la protagonista si se acerca.
 
