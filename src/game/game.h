@@ -128,6 +128,45 @@ struct Ring {  // onda expansiva en el suelo
     uint32_t color;
 };
 
+// Efectos de golpe. Cada familia se puede activar por separado (--efectos-golpe):
+//   tajo      el trazo del arma, una media luna de luz que cruza al enemigo en el sentido del golpe
+//   destello  el instante del impacto: estrella de rayos largos y un fogonazo que ilumina la escena
+//   materia   lo que suelta el enemigo: esquirlas de cristal (los de luz) o gotas de tinta que
+//             manchan el suelo (los de sombra)
+//   sacudida  el enemigo se dobla hacia donde le empujan, rebota y se aplasta un instante
+//   camara    la cámara da un tirón en la dirección del golpe y vuelve
+//   remate    en los remates: líneas de impacto alrededor del golpe y una onda de choque vertical
+enum HitFx : unsigned {
+    kFxSlash = 1, kFxFlash = 2, kFxMatter = 4, kFxRecoil = 8, kFxCamera = 16, kFxFinisher = 32, kFxAll = 63
+};
+// Traduce "tajo,destello,..." (o "todos" / "ninguno") a la máscara; false si no entiende algo.
+bool parseHitFx(const char* list, unsigned& mask);
+
+struct SlashMark {  // tajo: media luna que se dibuja de una punta a otra y se desvanece
+    Vec3 pos, along, bend;  // centro, sentido del golpe y hacia dónde se curva
+    float age, life, size;
+    uint32_t color;
+};
+
+struct ImpactFlash {  // destello del impacto (y líneas de impacto en los remates)
+    Vec3 pos, dir;
+    float age, life, size, angle;
+    uint32_t color;
+    bool finisher;
+};
+
+struct Debris {  // esquirla de cristal o gota de tinta
+    Vec3 pos, vel;
+    float age, life, size, spin, ground;
+    uint32_t color;
+    bool ink;
+};
+
+struct InkSplat {  // mancha de tinta en el suelo
+    Vec3 pos;
+    float age, life, radius, angle, stretch;
+};
+
 struct Blast {  // bola de fuego de la magia Fuego
     Vec3 pos;
     float age, radius, seed;
@@ -584,6 +623,8 @@ public:
     float croma() const { return croma_; }
     // Apertura extra del campo de visión (radianes) en acercamientos y remates.
     float fovKick() const { return fovKick_; }
+    Vec3 cameraKick() const { return camKick_; }  // tirón de cámara del último golpe (mundo)
+    void setHitFx(unsigned mask) { hitFx_ = mask; }
     Vec3 heroRenderPos(float alpha) const { return hero_.interpolatedPos(alpha); }
     // Fracción [0,1] del segmento from→to libre de escenario (para que la cámara no
     // atraviese las casas).
@@ -725,6 +766,12 @@ private:
     int ambushTarget() const;
     void spawnSparks(Vec3 pos, Vec3 dir, int count, uint32_t color, float speed, bool stars = true);
     void spawnRing(Vec3 pos, float radius, float life, uint32_t color);
+    // Efectos de un golpe cuerpo a cuerpo de la protagonista (tajo, remate) y de cualquier
+    // golpe que empuje a un enemigo (destello, materia, sacudida, cámara).
+    void meleeHitFx(const Enemy& e, Move m, Vec3 dir);
+    void impactFx(Enemy& e, Vec3 point, Vec3 dir, float strength);
+    void updateHitFx(float dt);
+    void drawHitFx(DebugDraw& glow, Renderer& solid, const ViewInfo& view) const;
     float groundHeight(Vec3 p) const;
     Vec3 bladeTip() const;
     float random01();
@@ -873,6 +920,12 @@ private:
     static constexpr size_t kMaxParticles = 900;
     std::vector<Particle> particles_;
     std::vector<Ring> rings_;
+    std::vector<SlashMark> slashes_;
+    std::vector<ImpactFlash> flashes_;
+    std::vector<Debris> debris_;
+    std::vector<InkSplat> splats_;
+    unsigned hitFx_ = kFxAll;
+    Vec3 camKick_, camKickVel_;
     std::vector<Blast> blasts_;
     std::vector<Notice> notices_;
     std::vector<TreasureChest> chests_;

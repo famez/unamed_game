@@ -26,6 +26,7 @@ set(LOGIC_SOURCES
     src/actors/enemy.cpp
     src/game/game.cpp
     src/game/combat.cpp
+    src/game/hit_fx.cpp
     src/game/enemy_ai.cpp
     src/game/loot.cpp
     src/game/game_story.cpp

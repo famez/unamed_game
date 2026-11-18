@@ -63,7 +63,7 @@ Dependencias del sistema: `libOpenGL`/`libGLX` (glvnd + Mesa), `libX11` y `libXi
 fuentes Orbitron y Exo 2.
 
 Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena id` (reproduce una escena del guion), `--autoplay` (un bot combate solo, sin capturar el ratón), `--sombra` (empezar en modo sombra), `--exportar-modelos [carpeta]` (escribe a .glb los personajes que falten; `--forzar` los sustituye), `--visor fichero.glb` (visor de modelos), `--vitrina` (guion que enseña ataques, técnicas, formas y mecánicas), `--video fichero.mp4 [seg]` (graba a velocidad real con ffmpeg),
-`--screenshot fichero.ppm segundos [frames]` (guarda frames y sale) y `--camyaw radianes`.
+`--screenshot fichero.ppm segundos [frames]` (guarda frames y sale), `--camyaw radianes` y `--efectos-golpe lista` (qué efectos de golpe se ven: `tajo`, `destello`, `materia` —esquirlas de cristal en los de luz, tinta que mancha el suelo en los de sombra—, `sacudida`, `camara`, `remate`; o `todos` / `ninguno`).
 
 ## Controles
 

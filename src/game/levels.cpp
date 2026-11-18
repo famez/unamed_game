@@ -547,6 +547,11 @@ void Game::loadLevel(LevelId id) {
     rings_.clear();
     blasts_.clear();
     trail_.clear();
+    slashes_.clear();
+    flashes_.clear();
+    debris_.clear();
+    splats_.clear();
+    camKick_ = camKickVel_ = {};
     particles_.clear();
     companions_.clear();
     holes_.clear();

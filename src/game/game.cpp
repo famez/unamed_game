@@ -337,6 +337,7 @@ float Game::groundHeight(Vec3 p) const {
 }
 
 void Game::updateEffects(float dt) {
+    updateHitFx(dt);
     for (Particle& p : particles_) {
         p.vel.y -= p.gravity * dt;
         p.vel = p.vel * std::exp(-1.5f * dt);

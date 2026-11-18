@@ -1196,6 +1196,7 @@ void Game::drawEffects(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Vi
         }
         glowRing(glow, r.pos, std::max(0.0f, radius - 0.25f), radius, withAlpha(r.color, 0.8f * (1.0f - u)));
     }
+    if (solid) drawHitFx(glow, *solid, view);
     for (const Blast& b : blasts_) {
         float grow = smoothstep01(b.age / 0.15f), fade = 1.0f - b.age / 0.6f;
         if (!solid) {
@@ -1204,6 +1205,110 @@ void Game::drawEffects(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const Vi
         }
         solid->fireBall(b.pos, b.radius * grow, b.seed, 1.4f * fade);
         solid->light(b.pos + Vec3{0, 0.5f, 0}, Vec3{1.0f, 0.5f, 0.15f} * (6.0f * fade), 8.0f);
+    }
+}
+
+// --- Efectos de golpe ------------------------------------------------------------------
+
+void Game::drawHitFx(DebugDraw& glow, Renderer& solid, const ViewInfo& view) const {
+    // Tajos: una media luna que se dibuja deprisa de una punta a la otra (la cabeza va por
+    // delante y la cola la sigue), gruesa en el centro y afilada en las puntas, con el
+    // centro blanco. El grosor se orienta hacia la cámara para que se lea desde cualquier lado.
+    for (const SlashMark& m : slashes_) {
+        if (m.age < 0) continue;
+        float u = m.age / m.life;
+        float head = -1.0f + 2.0f * smoothstep01(m.age / 0.05f);
+        float tail = -1.0f + 2.0f * smoothstep01((m.age - 0.04f) / (m.life - 0.04f));
+        if (head - tail < 0.02f) continue;
+        float fade = 1.0f - smoothstep01((u - 0.4f) / 0.6f);
+        float L = m.size * (1.0f + 0.2f * u), bendAmount = 0.42f * L;
+        const int n = 18;
+        Vec3 prevOut, prevIn, prevCore0, prevCore1;
+        for (int i = 0; i <= n; ++i) {
+            float sv = tail + (head - tail) * float(i) / float(n);
+            Vec3 p = m.pos + m.along * (sv * L) + m.bend * (bendAmount * (1.0f - sv * sv));
+            Vec3 tangent = normalize(m.along * L - m.bend * (2.0f * bendAmount * sv));
+            Vec3 thick = cross(tangent, normalize(view.eye - p));
+            if (length(thick) < 1e-4f) thick = m.bend;
+            thick = normalize(thick);
+            if (dot(thick, m.bend) < 0) thick = -thick;
+            float w = 0.055f * m.size * (1.0f - sv * sv) * (0.5f + 0.5f * fade);
+            Vec3 out = p + thick * (w * 0.5f), in = p - thick * (w * 0.5f);
+            Vec3 core0 = p + thick * (w * 0.3f), core1 = p - thick * (w * 0.05f);
+            if (i > 0) {
+                uint32_t col = withAlpha(m.color, 0.45f * fade), core = withAlpha(rgba(255, 255, 255), 0.5f * fade);
+                glow.quad(prevIn, prevOut, out, in, col);
+                glow.quad(prevCore1, prevCore0, core0, core1, core);
+            }
+            prevOut = out, prevIn = in, prevCore0 = core0, prevCore1 = core1;
+        }
+    }
+    // Destellos: rayos largos y finos que salen del punto de impacto (como una estrella de
+    // cómic) y un fogonazo que ilumina lo que hay alrededor durante unos fotogramas. En los
+    // remates, además, líneas de impacto alrededor y una onda de choque vertical.
+    for (const ImpactFlash& f : flashes_) {
+        float u = f.age / f.life;
+        float k = 1.0f - u;
+        if (f.age < 0.07f) {
+            Vec3 c{float(f.color & 0xFF) / 255.0f, float((f.color >> 8) & 0xFF) / 255.0f, float((f.color >> 16) & 0xFF) / 255.0f};
+            solid.light(f.pos, c * ((f.finisher ? 9.0f : 4.5f) * (1.0f - f.age / 0.07f)), f.finisher ? 7.0f : 4.0f);
+        }
+        if (!f.finisher) {
+            float size = f.size * (0.7f + 0.6f * smoothstep01(u * 3.0f));
+            for (int r = 0; r < 6; ++r) {
+                float a = f.angle + float(r) * (kPi / 3.0f) + 0.25f * std::sin(float(r) * 7.1f);
+                float len = size * (r % 2 ? 0.6f : 1.15f);
+                Vec3 d = view.right * std::cos(a) + view.up * std::sin(a), n = view.right * -std::sin(a) + view.up * std::cos(a);
+                Vec3 tip = f.pos + d * len, base = f.pos + n * (0.05f * size * k);
+                glow.triangle(base, tip, f.pos - n * (0.05f * size * k), withAlpha(f.color, 0.9f * k));
+            }
+            glowDot(glow, view, f.pos, 0.35f * f.size * (1.0f - 0.5f * u), withAlpha(f.color, 0.8f * k));
+            continue;
+        }
+        // Remate: líneas de impacto (radiales, de largo y grosor al azar, que se alejan).
+        for (int i = 0; i < 26; ++i) {
+            float h = std::fmod(std::sin(float(i) * 12.9898f + f.angle * 78.233f) * 43758.5453f, 1.0f);
+            h = h < 0 ? h + 1.0f : h;
+            float a = f.angle + float(i) / 26.0f * 2.0f * kPi + h * 0.2f;
+            Vec3 d = view.right * std::cos(a) + view.up * std::sin(a), n = view.right * -std::sin(a) + view.up * std::cos(a);
+            float r0 = f.size * (0.55f + 0.5f * h + 1.2f * u), r1 = r0 + f.size * (0.5f + 0.9f * (1.0f - h)) * k;
+            float wdt = f.size * 0.025f * (0.5f + h);
+            glow.triangle(f.pos + d * r0 + n * wdt, f.pos + d * r1, f.pos + d * r0 - n * wdt, withAlpha(f.color, 0.75f * k));
+        }
+        // Onda de choque en el plano perpendicular al golpe.
+        Vec3 ax = normalize(cross(f.dir, Vec3{0, 1, 0}));
+        if (length(ax) < 0.5f) ax = view.right;
+        Vec3 ay = normalize(cross(ax, f.dir));
+        float radius = f.size * (0.3f + 1.6f * smoothstep01(u * 1.3f)), thick = 0.12f * f.size * k;
+        const int segs = 36;
+        for (int i = 0; i < segs; ++i) {
+            float a0 = 2.0f * kPi * float(i) / segs, a1 = 2.0f * kPi * float(i + 1) / segs;
+            Vec3 d0 = ax * std::cos(a0) + ay * std::sin(a0), d1 = ax * std::cos(a1) + ay * std::sin(a1);
+            glow.quad(f.pos + d0 * radius, f.pos + d1 * radius, f.pos + d1 * (radius + thick), f.pos + d0 * (radius + thick),
+                      withAlpha(f.color, 0.7f * k));
+        }
+        glowStar(glow, view, f.pos, f.size * (1.2f - 0.6f * u), f.angle, withAlpha(f.color, k));
+    }
+    // Esquirlas de cristal (brillan y giran) y gotas de tinta (estiradas en la dirección en
+    // que caen).
+    for (const Debris& b : debris_) {
+        float k = 1.0f - smoothstep01((b.age - b.life + 0.25f) / 0.25f);
+        if (b.ink) {
+            float sp = length(b.vel);
+            Mat4 m = translate(b.pos) * basisY(sp > 0.1f ? b.vel : Vec3{0, 1, 0});
+            solid.ellipsoid(m, {}, Vec3{b.size, b.size * (1.0f + 0.12f * sp), b.size} * k, b.color, Material::Cloth);
+        } else {
+            Mat4 m = translate(b.pos) * rotateY(b.spin * 0.3f + b.size * 9.0f) * rotateX(b.age * b.spin) * rotateZ(b.size * 5.0f);
+            solid.box(m, {}, Vec3{0.012f, 0.05f, 0.012f} * (b.size * k), b.color, Material::Glow);
+            if (int(b.age * 20.0f + b.size * 10.0f) % 3 == 0)  // destellos sueltos al girar
+                glowStar(glow, view, b.pos, 0.07f * k, b.age * 9.0f, withAlpha(b.color, 0.8f * k));
+        }
+    }
+    // Manchas de tinta: se extienden deprisa al caer y se encogen al secarse.
+    for (const InkSplat& s : splats_) {
+        float grow = smoothstep01(s.age / 0.12f), dry = 1.0f - smoothstep01((s.age - s.life + 0.8f) / 0.8f);
+        float r = s.radius * grow * (0.4f + 0.6f * dry);
+        solid.ellipsoid(translate(s.pos) * rotateY(s.angle), {}, {r, 0.006f, r * s.stretch}, rgba(12, 7, 20), Material::Cloth);
     }
 }
 

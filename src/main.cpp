@@ -119,6 +119,8 @@ const char kHelp[] =
     "                                con números, solo esos actos (6: romper farolas, 17: polillas)\n"
     "  --video FICHERO.mp4 [SEG]     graba a velocidad real (30 fps, con ffmpeg); sale a los SEG segundos\n"
     "  --screenshot FICHERO SEG [N]  guarda N fotogramas (.ppm) desde SEG segundos y sale\n"
+    "  --efectos-golpe LISTA         efectos al golpear, separados por comas: tajo, destello, materia\n"
+    "                                (esquirlas o tinta), sacudida, camara, remate; o todos / ninguno\n"
     "  -h, --help                    esta ayuda\n";
 
 int main(int argc, char** argv) {
@@ -270,6 +272,12 @@ int main(int argc, char** argv) {
             if (std::strcmp(argv[i], "--escena") == 0) game.jumpToScene(argv[i + 1]);
     };
     startGame();
+    for (int i = 1; i + 1 < argc; ++i)  // --efectos-golpe tajo,destello,...: solo esos efectos de golpe
+        if (std::strcmp(argv[i], "--efectos-golpe") == 0) {
+            unsigned mask = kFxAll;
+            if (parseHitFx(argv[i + 1], mask)) game.setHitFx(mask);
+            else std::fprintf(stderr, "--efectos-golpe: no entiendo \"%s\" (tajo, destello, materia, sacudida, camara, remate, todos, ninguno)\n", argv[i + 1]);
+        }
     for (int i = 1; i < argc; ++i)  // --sombra: empezar en modo sombra (niveles sueltos y patio)
         if (std::strcmp(argv[i], "--sombra") == 0) {
             Controls z;
@@ -679,6 +687,7 @@ int main(int argc, char** argv) {
             view.target += Vec3{std::sin(t * 61.0f), std::sin(t * 47.0f + 1.0f), std::sin(t * 53.0f + 2.0f)} *
                            (0.12f * shake * shake);
         }
+        view.target += game.cameraKick();  // tirón hacia donde empuja el último golpe
 
         RenderCamera rc;
         rc.fovY = 60.0f * kPi / 180.0f + game.fovKick();

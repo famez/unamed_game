@@ -372,6 +372,7 @@ void Game::resolveImpact(Move m) {
         hitEnemy(e, dir, (w.power + inv_.powerBonus + levelPower()) * hp.damage * formDamage() * riposte,
                  hp.knock * (form_ != Form::None ? 1.3f : 1.0f) * (riposteStep_ >= 0 && riposteStep_ < riposteLength() ? 0.3f : 1.0f),
                  hp.lift, hp.heavy || form_ == Form::Wolf);
+        meleeHitFx(e, m, dir);
         ++hits;
     }
     for (Crate& c : crates_) {
@@ -490,6 +491,7 @@ void Game::hitEnemy(Enemy& e, Vec3 dir, float damage, float knock, float lift, b
     Vec3 point = e.center() - dir * (e.body.radius * 0.6f);
     spawnSparks(point, dir, 8, rgba(255, 255, 230), 4.0f);
     spawnSparks(point, dir, 5, inv_.weaponStats().trail, 3.0f);
+    if (knock > 0) impactFx(e, point, dir, heavy ? 1.6f : 1.0f);  // los daños continuos, sin efectos
     const EnemyDef& d = e.def();
     if (e.health <= 0) {
         e.knock = dir * knock;
@@ -640,6 +642,10 @@ void Game::defeatHero() {
     hero_.downTimer = 0;
     lock_ = -1;
     trail_.clear();
+    slashes_.clear();
+    flashes_.clear();
+    debris_.clear();
+    splats_.clear();
 }
 
 void Game::respawnHero() {
