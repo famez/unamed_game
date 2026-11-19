@@ -427,6 +427,24 @@ struct Block {
 // que sigue a Vela por las zonas seguras (Pabilo).
 enum class NpcRole { Townsfolk, Inn, Shop, Trainer, Follower };
 
+// Lo que vende una tienda: el objeto y su precio en lúmenes.
+struct ShopItem {
+    ItemId item;
+    int price;
+};
+
+// Teleférico: un cable entre dos estaciones con dos cabinas que se cruzan (una en cada cable;
+// cuando una está en A la otra está en B). Con F en el andén de una punta se sube a la cabina
+// que espera allí y se baja en la otra.
+struct CableLine {
+    Vec3 a, b;           // el cable en cada estación (de él cuelgan las cabinas)
+    Vec3 side;           // de la mitad a cada cable (las cabinas van a ±side)
+    Vec3 stopA, stopB;   // los andenes: donde se sube y adonde se llega
+    float yawA = 0, yawB = 0;  // hacia dónde se mira al bajar
+    std::string nameA, nameB;
+    float t = 0;         // 0: la cabina 1 en A; 1: en B (la 2, al revés)
+};
+
 // Habitante: pasea por su zona (en torno a `home`), se para de vez en cuando (en su pose de
 // reposo) y mira a la protagonista si se le acerca. `model`: su .glb de assets/models/habitantes.
 // Con nombre, F le habla: dice sus frases por turnos.
@@ -434,6 +452,7 @@ struct Npc {
     std::string model, name;
     NpcRole role = NpcRole::Townsfolk;
     std::vector<std::string> lines;
+    std::vector<ShopItem> stock;  // con género: F abre la tienda (si no, el taller)
     int line = 0;
     float still = 0;   // 0 andando, 1 en su pose de reposo (para mezclar)
     Character body;
@@ -616,6 +635,26 @@ public:
         shopRequest_ = false;
         return r;
     }
+    // Tiendas: F a quien atiende abre su género (lo recoge main con takeTradeRequest).
+    bool takeTradeRequest() {
+        bool r = tradeRequest_;
+        tradeRequest_ = false;
+        return r;
+    }
+    const std::vector<ShopItem>& shopStock() const { return shopStock_; }
+    const std::string& shopName() const { return shopName_; }
+    // Compra el artículo `i` de la tienda abierta: falso si no llegan los lúmenes o no cabe.
+    bool buy(int i, std::string& message);
+    // Teleférico.
+    const std::vector<CableLine>& cableLines() const { return cables_; }
+    bool riding() const { return ride_ >= 0; }
+    float rideFade() const { return rideFade_; }
+    // Al subir o bajar de la cabina la protagonista cambia de sitio de golpe: corte de plano.
+    bool takeCameraCut() {
+        bool r = cameraCut_;
+        cameraCut_ = false;
+        return r;
+    }
     const std::string& levelName() const { return levelName_; }
     int partIndex() const { return int(part_); }
     int partCount() const { return int(parts_.size()); }
@@ -738,7 +777,7 @@ private:
     void traceBeams();
     // Interacción con lo más cercano (cápsula, nodo, farol, objeto, espejo). -1 si no hay nada.
     struct InteractTarget {
-        int kind = -1;  // 0 cápsula, 1 nodo, 2 farol, 3 objeto, 4 espejo, 5 interruptor, 6 vecino, 7 criatura
+        int kind = -1;  // 0 cápsula, 1 nodo, 2 farol, 3 objeto, 4 espejo, 5 interruptor, 6 vecino, 7 criatura, 8 teleférico
         int index = -1;
         std::string label;
     };
@@ -848,7 +887,7 @@ private:
     // Dibujado (game_draw.cpp).
     void drawLevel(DebugDraw& lines, Renderer* solid, const DrawFlags& f, const ViewInfo& view, float alpha) const;
     void drawTerrain(Renderer& r) const;
-    void drawProps(Renderer& r, const ViewInfo& view) const;
+    void drawProps(Renderer& r, const ViewInfo& view, float alpha = 1) const;
     void drawHero(DebugDraw& lines, Renderer* solid, const DrawFlags& f, float alpha) const;
     void drawEnemies(DebugDraw& lines, DebugDraw& glow, Renderer* solid, const DrawFlags& f, const ViewInfo& view,
                      float alpha) const;
@@ -868,6 +907,23 @@ private:
     std::string npcSpeaker_, npcLine_;
     float npcLineTime_ = 0;
     bool shopRequest_ = false;  // la Doctora Umbra abre el taller (lo recoge main)
+    bool tradeRequest_ = false;  // una tienda abre su género (lo recoge main)
+    std::vector<ShopItem> shopStock_;
+    std::string shopName_;
+    // Teleférico: las líneas y el viaje en curso (`ride_`: la línea; -1, a pie).
+    std::vector<CableLine> cables_;
+    int ride_ = -1;
+    bool rideForward_ = true;  // de A a B
+    int rideCabin_ = 0;        // la cabina en la que va (0 o 1)
+    float rideT0_ = 0;         // el `t` de la línea al salir (llega a 1 - rideT0_)
+    float rideTime_ = 0;       // segundos desde que se pulsó F (fundido, viaje, fundido)
+    float rideFade_ = 0;       // negro al subir y al bajar
+    bool rideAboard_ = false;  // ya en la cabina (pasado el primer fundido)
+    bool cameraCut_ = false;
+    void startRide(int line, bool forward);
+    void updateRide(float dt);
+    float rideDuration(const CableLine& l) const;
+    Vec3 cabinPos(const CableLine& l, int cabin) const;  // dónde está (el suelo, en el centro)
     std::vector<AABB> propSolids_;  // colisiones de las piezas (entran en world_)
     std::vector<uint32_t> terrainColor_;  // por punto del terreno
     std::vector<uint8_t> terrainMaterial_;

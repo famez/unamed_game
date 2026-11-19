@@ -136,7 +136,15 @@ void Game::talkTo(Npc& n) {
             notify("Descansas en la fonda · vida llena y punto de control", rgba(255, 210, 140));
             uiSound(Sfx::ItemGet, 0.6f, 0.9f);
             break;
-        case NpcRole::Shop: shopRequest_ = true; break;
+        case NpcRole::Shop:  // con género, su tienda; si no, el taller
+            if (n.stock.empty()) {
+                shopRequest_ = true;
+            } else {
+                shopStock_ = n.stock;
+                shopName_ = n.name;
+                tradeRequest_ = true;
+            }
+            break;
         case NpcRole::Trainer: text = kBrasaTips[size_t(n.line - 1) % std::size(kBrasaTips)]; break;
         default: break;
     }

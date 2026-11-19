@@ -289,6 +289,82 @@ int main() {
                 CHECK(next == rt.pts.size(), "bahía: %s (llega a %zu/%zu, en %.1f, %.1f, %.1f)", rt.what, next, rt.pts.size(), p.x, p.y, p.z);
             }
         }
+        {  // La bahía: tiendas que venden con lúmenes y tabernas donde se descansa
+            Game r = fresh();
+            r.loadLevel(LevelId::Rio);
+            int shops = 0, inns = 0;
+            for (const Npc& n : r.npcs_) shops += n.role == NpcRole::Shop && !n.stock.empty(), inns += n.role == NpcRole::Inn;
+            Npc* armazem = nullptr;
+            for (Npc& n : r.npcs_)
+                if (n.name.find("armazém") != std::string::npos) armazem = &n;
+            CHECK(shops >= 3 && inns >= 2 && armazem, "bahía: %d tiendas y %d tabernas", shops, inns);
+            if (armazem) {
+                // Delante del mostrador, F le habla y abre su género.
+                place(r, armazem->body.body.pos + Vec3{-1.45f, 0.3f, 0});
+                run(r, 0.3f);
+                Controls f;
+                f.interact = true;
+                r.update(dt, f);
+                bool opened = r.takeTradeRequest() && r.shopStock().size() == armazem->stock.size();
+                r.inv_.munny = 30;
+                int before = r.inv_.count(r.shopStock()[0].item);
+                std::string msg;
+                bool first = r.buy(0, msg), second = r.buy(0, msg);
+                CHECK(opened && first && !second && r.inv_.munny == 30 - r.shopStock()[0].price &&
+                          r.inv_.count(r.shopStock()[0].item) == before + 1,
+                      "bahía: F en el mostrador abre el armazém (%d) y se compra con lúmenes (quedan %d; «%s»)", opened, r.inv_.munny,
+                      msg.c_str());
+            }
+            for (Npc& n : r.npcs_)
+                if (n.role == NpcRole::Inn) {
+                    r.hp_ = 10;
+                    r.talkTo(n);
+                    CHECK(r.hp_ == r.maxHp_, "bahía: en %s se descansa (vida llena)", n.name.c_str());
+                    break;
+                }
+        }
+        {  // El teleférico: F en el andén sube a la cabina; llega a la otra estación (a la explanada
+            // del morro, que se pisa y no deja caer) y de allí se sigue al Pão de Açúcar y se vuelve
+            Game r = fresh();
+            r.loadLevel(LevelId::Rio);
+            CHECK(r.cables_.size() == 2, "bahía: dos líneas de teleférico (%zu)", r.cables_.size());
+            auto ride = [&](int line, bool fromA) {
+                const CableLine& l = r.cables_[size_t(line)];
+                Vec3 at = fromA ? l.stopA : l.stopB;
+                place(r, at + Vec3{0, 0.3f, 0});
+                run(r, 0.3f);
+                Controls f;
+                f.interact = true;
+                r.update(dt, f);
+                bool started = r.riding();
+                float topY = -1e9f, t0 = l.t;
+                for (int i = 0; i < 60 * 60 && r.riding(); ++i) {
+                    r.update(dt, Controls{});
+                    topY = std::max(topY, r.hero_.body.pos.y);
+                }
+                run(r, 0.6f);
+                Vec3 to = fromA ? l.stopB : l.stopA, p = r.hero_.body.pos;
+                CHECK(started && !r.riding() && length(flat(p - to)) < 0.6f && std::fabs(p.y - to.y) < 0.1f && r.hero_.body.grounded &&
+                          std::fabs(l.t - (1 - t0)) < 1e-4f && topY > std::min(l.a.y, l.b.y) - 4.0f,
+                      "bahía: teleférico %s → %s (llega a %.1f, %.1f, %.1f; andén %.1f, %.1f, %.1f)", fromA ? l.nameA.c_str() : l.nameB.c_str(),
+                      fromA ? l.nameB.c_str() : l.nameA.c_str(), p.x, p.y, p.z, to.x, to.y, to.z);
+            };
+            ride(0, true);
+            float urca = r.hero_.body.pos.y;
+            {  // la explanada de Urca: se anda hasta el pretil y no se cae
+                Controls c;
+                c.move = normalize(flat(r.cables_[0].stopB - r.cables_[0].b));
+                run(r, 4.0f, c);
+                Vec3 p = r.hero_.body.pos;
+                CHECK(std::fabs(p.y - urca) < 0.3f && r.world_.terrain->fenceAt(p.x, p.z) < 0.1f,
+                      "bahía: en la explanada de Urca se anda sin caer (y=%.1f, arriba %.1f)", p.y, urca);
+            }
+            ride(1, true);
+            CHECK(r.hero_.body.pos.y > 50, "bahía: en lo alto del Pão de Açúcar (y=%.1f)", r.hero_.body.pos.y);
+            ride(1, false);
+            ride(0, false);
+            ride(0, true);  // la cabina que volvió abajo sigue sirviendo
+        }
         {  // Las Copas: por la escalera del tronco y la pasarela larga se llega al mirador; las
             // barandillas paran al que anda, y el que cae al vacío vuelve a un sitio seguro
             Game c = fresh();

@@ -560,6 +560,10 @@ void Game::loadLevel(LevelId id) {
     portals_.clear();
     props_.clear();
     npcs_.clear();
+    cables_.clear();
+    ride_ = -1;
+    rideFade_ = 0;
+    hero_.carried = false;
     npcLineTime_ = 0;
     propSolids_.clear();
     world_.terrain.reset();
@@ -813,8 +817,17 @@ Game::InteractTarget Game::nearbyInteract() const {
     for (size_t i = 0; i < npcs_.size(); ++i) {
         const Npc& n = npcs_[i];
         if (n.name.empty()) continue;
-        const char* verb = n.role == NpcRole::Inn ? "Descansar" : n.role == NpcRole::Shop ? "Taller" : n.role == NpcRole::Trainer ? "Entrenar" : "Hablar";
+        const char* verb = n.role == NpcRole::Inn                        ? "Descansar"
+                           : n.role == NpcRole::Shop && !n.stock.empty() ? "Comprar"
+                           : n.role == NpcRole::Shop                     ? "Taller"
+                           : n.role == NpcRole::Trainer                  ? "Entrenar"
+                                                                         : "Hablar";
         consider(6, int(i), n.body.body.pos, std::string(verb) + " · " + n.name);
+    }
+    for (size_t i = 0; i < cables_.size(); ++i) {  // los andenes del teleférico (índice: línea·2 + punta)
+        const CableLine& l = cables_[i];
+        consider(8, int(i) * 2, l.stopA, "Teleférico · a " + l.nameB);
+        consider(8, int(i) * 2 + 1, l.stopB, "Teleférico · a " + l.nameA);
     }
     for (size_t i = 0; i < creatures_.size(); ++i) {  // el búho, desde el pie de su farola
         const Creature& c = creatures_[i];
@@ -846,6 +859,10 @@ void Game::tryInteract() {
     }
     if (t.kind == 7) {
         talkToCreature(creatures_[size_t(t.index)]);
+        return;
+    }
+    if (t.kind == 8) {
+        startRide(t.index / 2, t.index % 2 == 0);
         return;
     }
     if (t.kind == 0) {

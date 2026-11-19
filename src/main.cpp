@@ -5,6 +5,7 @@
 #include "game/props.h"
 #include "core/gl.h"
 #include "ui/inventory_menu.h"
+#include "dev/cable_bot.h"
 #include "dev/climb_bot.h"
 #include "dev/showcase.h"
 #include "dev/viewer.h"
@@ -316,6 +317,7 @@ int main(int argc, char** argv) {
     bool swapBot = false;   // --cambios: el bot se queda quieto y cambia de luz a sombra y vuelta
     bool demoBot = false;   // --demo: el bot enseña técnicas, formas y armas de las dos mitades
     bool climbing = false;  // --escalada: el bot hace la subida de Los Andamios
+    bool cableTour = false; // --teleferico: el bot compra, descansa y sube en el teleférico (la bahía)
     float camYaw0 = 0;  // --camyaw: orientación inicial de la cámara (radianes)
     const char* shotPath = nullptr;
     double shotTime = 0;
@@ -329,6 +331,7 @@ int main(int argc, char** argv) {
     std::vector<unsigned char> videoPx;
     Showcase vitrina;
     ClimbBot climbBot;  // --escalada: la subida de Los Andamios
+    CableBot cableBot;  // --teleferico: la bahía, de la tienda al Pão de Açúcar
     for (int i = 1; i + 1 < argc; ++i)  // --vitrina 5,16: solo esos actos (contados desde 1)
         if (std::strcmp(argv[i], "--vitrina") == 0 && argv[i + 1][0] != '-') {
             std::vector<int> acts;
@@ -355,6 +358,7 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--cambios") == 0) autoplay = swapBot = true;
         if (std::strcmp(argv[i], "--demo") == 0) autoplay = demoBot = true;
         if (std::strcmp(argv[i], "--escalada") == 0) autoplay = climbing = true;
+        if (std::strcmp(argv[i], "--teleferico") == 0) autoplay = cableTour = true;
         if (std::strcmp(argv[i], "--vitrina") == 0) autoplay = true;
         if (std::strcmp(argv[i], "--video") == 0 && i + 1 < argc) {
             videoPath = argv[++i];
@@ -444,7 +448,8 @@ int main(int argc, char** argv) {
                 platform::setMouseCaptured(true);
             }
         } else if (inventory.open) {
-            if (inventory.update(uiInput, game, uw, uh)) {
+            if (cableTour) cableBot.shopOpen();  // el bot enseña la tienda un rato y la cierra
+            if (inventory.update(uiInput, game, uw, uh) || cableBot.shopShown(120)) {
                 inventory.open = false;
                 platform::setMouseCaptured(true);
             }
@@ -626,12 +631,16 @@ int main(int argc, char** argv) {
                         c = climbBot.step(game, cam.yaw, c);
                         if (climbBot.done()) quit = true;
                     }
+                    if (cableTour) {
+                        c = cableBot.step(game, cam.yaw, c);
+                        if (cableBot.done()) quit = true;
+                    }
                     if (showcase) {
                         c = vitrina.step(game, cam.yaw, c);
                         if (vitrina.done()) quit = true;
                     }
                     // En los modos de prueba también cambia a sombra y lanza agujeros negros.
-                    if (turnsBot || swapBot || demoBot || showcase || climbing) {
+                    if (turnsBot || swapBot || demoBot || showcase || climbing || cableTour) {
                     } else if (game.testMode() != TestMode::None) {
                         c.swapMode = botStep == 30;
                         if (botStep % 240 == 120) c.command = 4;  // la técnica grande de cada mitad
@@ -641,6 +650,10 @@ int main(int argc, char** argv) {
                 pending = PendingInput{};
                 if (game.takeShopRequest() && !inventory.open) {  // la Doctora Umbra abre el taller
                     inventory.showWorkshop();
+                    platform::setMouseCaptured(false);
+                }
+                if (game.takeTradeRequest() && !inventory.open) {  // una tienda: su género
+                    inventory.showShop();
                     platform::setMouseCaptured(false);
                 }
             }
@@ -656,7 +669,7 @@ int main(int argc, char** argv) {
         // se adelanta un poco hacia donde corre. Con un objetivo fijado gira sola para
         // encuadrar a los dos.
         Vec3 heroPos = game.heroRenderPos(alpha);
-        if (vitrina.takeCut()) {  // el guion ha cambiado de sitio al protagonista: corte de plano
+        if (vitrina.takeCut() || game.takeCameraCut()) {  // ha cambiado de sitio de golpe: corte de plano
             cam.target = heroPos + Vec3{0, 1.1f, 0};
             camVel = {};
             camDist = cam.distance;

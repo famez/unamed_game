@@ -113,9 +113,13 @@ void Game::update(float dt, const Controls& input) {
     hpGhost_ = hpGhost_ > hp_ ? (heroFlash_ > 0 ? hpGhost_ : moveTowards(hpGhost_, hp_, 40.0f * dt)) : hp_;
 
     bool down = hero_.downTimer >= 0;
+    updateRide(dt);
     if (down) {
         hero_.downTimer += dt;
         if (hero_.downTimer > kHeroRespawn) respawnHero();
+    } else if (riding()) {  // en el teleférico: se mira el paisaje
+        lock_ = -1;
+        if (c.advance && dialogue_.active()) dialogue_.advance();
     } else if (inLight_ || travel_) {  // hecho luz: solo se elige fuente, se salta o se sale
         updateLightTarget(c);
         if (inLight_) updateInsideLight(dt, c);
@@ -195,7 +199,7 @@ void Game::update(float dt, const Controls& input) {
     if (diving_ && onWall_)
         updateWallClimb(dt, c);
     else
-        hero_.update(dt, down || light ? Vec3{} : c.move, !down && !light && !diving_ && c.jump, world_,
+        hero_.update(dt, down || light || riding() ? Vec3{} : c.move, !down && !light && !diving_ && !riding() && c.jump, world_,
                      std::atan2(c.camForward.x, c.camForward.z));
     updateWolf(dt);
     if (c.jump && wasGrounded && hero_.body.vel.y > 1.0f) {

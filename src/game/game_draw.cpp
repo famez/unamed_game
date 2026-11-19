@@ -482,7 +482,7 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
         else
             solid->box(d.transform, d.center, d.half, d.color, d.material);
     }
-    drawProps(*solid, view);
+    drawProps(*solid, view, alpha);
     // Bombillas de las farolas (apagadas, grises) y la luz de las cercanas: cada luz cuesta
     // en todos los píxeles de la escena.
     for (size_t i = 0; i < lamps_.size(); ++i) {
@@ -636,7 +636,7 @@ void Game::drawTerrain(Renderer& r) const {
 
 // Piezas .glb: solo las que caen dentro de la cámara y no están demasiado lejos para su
 // tamaño (la hierba, cerca; las torres, hasta el horizonte). Dan sombra las cercanas.
-void Game::drawProps(Renderer& r, const ViewInfo& view) const {
+void Game::drawProps(Renderer& r, const ViewInfo& view, float alpha) const {
     if (props_.empty()) return;
     const PropLibrary& lib = propLibrary();
     // Planos de la pirámide de visión (de la matriz vista-proyección).
@@ -665,6 +665,23 @@ void Game::drawProps(Renderer& r, const ViewInfo& view) const {
         float dh = length(flat(p.center - hero)) - p.radius;
         bool shadow = dh < 34.0f && p.radius > 0.5f;
         r.prop(lib[size_t(p.def)].mesh, p.transform, shadow);
+    }
+    // Las cabinas del teleférico, donde las tenga el cable (miran hacia B).
+    if (!cables_.empty()) {
+        int cabin = lib.find("teleferico");
+        if (cabin < 0) return;
+        for (size_t i = 0; i < cables_.size(); ++i) {
+            const CableLine& l = cables_[i];
+            Vec3 d = flat(l.b - l.a);
+            float yaw = std::atan2(d.x, d.z);
+            for (int k = 0; k < 2; ++k) {
+                Vec3 at = cabinPos(l, k);
+                // La de la protagonista, con ella (que se dibuja entre dos pasos): sin tirones.
+                if (ride_ == int(i) && rideAboard_ && k == rideCabin_ && hero_.carried)
+                    at = hero_.interpolatedPos(alpha) - Vec3{0, 0.18f, 0};
+                r.prop(lib[size_t(cabin)].mesh, translate(at) * rotateY(yaw), length(flat(at - hero)) < 40.0f);
+            }
+        }
     }
 }
 

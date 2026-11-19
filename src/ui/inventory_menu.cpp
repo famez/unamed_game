@@ -61,7 +61,19 @@ void InventoryMenu::showWorkshop() {
     top_ = 0;
 }
 
-std::vector<ItemId> InventoryMenu::entries(const Inventory& inv) const {
+void InventoryMenu::showShop() {
+    show();
+    tab_ = Shop;
+    top_ = 0;
+}
+
+std::vector<ItemId> InventoryMenu::entries(const Game& game) const {
+    const Inventory& inv = game.inventory();
+    if (tab_ == Shop) {
+        std::vector<ItemId> out;
+        for (const ShopItem& s : game.shopStock()) out.push_back(s.item);
+        return out;
+    }
     if (tab_ == Workshop) {  // una fila por receta
         int n = 0;
         const Recipe* r = recipes(n);
@@ -85,6 +97,11 @@ std::vector<ItemId> InventoryMenu::entries(const Inventory& inv) const {
 
 void InventoryMenu::activate(Game& game, ItemId id) {
     const ItemDef& d = itemDef(id);
+    if (tab_ == Shop) {
+        game.buy(selected_, message_);
+        messageTime_ = 2.0f;
+        return;
+    }
     if (tab_ == Workshop) {
         int n = 0;
         const Recipe* r = recipes(n);
@@ -116,21 +133,22 @@ void InventoryMenu::activate(Game& game, ItemId id) {
 
 bool InventoryMenu::update(const Input& in, Game& game, int width, int height) {
     messageTime_ = std::max(0.0f, messageTime_ - 1.0f / 60.0f);
-    if (in.wasPressed(Key::A) || in.wasPressed(Key::Left)) {
+    bool shop = tab_ == Shop;  // en la tienda no hay pestañas
+    if (!shop && (in.wasPressed(Key::A) || in.wasPressed(Key::Left))) {
         tab_ = (tab_ + TabCount - 1) % TabCount;
         selected_ = top_ = 0;
     }
-    if (in.wasPressed(Key::D) || in.wasPressed(Key::Right)) {
+    if (!shop && (in.wasPressed(Key::D) || in.wasPressed(Key::Right))) {
         tab_ = (tab_ + 1) % TabCount;
         selected_ = top_ = 0;
     }
-    for (int t = 0; t < TabCount; ++t)
+    for (int t = 0; t < TabCount && !shop; ++t)
         if (in.mouseLeftPressed && tabRect(t, width, height).contains(in.mouseX, in.mouseY)) {
             tab_ = t;
             selected_ = top_ = 0;
         }
 
-    std::vector<ItemId> list = entries(game.inventory());
+    std::vector<ItemId> list = entries(game);
     int n = int(list.size());
     if (n > 0) {
         if (in.wasPressed(Key::W) || in.wasPressed(Key::Up) || in.wheel > 0) selected_ = (selected_ + n - 1) % n;
@@ -150,13 +168,15 @@ bool InventoryMenu::update(const Input& in, Game& game, int width, int height) {
         // Atajos del menú de comandos: 4, 5, 6.
         const Key slotKeys[] = {Key::N4, Key::N5, Key::N6};
         for (int s = 0; s < Inventory::kQuickSlots; ++s)
-            if (in.wasPressed(slotKeys[s]) && itemDef(id).kind == ItemKind::Consumable) {
+            if (!shop && in.wasPressed(slotKeys[s]) && itemDef(id).kind == ItemKind::Consumable) {
                 game.inventory().quick[s] = id;
                 message_ = std::string("Atajo ") + std::to_string(s + 4) + ": " + itemName(id);
                 messageTime_ = 2.0f;
             }
     }
-    return in.wasPressed(Key::I) || in.wasPressed(Key::Escape) || in.wasPressed(Key::Tab);
+    bool close = in.wasPressed(Key::I) || in.wasPressed(Key::Escape) || in.wasPressed(Key::Tab) || (shop && in.wasPressed(Key::F));
+    if (close && shop) tab_ = Consumables;  // la próxima vez, el inventario de siempre
+    return close;
 }
 
 void InventoryMenu::draw(UiLayer& ui, const Game& game, int width, int height) const {
@@ -176,7 +196,8 @@ void InventoryMenu::draw(UiLayer& ui, const Game& game, int width, int height) c
     fillRect(d, p.x0, p.y0 + 44, p.x1, p.y0 + 46, cyan);
     strokeRect(d, p.x0, p.y0, p.x1, p.y1, rgba(70, 90, 160));
     title.glow = 0.4f;
-    drawText(ui, p.x0 + 24, p.y0 + 8, 26, "INVENTARIO", light, title);
+    bool shop = tab_ == Shop;
+    drawText(ui, p.x0 + 24, p.y0 + 8, 26, shop ? game.shopName().c_str() : "INVENTARIO", light, title);
     title.glow = 0;
     char buf[128];
     std::snprintf(buf, sizeof(buf), "PV %d/%d    PM %d/%d    %d LUM", int(std::ceil(game.hp())), int(game.maxHp()),
@@ -185,7 +206,8 @@ void InventoryMenu::draw(UiLayer& ui, const Game& game, int width, int height) c
     info.align = Align::Right;
     drawText(ui, p.x1 - 24, p.y0 + 13, 16, buf, amber, info);
 
-    for (int t = 0; t < TabCount; ++t) {
+    if (shop) drawText(ui, p.x0 + 30, p.y0 + 62, 18, "Lo que hay a la venta", dim);
+    for (int t = 0; t < TabCount && !shop; ++t) {
         Rect r = tabRect(t, width, height);
         bool sel = t == tab_;
         fillRect(d, r.x0, r.y0, r.x1, r.y1, sel ? rgba(235, 245, 255, 240) : rgba(30, 40, 90, 230));
@@ -195,7 +217,7 @@ void InventoryMenu::draw(UiLayer& ui, const Game& game, int width, int height) c
         drawText(ui, (r.x0 + r.x1) * 0.5f, r.y0 + 8, 16, kTabNames[t], sel ? rgba(20, 30, 70) : dim, tc);
     }
 
-    std::vector<ItemId> list = entries(inv);
+    std::vector<ItemId> list = entries(game);
     int n = int(list.size());
     if (n == 0) drawText(ui, p.x0 + 40, p.y0 + kListTop + 8, 20, "Nada todavía", dim);
     int rows = std::min(n - top_, kMaxRows);
@@ -211,6 +233,14 @@ void InventoryMenu::draw(UiLayer& ui, const Game& game, int width, int height) c
         if (sel) fillRect(d, r.x0, r.y0, r.x0 + 5, r.y1, cyan);
         gem(d, r.x0 + 24, (r.y0 + r.y1) * 0.5f, 9, def.color);
         uint32_t tc = inv.count(id) > 0 ? (sel ? rgba(20, 30, 70) : light) : rgba(110, 115, 140);
+        if (shop) {  // el precio: en claro si llegan los lúmenes
+            int price = game.shopStock()[size_t(i)].price;
+            bool ok = inv.munny >= price;
+            drawText(ui, r.x0 + 44, r.y0 + 3, 20, def.name, ok ? (sel ? rgba(20, 30, 70) : light) : rgba(110, 115, 140));
+            std::snprintf(buf, sizeof(buf), "%d LUM", price);
+            drawText(ui, r.x1 - 14, r.y0 + 5, 18, buf, ok ? (sel ? rgba(150, 100, 20) : amber) : rgba(150, 120, 140), right);
+            continue;
+        }
         if (tab_ == Workshop) {  // recetas: en claro las que se pueden fabricar ya
             int rc = 0;
             const Recipe& rcp = recipes(rc)[i];
@@ -244,7 +274,14 @@ void InventoryMenu::draw(UiLayer& ui, const Game& game, int width, int height) c
         drawText(ui, dx + 80, dy + 22, 28, def.name, light);
         drawText(ui, dx + 20, dy + 80, 18, def.description, dim);
         float y = dy + 118;
-        if (tab_ == Workshop) {  // piezas de la receta: las que tienes / las que hacen falta
+        if (shop) {
+            int price = game.shopStock()[size_t(std::min(selected_, n - 1))].price;
+            std::snprintf(buf, sizeof(buf), "Precio  %d LUM", price);
+            drawText(ui, dx + 20, y, 19, buf, inv.munny >= price ? amber : rgba(255, 130, 140));
+            std::snprintf(buf, sizeof(buf), "Tienes  ×%d", inv.count(id));
+            drawText(ui, dx + 20, y + 30, 19, buf, light);
+            drawText(ui, dx + 20, y + 68, 16, "Enter · comprar", amber);
+        } else if (tab_ == Workshop) {  // piezas de la receta: las que tienes / las que hacen falta
             int rc = 0;
             const Recipe& rcp = recipes(rc)[std::min(selected_, n - 1)];
             if (rcp.minLevel > 1) {
@@ -294,5 +331,6 @@ void InventoryMenu::draw(UiLayer& ui, const Game& game, int width, int height) c
         drawText(ui, dx, qy + 24 + float(s) * 22, 17, buf, light);
     }
     if (messageTime_ > 0) drawText(ui, p.x0 + 30, p.y1 - 48, 20, message_.c_str(), rgba(130, 255, 160));
-    drawText(ui, p.x0 + 30, p.y1 - 22, 14, "A/D pestaña · W/S elegir · Enter usar/equipar · I cerrar", dim);
+    drawText(ui, p.x0 + 30, p.y1 - 22, 14,
+             shop ? "W/S elegir · Enter comprar · F o Esc salir" : "A/D pestaña · W/S elegir · Enter usar/equipar · I cerrar", dim);
 }

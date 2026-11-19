@@ -41,6 +41,7 @@ set(LOGIC_SOURCES
     src/game/levels_copas.cpp
     src/game/levels_andamios.cpp
     src/game/npcs.cpp
+    src/game/trade.cpp
     src/game/wild.cpp
     src/game/swarm.cpp
     src/game/light.cpp
@@ -80,6 +81,7 @@ add_executable(game
     src/ui/level_select.cpp
     src/dev/showcase.cpp
     src/dev/climb_bot.cpp
+    src/dev/cable_bot.cpp
     src/dev/viewer.cpp
     src/render/glb_write.cpp
     src/render/hero_model.cpp

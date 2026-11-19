@@ -63,6 +63,10 @@ public:
     float speedScale = 1;     // velocidad de carrera
     float gravityScale = 1;   // gravedad en el aire (Eco: casi nada)
     bool infiniteJumps = false;
+    // Llevada (en la cabina del teleférico): los pies van donde diga `carryPos`, sin física,
+    // y la pose es la de estar de pie.
+    bool carried = false;
+    Vec3 carryPos;
     float attackSpeed = 1; // multiplicador de la velocidad de los golpes (arma)
     Pose pose;             // pose mostrada (ya mezclada)
     Mat4 joints[JointCount] = {};  // matrices mundo tras el último update

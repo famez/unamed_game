@@ -670,7 +670,13 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
     }
 
     if (!body.grounded) fallSpeed_ = std::max(fallSpeed_, -body.vel.y);
-    moveBody(body, world, dt, kStepHeight);
+    if (carried) {
+        body.pos = carryPos;
+        body.vel = {};
+        body.grounded = true;
+    } else {
+        moveBody(body, world, dt, kStepHeight);
+    }
     if (body.grounded && !isAirAttack(move_)) {
         airStep_ = 0;
         airComboSpent_ = false;

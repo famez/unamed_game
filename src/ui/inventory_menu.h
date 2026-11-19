@@ -18,12 +18,13 @@ public:
 
     void show();
     void showWorkshop();  // directo a la pestaña del taller (la tienda de la Doctora Umbra)
+    void showShop();      // el género de la tienda abierta (Game::shopStock), para comprar
     // Devuelve true si el menú pide cerrarse.
     bool update(const Input& in, Game& game, int width, int height);
     void draw(UiLayer& ui, const Game& game, int width, int height) const;
 
 private:
-    enum Tab { Consumables, Materials, Weapons, Workshop, TabCount };
+    enum Tab { Consumables, Materials, Weapons, Workshop, TabCount, Shop = TabCount };  // la tienda no se elige: se abre
 
     struct Rect {
         float x0, y0, x1, y1;
@@ -32,7 +33,7 @@ private:
     static Rect panelRect(int width, int height);
     static Rect tabRect(int tab, int width, int height);
     static Rect rowRect(int row, int width, int height);
-    std::vector<ItemId> entries(const Inventory& inv) const;
+    std::vector<ItemId> entries(const Game& game) const;
     void activate(Game& game, ItemId id);
 
     int tab_ = Consumables;

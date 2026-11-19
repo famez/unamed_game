@@ -376,31 +376,38 @@ def estacion_teleferico(name, seed, terrace=False):
         p.add(box(0.14, 0.22, 0.14), '#ffe2a8', 'Glow', T(x, 3.05, -d - 0.55))
     p.light((0, 3.2, -d - 1.2), '#FFDDA0')
     if terrace:  # la terraza del morro, con barandilla de hierro verde
-        p.box((0, 0.15, -d - 3.0), (w + 1.5, 0.15, 3.0), '#cfc6b8', 'Stone')
+        p.box((0, 0.02, -d - 3.0), (w + 1.5, 0.03, 3.0), '#cfc6b8', 'Stone')
         for k in range(9):
             x = -w - 1.5 + k * (2 * w + 3) / 8
-            p.rod((x, 0.3, -d - 5.9), (x, 1.3, -d - 5.9), 0.03, '#2f6f6a', 'Metal', seg=4)
-        p.box((0, 1.3, -d - 5.9), (w + 1.5, 0.04, 0.04), '#2f6f6a', 'Metal')
+            p.rod((x, 0.05, -d - 5.9), (x, 1.1, -d - 5.9), 0.03, '#2f6f6a', 'Metal', seg=4)
+        p.box((0, 1.1, -d - 5.9), (w + 1.5, 0.04, 0.04), '#2f6f6a', 'Metal')
     p.collider((-w - 0.3, 0, -d - 0.3), (w + 0.3, h, d + 0.3))
     return p
 
 
 def teleferico(name):
     """Cabina del teleférico, pintada como el tranvía: amarilla con la franja azul, marcos de
-    madera, techo claro y el brazo de hierro que la cuelga del cable."""
+    madera, techo claro y el brazo de hierro que la cuelga del cable. Hueca y con las ventanas
+    sin cristal, como el bondinho: quien viaja dentro se ve desde fuera (el suelo, a 0,18 m)."""
     p = Piece(name)
-    p.box((0, 0.55, 0), (1.25, 0.45, 1.85), NAVY)
-    p.box((0, 1.05, 0), (1.3, 0.06, 1.9), '#d8d2c8')
-    p.box((0, 1.6, 0), (1.25, 0.5, 1.85), YELLOW)
-    for z in (-1.2, -0.4, 0.4, 1.2):  # ventanas con marco de madera
-        for x in (-1.26, 1.26):
-            p.add(box(0.02, 0.32, 0.32), '#2c3e50', 'Glass', T(x, 1.62, z))
-            p.add(box(0.025, 0.36, 0.03), '#8a5a34', m=T(x, 1.62, z + 0.34))
-    for z in (-1.86, 1.86):
-        p.add(box(0.95, 0.32, 0.02), '#2c3e50', 'Glass', T(0, 1.62, z))
-        p.add(cylinder(0.09, 0.09, 0.04, 8), '#fff1c8', 'Glow', mul(T(0, 0.75, z), RX(math.pi / 2), T(0, -0.02, 0)))
-    p.box((0, 2.15, 0), (1.35, 0.06, 1.95), YELLOW)
-    p.add(gable(1.95, 1.35, 0.25), '#d8d2c8', m=mul(T(0, 2.21, 0), RY(math.pi / 2)))
+    hx, hz = 1.25, 1.85
+    p.box((0, 0.1, 0), (hx, 0.08, hz), '#8a5a34')  # el suelo de tablas
+    for sx in (-1, 1):  # los costados: abajo azul, arriba los huecos de las ventanas
+        p.box((sx * (hx - 0.03), 0.6, 0), (0.03, 0.42, hz), NAVY)
+        for z in (-hz + 0.06, -0.8, 0.0, 0.8, hz - 0.06):  # montantes
+            p.box((sx * (hx - 0.03), 1.6, z), (0.04, 0.5, 0.06), YELLOW)
+        p.box((sx * (hx - 0.02), 1.06, 0), (0.05, 0.05, hz), '#d8d2c8')  # el antepecho claro
+        p.box((sx * (hx - 0.03), 1.3, 0), (0.025, 0.025, hz - 0.05), '#8a5a34')  # barandilla de madera
+    for sz in (-1, 1):  # testeros: abajo azul con el farol, arriba un gran hueco
+        p.box((0, 0.6, sz * (hz - 0.03)), (hx, 0.42, 0.03), NAVY)
+        p.box((0, 1.06, sz * (hz - 0.02)), (hx, 0.05, 0.05), '#d8d2c8')
+        for x in (-hx + 0.06, hx - 0.06):
+            p.box((x, 1.6, sz * (hz - 0.03)), (0.06, 0.5, 0.04), YELLOW)
+        p.add(cylinder(0.09, 0.09, 0.04, 8), '#fff1c8', 'Glow', mul(T(0, 0.75, sz * (hz + 0.01)), RX(math.pi / 2), T(0, -0.02, 0)))
+    p.box((0, 2.15, 0), (hx + 0.1, 0.06, hz + 0.1), YELLOW)
+    p.box((0, 2.07, 0), (hx - 0.05, 0.03, hz - 0.05), '#d8d2c8')  # el techo por dentro
+    p.add(gable(hz + 0.1, hx + 0.1, 0.25), '#d8d2c8', m=mul(T(0, 2.21, 0), RY(math.pi / 2)))
+    p.add(box(0.12, 0.08, 0.12), '#fff1c8', 'Glow', T(0, 2.0, 0))  # la bombilla del techo
     p.rod((0, 2.4, 0), (0, 3.6, 0), 0.08, '#2a2a2e', 'Metal')
     p.box((0, 3.7, 0), (0.25, 0.15, 0.9), '#2a2a2e', 'Metal')
     for z in (-0.7, 0.7):
@@ -412,14 +419,15 @@ SOBRADO = [('#e9b949', '#2a7d4f'), ('#d9786a', '#f2efe8'), ('#7fb2c9', '#f2efe8'
            ('#a7c48a', '#5a3622'), ('#e58f5e', '#2a4a7a'), ('#c9a0d6', '#f2efe8'), ('#f4d9a6', '#c8202f')]
 
 
-def sobrado(name, seed, floors=2, width=7.0):
+def sobrado(name, seed, floors=2, width=7.0, shopfront=False, depth=4.5):
     """Sobrado colonial (Lapa, Santa Teresa): fachada de color con pilastras y cornisas
     blancas, ventanas altas en arco con contraventanas, balcones de hierro, puertas en arco
-    abajo y la platibanda que esconde el tejado de teja. La fachada mira a +z."""
+    abajo y la platibanda que esconde el tejado de teja. La fachada mira a +z.
+    `shopfront`: la planta baja la pone quien llama (tiendas y tabernas)."""
     p = Piece(name)
     rnd = random.Random(seed)
     color, shutter = SOBRADO[seed % len(SOBRADO)]
-    w, d, fh = width / 2, 4.5, 3.3
+    w, d, fh = width / 2, depth, 3.3
     h = floors * fh
     white = '#fbf6ea'
     p.box((0, h / 2, 0), (w, h / 2, d), color, 'Stone')
@@ -440,6 +448,8 @@ def sobrado(name, seed, floors=2, width=7.0):
         for k in range(n):
             x = -w + (k + 0.5) * 2 * w / n
             if f == 0:
+                if shopfront:
+                    continue
                 if k == n // 2 or rnd.random() < 0.3:  # puerta
                     arch_opening(p, x, 0.05, d + 0.02, 1.1, 2.6, rnd.choice(['#5a3622', shutter, '#3d2a1e']))
                 else:
@@ -461,6 +471,192 @@ def sobrado(name, seed, floors=2, width=7.0):
                 p.add(sphere(0.22, 0.18, 0.18, 8, 5), rnd.choice(['#e0245e', '#ff9f1c', '#c13fd6']), m=T(x + 0.45, y + 0.7, d + 0.5))
     p.collider((-w, 0, -d), (w, h + 1.0, d))
     return p
+
+
+def letrero(p, x, y, z, color, icon):
+    """Letrero que cuelga de una escuadra de hierro, de canto a la calle (mira a ±x), con su
+    dibujo por las dos caras: `icon` 'celula', 'frasco', 'hojas' o 'jarra'."""
+    p.rod((x, y + 0.75, z - 0.02), (x, y + 0.75, z + 1.15), 0.025, BLACK, 'Metal', seg=4)
+    p.beam((x, y + 0.45, z), (x, y + 0.75, z + 0.4), 0.03, BLACK, 'Metal')
+    for zz in (z + 0.45, z + 1.05):
+        p.rod((x, y + 0.75, zz), (x, y + 0.62, zz), 0.012, BLACK, 'Metal', seg=4)
+    p.box((x, y + 0.3, z + 0.75), (0.035, 0.32, 0.36), '#5a3622')
+    p.box((x, y + 0.3, z + 0.75), (0.045, 0.27, 0.31), color)
+    for s in (-1, 1):
+        fx = x + s * 0.05
+        if icon == 'celula':  # la célula vital: un rombo verde
+            p.add(box(0.012, 0.13, 0.13), '#5ae678', 'Glow', mul(T(fx, y + 0.3, z + 0.75), RX(math.pi / 4)))
+        elif icon == 'frasco':  # el frasco de la botica
+            p.add(sphere(0.012, 0.11, 0.11, 8, 5), '#b98cff', 'Glow', T(fx, y + 0.24, z + 0.75))
+            p.box((fx, y + 0.41, z + 0.75), (0.012, 0.07, 0.04), '#b98cff', 'Glow')
+        elif icon == 'hojas':  # dos hojas cruzadas
+            for a in (0.7, -0.7):
+                p.add(box(0.012, 0.2, 0.025), '#d8dce4', 'Metal', mul(T(fx, y + 0.3, z + 0.75), RX(a)))
+        else:  # la jarra de la taberna, con su espuma
+            p.box((fx, y + 0.26, z + 0.72), (0.012, 0.13, 0.09), '#f0b040')
+            p.box((fx, y + 0.41, z + 0.72), (0.012, 0.04, 0.1), '#fbf6ea')
+            p.box((fx, y + 0.27, z + 0.87), (0.012, 0.07, 0.03), '#f0b040')
+
+
+def toldo(p, w, d, y0, y1, out, c1, c2):
+    """Toldo a rayas de la fachada (en z = d): de `y0` contra la pared a `y1` a `out` m."""
+    ang = math.atan2(y0 - y1, out)
+    ln = math.hypot(out, y0 - y1)
+    n = int(w * 2 / 0.4)
+    for k in range(n):
+        x = -w + (k + 0.5) * 2 * w / n
+        col = c1 if k % 2 else c2
+        p.add(box(w / n, 0.025, ln / 2), col, m=mul(T(x, (y0 + y1) / 2, d + out / 2), RX(ang)))
+        p.add(box(w / n * 0.9, 0.12, 0.012), col, m=T(x, y1 - 0.1, d + out + 0.01))  # el faldón
+    for x in (-w + 0.1, w - 0.1):  # los tirantes
+        p.rod((x, y0 + 0.5, d), (x, y1, d + out), 0.015, BLACK, 'Metal', seg=4)
+
+
+def venda(name, seed, goods):
+    """Tienda de la bahía en la planta baja de un sobrado (la fachada mira a +z): tres huecos
+    en arco abiertos con los estantes llenos, el toldo a rayas, el mostrador en la acera con el
+    género y el letrero colgado de una escuadra de hierro. Quien atiende, entre el mostrador y
+    la puerta (a 0,45 m de la fachada). `goods`: 'armazem' (células, velas y víveres), 'botica'
+    (frascos de colores y hierbas) o 'amolador' (la piedra de afilar y las hojas)."""
+    width, depth = 6.0, 3.5
+    p = sobrado(name, seed, 2, width, shopfront=True, depth=depth)
+    rnd = random.Random(seed * 13 + 5)
+    w, d = width / 2, depth
+    wood, dark = '#7a4a2a', '#211c19'
+    palette = {'armazem': ['#5ae678', '#3cc8ff', '#f2c230', '#e9e2d0', '#c8202f', '#8a5a34'],
+               'botica': ['#b98cff', '#ff78dc', '#5ae678', '#3cc8ff', '#7fd8c0'],
+               'amolador': ['#d8dce4', '#a8acb4', '#c9a646', '#8a8d96']}[goods]
+    glow = goods != 'amolador'
+    for k, x in enumerate((-1.95, 0.0, 1.95)):
+        arch_opening(p, x, 0.05, d + 0.02, 1.5, 2.9, dark)
+        p.box((x, 2.98, d + 0.06), (0.86, 0.06, 0.06), '#fbf6ea', 'Stone')  # sobrearco
+        if k == 1:  # la puerta: una cortina de cuentas y la luz de dentro
+            p.add(box(0.6, 1.0, 0.02), '#d9a35a', 'Glow', T(x, 1.15, d - 0.3))
+            continue
+        for b in range(3):  # estantes con el género
+            y = 0.75 + b * 0.55
+            p.box((x, y, d + 0.06), (0.7, 0.025, 0.06), wood)
+            for j in range(5):
+                gx = x - 0.56 + j * 0.28
+                col = rnd.choice(palette)
+                if goods == 'amolador':
+                    p.add(box(0.025, 0.2, 0.012), col, 'Metal', mul(T(gx, y + 0.22, d + 0.08), RZ(rnd.uniform(-0.15, 0.15))))
+                elif rnd.random() < 0.6:
+                    p.add(cylinder(0.07, 0.06, 0.2, 8), col, 'Glow' if glow and rnd.random() < 0.5 else 'Cloth', T(gx, y + 0.03, d + 0.1))
+                else:
+                    p.add(sphere(0.09, 0.1, 0.07, 8, 5), col, 'Glow' if glow and rnd.random() < 0.3 else 'Cloth', T(gx, y + 0.12, d + 0.1))
+    c1, c2 = {'armazem': ('#2a7d4f', '#fbf6ea'), 'botica': ('#6a3d8a', '#fbf6ea'), 'amolador': ('#c8202f', '#f2efe8')}[goods]
+    toldo(p, w - 0.15, d, 3.05, 2.45, 1.75, c1, c2)
+    # El mostrador en la acera, con el género encima.
+    p.box((0, 0.47, d + 1.2), (1.6, 0.47, 0.3), wood)
+    p.box((0, 0.96, d + 1.2), (1.68, 0.035, 0.36), '#a8764a')
+    for x in (-1.5, -0.5, 0.5, 1.5):
+        p.box((x, 0.47, d + 1.51), (0.04, 0.42, 0.012), shade(wood, 0.7))
+    if goods == 'armazem':
+        for x, col in ((-1.1, '#e07a2a'), (-0.4, '#f2c230'), (0.9, '#c8202f')):  # cestas de fruta
+            p.box((x, 1.06, d + 1.2), (0.25, 0.07, 0.2), '#a07040')
+            for k in range(5):
+                p.add(sphere(0.07, 0.07, 0.07, 6, 4), col, m=T(x - 0.15 + (k % 3) * 0.15, 1.16 + (k // 3) * 0.06, d + 1.15 + (k % 2) * 0.1))
+        for k in range(4):  # velas en un cajón
+            p.add(cylinder(0.025, 0.025, 0.22, 6), '#f4ecd6', m=T(0.3 + k * 0.08, 0.99, d + 1.2))
+            p.add(sphere(0.02, 0.03, 0.02, 5, 3), '#ffd27a', 'Glow', T(0.3 + k * 0.08, 1.24, d + 1.2))
+        for x in (-2.3, 2.3):  # sacos de grano al lado
+            p.add(sphere(0.3, 0.38, 0.28, 8, 5), '#c9b07a', m=T(x, 0.36, d + 1.0))
+    elif goods == 'botica':
+        for k in range(7):  # frascos que brillan
+            x = -1.3 + k * 0.42
+            col = palette[k % len(palette)]
+            p.add(sphere(0.09, 0.1, 0.09, 8, 5), col, 'Glow', T(x, 1.1, d + 1.2))
+            p.add(cylinder(0.03, 0.03, 0.1, 6), col, 'Glow', T(x, 1.17, d + 1.2))
+            p.add(cylinder(0.035, 0.035, 0.04, 6), '#8a5a34', m=T(x, 1.27, d + 1.2))
+        p.add(cylinder(0.12, 0.09, 0.14, 10), '#cfc6b8', 'Stone', T(1.45, 0.99, d + 1.25))  # el almirez
+        for x in (-2.4, 2.4):  # macetas de hierbas
+            p.add(cylinder(0.22, 0.18, 0.4, 10), '#b5653e', 'Stone', T(x, 0, d + 0.9))
+            p.add(sphere(0.3, 0.25, 0.3, 8, 5), '#4f9a4a', m=T(x, 0.55, d + 0.9))
+    else:
+        # La piedra de afilar a un lado, con su pedal, y hojas sobre el mostrador.
+        p.add(cylinder(0.42, 0.42, 0.14, 16), '#9a948a', 'Stone', mul(T(2.45, 1.0, d + 1.1), RZ(math.pi / 2), T(0, -0.07, 0)))
+        p.beam((2.45, 0, d + 0.8), (2.45, 1.0, d + 1.1), 0.08, wood)
+        p.beam((2.45, 0, d + 1.4), (2.45, 1.0, d + 1.1), 0.08, wood)
+        p.box((2.45, 0.08, d + 1.5), (0.25, 0.03, 0.12), wood)
+        for k in range(5):
+            x = -1.3 + k * 0.5
+            p.add(box(0.03, 0.012, 0.32), '#d8dce4', 'Metal', mul(T(x, 1.0, d + 1.2), RY(rnd.uniform(-0.4, 0.4))))
+            p.add(box(0.035, 0.02, 0.07), '#5a3622', m=mul(T(x, 1.0, d + 1.2), RY(rnd.uniform(-0.4, 0.4)), T(0, 0.01, -0.36)))
+    letrero(p, w + 0.12, 3.25, d, {'armazem': '#2a7d4f', 'botica': '#4a2d6a', 'amolador': '#8a1f28'}[goods],
+            {'armazem': 'celula', 'botica': 'frasco', 'amolador': 'hojas'}[goods])
+    p.collider((-1.7, 0, d + 0.88), (1.7, 1.0, d + 1.56))
+    return p
+
+
+def taberna(name, seed):
+    """Taberna (botequim) en la planta baja de un sobrado: la puerta grande abierta con la luz
+    cálida de dentro, ventanas encendidas, toneles junto a la puerta, la pizarra, dos mesas en
+    la acera con sus taburetes, una guirnalda de bombillas y el letrero de la jarra. La fachada
+    mira a +z; quien atiende, en la puerta."""
+    width, depth = 7.0, 3.5
+    p = sobrado(name, seed, 2, width, shopfront=True, depth=depth)
+    rnd = random.Random(seed * 7 + 3)
+    w, d = width / 2, depth
+    wood, warm = '#6a3f24', '#a8662e'
+    arch_opening(p, 0, 0.05, d + 0.02, 2.0, 3.0, warm, 'Glow')  # la puerta abierta
+    for s in (-1, 1):  # las hojas de la puerta, abiertas contra la pared
+        p.box((s * 1.25, 1.3, d + 0.08), (0.24, 1.25, 0.04), '#2a5a3a')
+    p.box((0, 1.0, d - 0.25), (0.8, 0.5, 0.2), wood)  # la barra, al fondo
+    for x in (-2.35, 2.35):  # ventanas encendidas con su reja
+        arch_opening(p, x, 0.95, d + 0.02, 1.1, 1.9, warm, 'Glow')
+        for b in range(4):
+            p.box((x - 0.39 + b * 0.26, 1.7, d + 0.07), (0.015, 0.75, 0.015), BLACK, 'Metal')
+        p.box((x, 2.95, d + 0.06), (0.65, 0.06, 0.06), '#fbf6ea', 'Stone')
+    # Toneles junto a la puerta, uno de pie y otro tumbado.
+    for x, z in ((-1.55, d + 0.45), (1.6, d + 0.45)):
+        p.add(cylinder(0.32, 0.32, 0.85, 12), '#8a5a34', m=T(x, 0, z))
+        for y in (0.15, 0.7):
+            p.add(cylinder(0.335, 0.335, 0.05, 12), '#3a3d46', 'Metal', T(x, y, z))
+    p.add(cylinder(0.28, 0.28, 0.7, 12), '#8a5a34', m=mul(T(-3.0, 0.3, d + 0.45), RZ(math.pi / 2), T(0, -0.35, 0)))
+    # La pizarra con el menú.
+    p.beam((2.9, 0, d + 0.55), (2.9, 1.15, d + 0.35), 0.05, wood)
+    p.box((2.9, 0.95, d + 0.42), (0.32, 0.38, 0.03), '#2c332e', m=RX(0))
+    for k in range(4):
+        p.box((2.9, 1.16 - k * 0.13, d + 0.455), (0.2 - (k % 2) * 0.06, 0.012, 0.005), '#e8e4d8')
+    # Mesas en la acera con taburetes.
+    for tx in (-1.9, 1.9):
+        tz = d + 1.85
+        p.add(cylinder(0.45, 0.45, 0.05, 14), '#a8764a', m=T(tx, 0.74, tz))
+        p.add(cylinder(0.05, 0.05, 0.74, 6), BLACK, 'Metal', T(tx, 0, tz))
+        p.add(cylinder(0.25, 0.25, 0.03, 10), BLACK, 'Metal', T(tx, 0, tz))
+        p.add(cylinder(0.06, 0.05, 0.16, 6), rnd.choice(['#f0b040', '#c8202f', '#3d78c4']), m=T(tx + 0.12, 0.79, tz - 0.05))
+        p.add(cylinder(0.04, 0.04, 0.12, 6), '#2a7d4f', 'Glass', T(tx - 0.15, 0.79, tz + 0.1))
+        for a in (0.4, 2.0, 3.6, 5.1):
+            sx, sz = tx + math.cos(a) * 0.75, tz + math.sin(a) * 0.75
+            p.add(cylinder(0.19, 0.19, 0.05, 10), '#8a5a34', m=T(sx, 0.46, sz))
+            for l in range(3):
+                b = a + l * 2.1
+                p.rod((sx + math.cos(b) * 0.13, 0, sz + math.sin(b) * 0.13), (sx + math.cos(b) * 0.08, 0.46, sz + math.sin(b) * 0.08),
+                      0.015, BLACK, 'Metal', seg=4)
+        p.collider((tx - 0.5, 0, tz - 0.5), (tx + 0.5, 0.8, tz + 0.5))
+    # La guirnalda de bombillas, de la fachada a dos postes.
+    for s in (-1, 1):
+        px, pz = s * (w - 0.2), d + 3.1
+        p.rod((px, 0, pz), (px, 2.9, pz), 0.04, BLACK, 'Metal', seg=6)
+        a, b = (s * (w - 0.2), 3.05, d + 0.05), (px, 2.85, pz)
+        p.rod(a, b, 0.008, BLACK, 'Metal', seg=3)
+        for k in range(1, 6):
+            u = k / 6
+            q = (a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u - 0.2 * math.sin(u * math.pi), a[2] + (b[2] - a[2]) * u)
+            p.add(sphere(0.045, 0.06, 0.045, 6, 4), '#ffe2a0', 'Glow', T(*q))
+    a, b = (-(w - 0.2), 2.85, d + 3.1), ((w - 0.2), 2.85, d + 3.1)
+    p.rod(a, b, 0.008, BLACK, 'Metal', seg=3)
+    for k in range(1, 12):
+        u = k / 12
+        p.add(sphere(0.045, 0.06, 0.045, 6, 4), '#ffe2a0', 'Glow', T(a[0] + (b[0] - a[0]) * u, 2.85 - 0.3 * math.sin(u * math.pi), d + 3.1))
+    for s in (-1, 1):
+        p.collider((s * (w - 0.2) - 0.08, 0, d + 3.02), (s * (w - 0.2) + 0.08, 2.9, d + 3.18))
+    p.collider((-3.4, 0, d + 0.1), (-1.2, 0.9, d + 0.8))
+    p.collider((1.25, 0, d + 0.1), (3.2, 1.2, d + 0.8))
+    letrero(p, w + 0.12, 3.25, d, '#7a2a1a', 'jarra')
+    return p
+
 
 
 def tiles_lambda():
@@ -571,4 +767,6 @@ def piezas():
            barca('barca_roja', '#c8202f')]
     out += [casa_favela('casa_favela_%d' % (i + 1), 100 + i * 7) for i in range(8)]
     out += [sobrado('sobrado_%d' % (i + 1), i, 2 if i % 3 else 3, 6.0 + (i % 3) * 1.5) for i in range(8)]
+    out += [venda('tienda_armazem', 0, 'armazem'), venda('tienda_botica', 6, 'botica'), venda('tienda_amolador', 3, 'amolador'),
+            taberna('taberna_arco', 1), taberna('taberna_lapa', 5)]
     return out
