@@ -93,6 +93,15 @@ const float kCoretoH = 2.5f, kIgrejaH = 15.0f, kBondinhoH = 3.5f, kQuadraH = 12.
 // El Morro da Urca y el Pão de Açúcar (cúpulas de roca en la bahía) con su explanada arriba.
 const Vec3 kUrca{18, 0, -92}, kPao{50, 0, -112};
 const float kUrcaTop = 22.0f, kPaoTop = 52.0f, kTopR = 10.0f;
+// Las tabernas, en las que se entra: la fachada en `at` (el borde de la plaza), hacia `out`.
+struct Tavern {
+    const char* prop;
+    Vec3 at, out;
+    float h;
+};
+const Tavern kTaverns[] = {{"taberna_arco", {13, 0, 12.2f}, {1, 0, 0}, kPlazaH}, {"taberna_lapa", kCoreto + Vec3{15, 0, 6}, {1, 0, 0}, kCoretoH}};
+constexpr float kTavernDoor = 0.35f + 7.0f - 0.2f;  // de la calle a la pared del fondo, por dentro
+constexpr float kTavernHalf = 3.5f - 0.2f;          // medio ancho por dentro
 
 // Rectángulo orientado (las casas), para no ponerlas unas encima de otras.
 struct Footprint {
@@ -166,12 +175,21 @@ void Game::buildRio() {
         {kUrca, kTopR, -1, 0, kUrcaTop, PiedraClara},  // las explanadas del teleférico
         {kPao, kTopR, -1, 0, kPaoTop, PiedraClara},
     };
+    // Dentro de las tabernas también se anda (no cuentan para no poner casas encima).
+    std::vector<Area> rooms;
+    for (const Tavern& tv : kTaverns) {
+        bool alongX = std::fabs(tv.out.x) > 0.5f;
+        float a = (kTavernDoor + 1.0f) * 0.5f;  // desde un metro dentro de la plaza: sin costura en la puerta
+        rooms.push_back({tv.at + tv.out * (a - 1.0f), alongX ? a : kTavernHalf, alongX ? kTavernHalf : a, 0, tv.h, Losas, true, 4, 0.6f, 0.45f});
+    }
     auto dBeach = [](Vec3 p) { return sdBox(p, {0, 0, -23}, 19, 16, 4); };       // la caleta, hasta el agua
     auto dCove = [](Vec3 p) { return sdBox(p, {0, 0, -34}, 19, 27, 5); };        // con su trozo de mar
     auto dPrainha = [](Vec3 p) { return sdBox(p, {90, 0, -38}, 18, 8, 3); };      // la playa virgen
     auto dPrainhaSea = [](Vec3 p) { return sdBox(p, {90, 0, -46}, 20, 16, 5); };
-    auto walk = [&](Vec3 p) {
+    auto walk = [&](Vec3 p, bool inside = true) {
         float d = std::min(dBeach(p), dPrainha(p));
+        if (inside)
+            for (const Area& a : rooms) d = std::min(d, a.dist(p));
         for (const Lane& l : lanes) d = std::min(d, laneDist(l, p, nullptr));
         for (const Area& a : areas)
             if (a.walk) d = std::min(d, a.dist(p));
@@ -206,6 +224,7 @@ void Game::buildRio() {
                 cand(d, lh, l.wall, l.run, l.slope, l.look, true);
             }
             for (const Area& a : areas) cand(a.dist(p), a.h, a.wall, a.run, a.slope, a.look, a.walk);
+            for (const Area& a : rooms) cand(a.dist(p), a.h, a.wall, a.run, a.slope, a.look, true);
             if (inside < 1e8f) h = inside, look = insideLook;
             int dome = -1;
             // El fondo: morros que crecen lejos de las zonas, con la estatua en el más alto.
@@ -278,7 +297,7 @@ void Game::buildRio() {
     auto fits = [&](const Footprint& f) {
         for (float sx : {-1.0f, 0.0f, 1.0f})
             for (float sz : {-1.0f, 0.0f, 1.0f})
-                if (walk(f.corner(sx, sz)) < 0.25f) return false;
+                if (walk(f.corner(sx, sz), false) < 0.25f) return false;
         for (const Footprint& o : houses)
             for (float sx : {-1.0f, 0.0f, 1.0f})
                 for (float sz : {-1.0f, 0.0f, 1.0f})
@@ -420,7 +439,7 @@ void Game::buildRio() {
     // Al este, el armazém y el botequim (ver abajo, con quien atiende) y una casa entre ellos.
     shopfront("tienda_armazem", {13, 0, -1}, {1, 0, 0}, 3.0f);
     house("casa_favela_4", 15.6f, 5.2f);
-    shopfront("taberna_arco", {13, 0, 12.2f}, {1, 0, 0}, 3.5f);
+    shopfront(kTaverns[0].prop, kTaverns[0].at, kTaverns[0].out, 3.5f);
     // El punto focal: los arcos, con el tranvía parado encima; por el arco central se pasa a
     // la Rua dos Arcos.
     const float kArc = 0.65f;
@@ -466,7 +485,7 @@ void Game::buildRio() {
     // La botica al norte, el amolador al oeste y la taberna da Lapa al este; luego los sobrados.
     shopfront("tienda_botica", kCoreto + Vec3{6, 0, 12}, {0, 0, 1}, 3.0f);
     shopfront("tienda_amolador", kCoreto + Vec3{-15, 0, 6}, {-1, 0, 0}, 3.0f);
-    shopfront("taberna_lapa", kCoreto + Vec3{15, 0, 6}, {1, 0, 0}, 3.5f);
+    shopfront(kTaverns[1].prop, kTaverns[1].at, kTaverns[1].out, 3.5f);
     // Sobrados: primero los de las plazas (las fachadas que mandan), luego las calles.
     lineArea(areas[2], 0);
     lineArea(areas[3], 0);
@@ -643,17 +662,23 @@ void Game::buildRio() {
     addNpc("deshollinadora", {-56, 0, 26}, 3);
     addNpc("guardia_apagado", kBondinho + Vec3{-3, 0, -3}, 2);
     addNpc("surfista", {92, 0, -40}, 6);
-    // Quien atiende las tiendas (entre el mostrador y la puerta) y las tabernas (en la puerta).
+    // Quien atiende las tiendas (entre el mostrador y la puerta) y las tabernas (dentro, detrás
+    // de la barra: a 2,6 m del centro de la sala hacia el fondo).
     auto keeper = [&](const char* model, Vec3 at, Vec3 out, float inFront, const char* name, NpcRole role,
                       std::vector<std::string> lines, std::vector<ShopItem> stock = {}) {
         addNpc(model, at - out * inFront, 0.4f, name, role, std::move(lines));
-        npcs_.back().stock = std::move(stock);
-        npcs_.back().body.yaw = std::atan2(-out.x, -out.z);
+        Npc& n = npcs_.back();
+        n.stock = std::move(stock);
+        // Bajo techo: a la altura de la calle de fuera (no en el tejado).
+        Vec3 p = n.home;
+        p.y = groundHeight(at - out * 0.5f + Vec3{0, 30, 0});
+        n.home = n.target = p;
+        n.body.teleport(p, std::atan2(-out.x, -out.z));
     };
     keeper("aceitero", {13, 0, -1}, {1, 0, 0}, 0.1f, "Seu Candido, armazém", NpcRole::Shop,
            {"Velas, cerillas, células. Lo que alumbra se vende aquí.", "Desde que se paró la hora no he cerrado. Tampoco ha venido nadie."},
            {{ItemId::Potion, 25}, {ItemId::HiPotion, 70}, {ItemId::Ether, 45}});
-    keeper("cocinero", {13, 0, 12.2f}, {1, 0, 0}, 0.6f, "Seu Ademar, botequim", NpcRole::Inn,
+    keeper("cocinero", kTaverns[0].at, kTaverns[0].out, -(3.85f + 2.6f), "Seu Ademar, botequim", NpcRole::Inn,
            {"Siéntate. La cerveza está tibia, pero es cerveza.", "Aquí el atardecer dura lo que dura la conversación. O sea, siempre.",
             "Duerme en el banco del fondo. Nadie te va a despertar."});
     keeper("recolectora", kCoreto + Vec3{6, 0, 12}, {0, 0, 1}, 0.1f, "Dona Íris, botica", NpcRole::Shop,
@@ -662,7 +687,7 @@ void Game::buildRio() {
     keeper("oficinista", kCoreto + Vec3{-15, 0, 6}, {-1, 0, 0}, 0.1f, "Amolador", NpcRole::Shop,
            {"Una hoja de luz también se mella. Se nota en el sonido.", "Piezas de Grises, las compro y las vendo. No pregunto de dónde salen."},
            {{ItemId::Sharpener, 160}, {ItemId::ShinyShard, 30}, {ItemId::WingDust, 35}, {ItemId::GoldSpore, 40}});
-    keeper("cafetero", kCoreto + Vec3{15, 0, 6}, {1, 0, 0}, 0.6f, "Joca, taberna da Lapa", NpcRole::Inn,
+    keeper("cafetero", kTaverns[1].at, kTaverns[1].out, -(3.85f + 2.6f), "Joca, taberna da Lapa", NpcRole::Inn,
            {"Aquí se toca samba hasta que se haga de noche. Llevamos mucho tocando.",
             "Quédate. El que se va de la Lapa siempre vuelve, aunque sea a por el sombrero."});
     heroStart_ = {0, kPlazaH, -4};

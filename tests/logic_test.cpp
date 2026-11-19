@@ -315,13 +315,22 @@ int main() {
                       "bahía: F en el mostrador abre el armazém (%d) y se compra con lúmenes (quedan %d; «%s»)", opened, r.inv_.munny,
                       msg.c_str());
             }
-            for (Npc& n : r.npcs_)
-                if (n.role == NpcRole::Inn) {
-                    r.hp_ = 10;
-                    r.talkTo(n);
-                    CHECK(r.hp_ == r.maxHp_, "bahía: en %s se descansa (vida llena)", n.name.c_str());
-                    break;
+            // En el botequim se entra: de la plaza, por la puerta, hasta la barra; F al tabernero.
+            place(r, {8, 1.8f, 12.2f});
+            run(r, 0.3f);
+            r.hp_ = 10;
+            for (Vec3 to : {Vec3{12, 0, 12.2f}, Vec3{15, 0, 12.2f}, Vec3{18.2f, 0, 12.2f}})
+                for (int i = 0; i < 60 * 4 && length(flat(to - r.hero_.body.pos)) > 0.3f; ++i) {
+                    Controls c;
+                    c.move = normalize(flat(to - r.hero_.body.pos)) * 0.6f;
+                    r.update(dt, c);
                 }
+            Vec3 in = r.hero_.body.pos;
+            Controls f;
+            f.interact = true;
+            r.update(dt, f);
+            CHECK(in.x > 17.5f && std::fabs(in.y - 1.5f) < 0.2f && r.hp_ == r.maxHp_,
+                  "bahía: se entra en el botequim y en la barra se descansa (en %.1f, %.1f, %.1f; vida %.0f)", in.x, in.y, in.z, r.hp_);
         }
         {  // El teleférico: F en el andén sube a la cabina; llega a la otra estación (a la explanada
             // del morro, que se pisa y no deja caer) y de allí se sigue al Pão de Açúcar y se vuelve

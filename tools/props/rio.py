@@ -419,19 +419,37 @@ SOBRADO = [('#e9b949', '#2a7d4f'), ('#d9786a', '#f2efe8'), ('#7fb2c9', '#f2efe8'
            ('#a7c48a', '#5a3622'), ('#e58f5e', '#2a4a7a'), ('#c9a0d6', '#f2efe8'), ('#f4d9a6', '#c8202f')]
 
 
-def sobrado(name, seed, floors=2, width=7.0, shopfront=False, depth=4.5):
+def sobrado(name, seed, floors=2, width=7.0, shopfront=False, depth=4.5, room=None):
     """Sobrado colonial (Lapa, Santa Teresa): fachada de color con pilastras y cornisas
     blancas, ventanas altas en arco con contraventanas, balcones de hierro, puertas en arco
     abajo y la platibanda que esconde el tejado de teja. La fachada mira a +z.
-    `shopfront`: la planta baja la pone quien llama (tiendas y tabernas)."""
+    `shopfront`: la planta baja la pone quien llama (tiendas y tabernas).
+    `room` = (ancho, alto) de la puerta: la planta baja es una sala hueca en la que se entra
+    por esa puerta, en medio de la fachada (paredes de 0,2 m, techo a la altura del piso)."""
     p = Piece(name)
     rnd = random.Random(seed)
     color, shutter = SOBRADO[seed % len(SOBRADO)]
     w, d, fh = width / 2, depth, 3.3
     h = floors * fh
     white = '#fbf6ea'
-    p.box((0, h / 2, 0), (w, h / 2, d), color, 'Stone')
-    p.box((0, 0.35, 0), (w + 0.04, 0.35, d + 0.04), shade(color, 0.7), 'Stone')  # zócalo
+    if room:
+        dw, dh = room[0] / 2, room[1]
+        t, base = 0.2, shade(color, 0.7)
+        p.box((0, (h + fh) / 2, 0), (w, (h - fh) / 2, d), color, 'Stone')  # los pisos de arriba
+        p.box((0, fh - 0.03, 0), (w - t, 0.03, d - t), '#e8dcc4', 'Stone')  # el techo, encalado
+        for lo, hi in (((-w, 0, -d), (w, fh, -d + t)), ((-w, 0, -d), (-w + t, fh, d)), ((w - t, 0, -d), (w, fh, d)),
+                       ((-w, 0, d - t), (-dw, fh, d)), ((dw, 0, d - t), (w, fh, d)), ((-dw, dh, d - t), (dw, fh, d))):
+            c = tuple((lo[k] + hi[k]) / 2 for k in range(3))
+            hf = tuple((hi[k] - lo[k]) / 2 for k in range(3))
+            p.box(c, hf, color, 'Stone')
+            p.collider(lo, hi)
+            # El zócalo, por fuera y por dentro (no en el dintel).
+            if lo[1] == 0:
+                p.box((c[0], 0.35, c[2]), (hf[0] + 0.04, 0.35, hf[2] + 0.04), base, 'Stone')
+        p.collider((-w, fh, -d), (w, h + 1.0, d))
+    else:
+        p.box((0, h / 2, 0), (w, h / 2, d), color, 'Stone')
+        p.box((0, 0.35, 0), (w + 0.04, 0.35, d + 0.04), shade(color, 0.7), 'Stone')  # zócalo
     for x in (-w, w):
         p.box((x, h / 2, d), (0.22, h / 2, 0.08), white, 'Stone')
     for f in range(1, floors):
@@ -469,7 +487,8 @@ def sobrado(name, seed, floors=2, width=7.0, shopfront=False, depth=4.5):
                 p.box((x - 0.65 + b * 0.26, y + 0.95, d + 0.7), (0.012, 0.45, 0.012), '#2a2a2e', 'Metal')
             if rnd.random() < 0.35:  # una maceta con flores
                 p.add(sphere(0.22, 0.18, 0.18, 8, 5), rnd.choice(['#e0245e', '#ff9f1c', '#c13fd6']), m=T(x + 0.45, y + 0.7, d + 0.5))
-    p.collider((-w, 0, -d), (w, h + 1.0, d))
+    if not room:
+        p.collider((-w, 0, -d), (w, h + 1.0, d))
     return p
 
 
@@ -590,24 +609,99 @@ def venda(name, seed, goods):
 
 
 def taberna(name, seed):
-    """Taberna (botequim) en la planta baja de un sobrado: la puerta grande abierta con la luz
-    cálida de dentro, ventanas encendidas, toneles junto a la puerta, la pizarra, dos mesas en
-    la acera con sus taburetes, una guirnalda de bombillas y el letrero de la jarra. La fachada
-    mira a +z; quien atiende, en la puerta."""
+    """Taberna (botequim) en la planta baja de un sobrado, en la que se entra: dentro, la barra
+    con el botellero detrás, toneles en el rincón, dos mesas, el banco del fondo y faroles que
+    cuelgan del techo; fuera, toneles junto a la puerta, la pizarra, dos mesas en la acera con
+    sus taburetes, una guirnalda de bombillas y el letrero de la jarra. La fachada mira a +z;
+    quien atiende, detrás de la barra."""
     width, depth = 7.0, 3.5
-    p = sobrado(name, seed, 2, width, shopfront=True, depth=depth)
+    p = sobrado(name, seed, 2, width, shopfront=True, depth=depth, room=(1.8, 2.6))
     rnd = random.Random(seed * 7 + 3)
     w, d = width / 2, depth
-    wood, warm = '#6a3f24', '#a8662e'
-    arch_opening(p, 0, 0.05, d + 0.02, 2.0, 3.0, warm, 'Glow')  # la puerta abierta
-    for s in (-1, 1):  # las hojas de la puerta, abiertas contra la pared
-        p.box((s * 1.25, 1.3, d + 0.08), (0.24, 1.25, 0.04), '#2a5a3a')
-    p.box((0, 1.0, d - 0.25), (0.8, 0.5, 0.2), wood)  # la barra, al fondo
-    for x in (-2.35, 2.35):  # ventanas encendidas con su reja
+    iw, idp = w - 0.2, d - 0.2  # lo de dentro
+    wood, warm, white = '#6a3f24', '#a8662e', '#fbf6ea'
+    # La puerta: el marco blanco y las hojas, abiertas contra la pared.
+    for s in (-1, 1):
+        p.box((s * 1.0, 1.35, d + 0.04), (0.1, 1.35, 0.06), white, 'Stone')
+        p.box((s * 1.25 + s * 0.12, 1.3, d + 0.1), (0.24, 1.25, 0.04), '#2a5a3a')
+    p.box((0, 2.7, d + 0.04), (1.1, 0.1, 0.06), white, 'Stone')
+    for x in (-2.35, 2.35):  # ventanas encendidas con su reja (y, por dentro, la tarde)
         arch_opening(p, x, 0.95, d + 0.02, 1.1, 1.9, warm, 'Glow')
+        arch_opening(p, x, 0.95, d - 0.22, 1.1, 1.9, '#e0a070', 'Glass')
         for b in range(4):
             p.box((x - 0.39 + b * 0.26, 1.7, d + 0.07), (0.015, 0.75, 0.015), BLACK, 'Metal')
-        p.box((x, 2.95, d + 0.06), (0.65, 0.06, 0.06), '#fbf6ea', 'Stone')
+        p.box((x, 2.95, d + 0.06), (0.65, 0.06, 0.06), white, 'Stone')
+    # --- Dentro ---
+    p.box((0, 0.012, 0), (iw, 0.014, idp), '#7a5232')  # el entarimado
+    for k in range(-6, 7):
+        p.box((k * 0.5, 0.028, 0), (0.008, 0.003, idp), '#5a3a22')
+    for y in (0.75, 1.0):  # una cenefa de azulejo en las paredes
+        p.box((0, y, -idp + 0.005), (iw, 0.11, 0.01), '#3d6fa8' if y < 0.9 else '#e8eef6', 'Stone')
+        for s in (-1, 1):
+            p.box((s * (iw - 0.005), y, 0), (0.01, 0.11, idp), '#3d6fa8' if y < 0.9 else '#e8eef6', 'Stone')
+    # La barra, con la tapa de madera clara y el paso a la derecha.
+    bx0, bx1, bz = -2.6, 1.4, -1.95
+    p.box(((bx0 + bx1) / 2, 0.52, bz), ((bx1 - bx0) / 2, 0.52, 0.28), wood)
+    p.box(((bx0 + bx1) / 2, 1.07, bz + 0.03), ((bx1 - bx0) / 2 + 0.05, 0.035, 0.34), '#b07a48')
+    for k in range(5):
+        p.box((bx0 + 0.4 + k * 0.8, 0.5, bz + 0.29), (0.3, 0.38, 0.01), '#5a3420')  # los cuarterones
+    p.collider((bx0, 0, bz - 0.3), (bx1, 1.12, bz + 0.34))
+    p.add(cylinder(0.05, 0.05, 0.25, 8), '#c8b070', 'Metal', T(-0.4, 1.1, bz))  # el grifo de la cerveza
+    for x, c in ((0.3, '#f0b040'), (0.5, '#f0b040'), (-1.6, '#2a7d4f')):  # vasos y una botella en la barra
+        p.add(cylinder(0.04, 0.035, 0.13 if c != '#2a7d4f' else 0.3, 8), c, 'Glass', T(x, 1.1, bz + 0.1))
+    for x in (-2.2, -1.4, 0.9):  # taburetes de barra (en medio, sitio para pedir)
+        p.add(cylinder(0.18, 0.18, 0.05, 10), '#8a5a34', m=T(x, 0.72, bz + 0.75))
+        p.add(cylinder(0.035, 0.035, 0.72, 6), BLACK, 'Metal', T(x, 0, bz + 0.75))
+        p.add(cylinder(0.16, 0.16, 0.02, 10), BLACK, 'Metal', T(x, 0, bz + 0.75))
+    # El botellero en la pared del fondo, con un espejo en medio.
+    zb = -idp + 0.14
+    p.box(((bx0 + bx1) / 2, 2.05, -idp + 0.02), (0.5, 0.35, 0.015), '#9fb4c0', 'Glass')
+    for y in (1.35, 1.8, 2.5):
+        p.box(((bx0 + bx1) / 2, y, zb), ((bx1 - bx0) / 2, 0.025, 0.13), '#5a3622')
+        x = bx0 + 0.15
+        while x < bx1 - 0.1:
+            if not (y == 1.8 and abs(x - (bx0 + bx1) / 2) < 0.55):
+                tall = rnd.uniform(0.18, 0.32)
+                p.add(cylinder(0.045, 0.04, tall, 8), rnd.choice(['#2a7d4f', '#6b2a1a', '#c8a040', '#d8e0e8', '#3a2a5a']),
+                      'Glass', T(x, y + 0.025, zb))
+            x += rnd.uniform(0.14, 0.22)
+    p.box((-0.6, 2.95, -idp + 0.02), (0.45, 0.2, 0.02), '#2c332e')  # la pizarra de los precios
+    for k in range(3):
+        p.box((-0.6, 3.05 - k * 0.1, -idp + 0.045), (0.3 - (k % 2) * 0.1, 0.01, 0.004), '#e8e4d8')
+    # Toneles en el rincón, detrás del paso.
+    for x, z, y in ((2.75, -2.75, 0), (2.75, -2.05, 0), (2.75, -2.4, 0.86)):
+        p.add(cylinder(0.33, 0.33, 0.85, 12), '#8a5a34', m=T(x, y, z))
+        for yy in (0.15, 0.7):
+            p.add(cylinder(0.345, 0.345, 0.05, 12), '#3a3d46', 'Metal', T(x, y + yy, z))
+    p.collider((2.4, 0, -idp), (iw, 1.75, -1.7))
+    # El banco del fondo, a lo largo de la pared derecha, donde se duerme.
+    bxs = iw - 0.25
+    p.box((bxs, 0.45, 0.8), (0.25, 0.04, 1.4), '#8a5a34')
+    p.box((iw - 0.04, 0.85, 0.8), (0.03, 0.35, 1.4), '#8a5a34')
+    for z in (-0.5, 0.8, 2.1):
+        p.box((bxs, 0.22, z), (0.2, 0.22, 0.04), '#5a3622')
+    p.box((bxs, 0.52, -0.3), (0.18, 0.06, 0.25), '#c8202f')  # un cojín
+    p.collider((iw - 0.5, 0, -0.6), (iw, 0.5, 2.2))
+    # Dos mesas con sus sillas.
+    for tx, tz in ((-2.1, 1.3), (1.75, 1.0)):
+        p.box((tx, 0.74, tz), (0.45, 0.025, 0.45), '#a8764a')
+        for sx in (-1, 1):
+            for sz in (-1, 1):
+                p.box((tx + sx * 0.38, 0.37, tz + sz * 0.38), (0.03, 0.37, 0.03), '#5a3622')
+        p.add(cylinder(0.04, 0.04, 0.12, 6), '#2a7d4f', 'Glass', T(tx + 0.1, 0.765, tz))
+        p.add(cylinder(0.05, 0.05, 0.03, 8), '#f4e8c8', 'Glow', T(tx - 0.1, 0.765, tz + 0.1))  # una vela
+        for a in (0.0, math.pi) if tx > 0 else (0.0, math.pi / 2, math.pi):
+            cx, cz = tx + math.cos(a) * 0.75, tz + math.sin(a) * 0.75
+            p.box((cx, 0.45, cz), (0.2, 0.03, 0.2), '#8a5a34')
+            for sx in (-1, 1):
+                for sz in (-1, 1):
+                    p.box((cx + sx * 0.16, 0.22, cz + sz * 0.16), (0.02, 0.22, 0.02), '#5a3622')
+        p.collider((tx - 0.5, 0, tz - 0.5), (tx + 0.5, 0.78, tz + 0.5))
+    # Faroles que cuelgan del techo.
+    for x, z in ((-1.6, 0.9), (1.4, 0.9), (-0.6, bz)):
+        p.rod((x, 3.27, z), (x, 2.55, z), 0.01, BLACK, 'Metal', seg=4)
+        p.add(cylinder(0.12, 0.06, 0.08, 8), BLACK, 'Metal', T(x, 2.55, z))
+        p.add(sphere(0.1, 0.13, 0.1, 8, 5), '#ffd890', 'Glow', T(x, 2.42, z))
     # Toneles junto a la puerta, uno de pie y otro tumbado.
     for x, z in ((-1.55, d + 0.45), (1.6, d + 0.45)):
         p.add(cylinder(0.32, 0.32, 0.85, 12), '#8a5a34', m=T(x, 0, z))
