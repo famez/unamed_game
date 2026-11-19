@@ -726,9 +726,9 @@ int main(int argc, char** argv) {
             float r = 95.0f + 55.0f * std::sin(tt * 0.09f), hgt = 22.0f + 16.0f * std::sin(tt * 0.13f + 1.0f), a = tt * 0.11f;
             if (game.level() == LevelId::Neon) hgt += 34;  // por encima de las torres
             look = {0, 6.0f, 0};
-            if (game.level() == LevelId::Rio) {  // el diorama de la bahía: de cerca
-                r = 46.0f + 12.0f * std::sin(tt * 0.09f), hgt = 20.0f + 8.0f * std::sin(tt * 0.13f + 1.0f);
-                look = {-6, 4.0f, -8};
+            if (game.level() == LevelId::Rio) {  // la bahía: alrededor de la ciudad y la caleta
+                r = 105.0f + 30.0f * std::sin(tt * 0.09f), hgt = 40.0f + 14.0f * std::sin(tt * 0.13f + 1.0f);
+                look = {15, 6.0f, 30};
             }
             if (game.level() == LevelId::Copas) {  // la aldea de las copas: de cerca, entre los troncos
                 r = 38.0f + 10.0f * std::sin(tt * 0.09f), hgt = 10.0f + 8.0f * std::sin(tt * 0.13f + 1.0f);

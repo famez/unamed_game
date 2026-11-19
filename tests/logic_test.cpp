@@ -165,7 +165,7 @@ int main() {
                 const char* what;
             };
             for (Walk w : {Walk{{0, 0, -22}, {0, 0, -1}, "mar adentro"}, Walk{{-28, 0, -22.5f}, {1, 0, 0}, "del mirador a la playa"},
-                           Walk{{0, 0, 5}, {0, 0, 1}, "bajo los arcos"}, Walk{{-23.5f, 0, 5}, {-1, 0, 0}, "fuera de la escalera"}}) {
+                           Walk{{0, 0, 40}, {0, 0, 1}, "al norte de la praça"}, Walk{{-23.5f, 0, 5}, {-1, 0, 0}, "fuera de la escalera"}}) {
                 place(r, {w.from.x, r.world_.groundAt(w.from.x, w.from.z) + 2.0f, w.from.z});
                 Controls c;
                 c.move = w.dir;
@@ -173,6 +173,42 @@ int main() {
                 Vec3 p = r.hero_.body.pos;
                 CHECK(t.fenceAt(p.x, p.z) < 0.1f, "bahía: %s se queda dentro del recinto (%.1f, %.1f; fuera %.2f m)", w.what, p.x, p.z,
                       t.fenceAt(p.x, p.z));
+            }
+        }
+        {  // La bahía se recorre andando: del centro a la iglesia, la vuelta por Guimarães, los
+            // becos del morro hasta el mirador y la Rua da Praia hasta la Prainha
+            Game r = fresh();
+            r.loadLevel(LevelId::Rio);
+            struct Route {
+                const char* what;
+                std::vector<Vec3> pts;
+            };
+            const Route routes[] = {
+                {"bajo los arcos a la iglesia", {{0, 0, 5}, {0, 0, 30}, {0, 0, 42}, {14, 0, 46}, {40, 0, 46}, {46, 0, 58}, {36, 0, 68},
+                                                 {44, 0, 80}, {40, 0, 90}, {40, 0, 96}}},
+                {"de la iglesia por Guimarães a la praça", {{30, 0, 97}, {10, 0, 95}, {-8, 0, 93}, {-14, 0, 91}, {-20, 0, 84},
+                                                            {-22, 0, 70}, {-8, 0, 58}, {0, 0, 50}}},
+                {"por los becos del morro al mirador", {{-14, 0, 46}, {-40, 0, 46}, {-46, 0, 40}, {-54, 0, 30}, {-62, 0, 20},
+                                                        {-58, 0, 8}, {-58, 0, 0}, {-52, 0, -3}, {-42, 0, -10}, {-32, 0, -17}, {-28, 0, -19}}},
+                {"por la Rua da Praia a la Prainha", {{8, 0, -4}, {12, 0, -7.5f}, {26, 0, -9.5f}, {42, 0, -12}, {50, 0, -14},
+                                                      {57, 0, -13}, {66, 0, -17}, {74, 0, -24}, {80, 0, -31}, {90, 0, -38}}},
+            };
+            for (const Route& rt : routes) {
+                Vec3 a = rt.pts[0];
+                place(r, {a.x, r.world_.groundAt(a.x, a.z) + 0.5f, a.z});
+                size_t next = 1;
+                for (int i = 0; i < 60 * 120 && next < rt.pts.size(); ++i) {
+                    Vec3 to = rt.pts[next], p = r.hero_.body.pos;
+                    if (length(flat(to - p)) < 1.5f) {
+                        ++next;
+                        continue;
+                    }
+                    Controls c;
+                    c.move = normalize(flat(to - p));
+                    r.update(dt, c);
+                }
+                Vec3 p = r.hero_.body.pos;
+                CHECK(next == rt.pts.size(), "bahía: %s (llega a %zu/%zu, en %.1f, %.1f, %.1f)", rt.what, next, rt.pts.size(), p.x, p.y, p.z);
             }
         }
         {  // Las Copas: por la escalera del tronco y la pasarela larga se llega al mirador; las
