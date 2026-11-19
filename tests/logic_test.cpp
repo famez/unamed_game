@@ -328,6 +328,113 @@ int main() {
             run(c, 4.0f);
             CHECK(c.hero_.body.pos.y > -1.0f && c.hp_ < c.maxHp_, "copas: quien cae vuelve a un sitio seguro (y=%.1f)", c.hero_.body.pos.y);
         }
+        {  // Los Andamios: cada tramo se puede hacer con lo que enseña, y no sin ello
+            Game a = fresh();
+            a.freePlay_ = true;  // como desde el selector: los tramos avanzan
+            a.loadLevel(LevelId::Andamios);
+            run(a, 0.5f);
+            Character& h = a.hero_;
+            CHECK(h.body.grounded && std::fabs(h.body.pos.y) < 0.05f && a.world_.ladders.size() == 2 && a.parts_.size() == 5,
+                  "andamios: de pie en el rellano (y=%.2f), %zu escaleras y %zu tramos", h.body.pos.y, a.world_.ladders.size(), a.parts_.size());
+            // Un salto de `from` hacia `to`: corre, salta al pasar por `takeoff` y, si hace falta,
+            // el doble salto en lo alto. Devuelve la altura a la que queda de pie.
+            auto hop = [&](Vec3 from, Vec3 takeoff, Vec3 to, bool twice) {
+                place(a, from);
+                Vec3 dir = normalize(flat(to - from));
+                bool jumped = false, doubled = false;
+                for (int i = 0; i < 60 * 3; ++i) {
+                    Controls c;
+                    c.move = length(flat(to - h.body.pos)) > 0.4f ? normalize(flat(to - h.body.pos)) : Vec3{};
+                    if (!jumped && dot(flat(h.body.pos - takeoff), dir) > 0) c.jump = jumped = true;
+                    else if (twice && jumped && !doubled && h.body.vel.y < 0.5f) c.jump = doubled = true;
+                    a.update(dt, c);
+                }
+                return h.body.grounded ? h.body.pos.y : -100.0f;
+            };
+            {  // 1. la escalera de gato: empujando contra ella se sube y arriba se encarama
+                place(a, {0, 0.1f, 3});
+                Controls c;
+                c.move = {0, 0, 1};
+                bool climbed = false;
+                for (int i = 0; i < 60 * 4; ++i) {
+                    a.update(dt, c);
+                    climbed = climbed || h.climb() == Character::Climb::Ladder;
+                }
+                CHECK(climbed && h.body.grounded && std::fabs(h.body.pos.y - 5) < 0.05f && a.part_ >= 1,
+                      "andamios: por la escalera de gato a lo alto de la torre (y=%.2f, tramo %zu)", h.body.pos.y, a.part_);
+                place(a, {0, 5.1f, 7.2f});  // y se baja andando hacia el borde de la escalera
+                bool down = false;
+                for (int i = 0; i < 60 * 4; ++i) {
+                    down = down || h.climb() == Character::Climb::Ladder;
+                    c.move = down && h.body.grounded ? Vec3{} : Vec3{0, 0, -1};  // abajo, se para
+                    a.update(dt, c);
+                }
+                CHECK(down && h.body.grounded && std::fabs(h.body.pos.y) < 0.05f && !h.climbing(), "andamios: por la escalera se baja (y=%.2f)", h.body.pos.y);
+                CHECK(hop({1.6f, 0.1f, 3}, {1.6f, 0, 4.5f}, {1.6f, 0, 9}, true) < 1.0f, "andamios: sin la escalera no se llega a la torre (ni con el doble salto)");
+            }
+            {  // 2. los saltos (el último, con doble salto; sin él no se llega)
+                float y1 = hop({0, 5.1f, 7.5f}, {0, 0, 9.6f}, {0, 0, 13.5f}, false);
+                float y2 = hop({0, 5.1f, 13.0f}, {0, 0, 14.6f}, {0, 0, 18.0f}, false);
+                float y3 = hop({0, 6.3f, 16.8f}, {0, 0, 18.6f}, {3.0f, 0, 22.5f}, true);
+                CHECK(std::fabs(y1 - 5) < 0.05f && std::fabs(y2 - 6.2f) < 0.05f && std::fabs(y3 - 8.6f) < 0.05f,
+                      "andamios: de losa en losa (%.2f, %.2f, %.2f)", y1, y2, y3);
+            }
+            // Bot de paredes: corre hacia `first`; agarrado, salta en cuanto puede; en el aire, sigue
+            // hacia donde mira y, tras un salto de pared, gasta el doble salto si `twice`. Para al
+            // pisar por encima de `goal`.
+            auto wallBot = [&](Vec3 from, Vec3 first, float goal, bool twice, int& clings) {
+                place(a, from);
+                clings = 0;
+                bool started = false, wallJumped = false, doubled = false;
+                float best = -100;
+                for (int i = 0; i < 60 * 8; ++i) {
+                    Controls c;
+                    bool high = h.body.grounded && h.body.pos.y > from.y + 0.5f;  // encaramada a medio camino
+                    c.move = started && !high ? h.forward() : first;
+                    if (!started && i > 20) c.jump = started = true;
+                    if (high && !h.climbing() && dot(h.forward(), first) > 0.95f) c.jump = true, wallJumped = true, doubled = false;  // ya vuelta
+                    else if (h.climb() == Character::Climb::Wall && h.climbTime_ > 0.08f) c.jump = wallJumped = true, doubled = false;
+                    else if (twice && wallJumped && !doubled && !h.climbing() && !h.body.grounded && h.body.vel.y < 1.0f) c.jump = doubled = true;
+                    Character::Climb before = h.climb();
+                    a.update(dt, c);
+                    if (h.climb() == Character::Climb::Wall && before != Character::Climb::Wall) ++clings;
+                    if (h.body.grounded && h.body.pos.y > goal - 0.1f) {
+                        best = h.body.pos.y;
+                        break;
+                    }
+                }
+                return best;
+            };
+            {  // 3. el pozo: de pared en pared hasta arriba
+                int clings = 0;
+                float y = wallBot({8.2f, 8.7f, 23}, {1, 0, 0}, 15.2f, true, clings);
+                CHECK(std::fabs(y - 15.2f) < 0.05f && clings >= 2, "andamios: el pozo se sube saltando de pared en pared (y=%.2f, %d agarres)", y, clings);
+                CHECK(hop({4.0f, 8.7f, 21.0f}, {5.0f, 0, 21.0f}, {11.0f, 0, 21.0f}, true) < 15.0f, "andamios: el pozo no se salta con el doble salto");
+            }
+            {  // 4. la cornisa: agarrarse a la pared suelta, salto de pared y doble salto
+                int clings = 0;
+                float y = wallBot({8.6f, 16.5f, 34}, {1, 0, 0}, 21.2f, true, clings);
+                CHECK(std::fabs(y - 21.2f) < 0.05f && clings >= 1, "andamios: a la cornisa con un salto de pared (y=%.2f, %d agarres)", y, clings);
+                CHECK(hop({9.4f, 16.5f, 34}, {8.0f, 0, 34}, {4.0f, 0, 34}, true) < 21.0f, "andamios: a la cornisa no se llega solo con el doble salto");
+            }
+            {  // 5. de la cornisa a la escalera que cuelga y arriba, a la linterna
+                a.part_ = 4;
+                place(a, {4.5f, 21.3f, 34.5f});
+                bool jumped = false, grabbed = false;
+                for (int i = 0; i < 60 * 6; ++i) {
+                    Controls c;
+                    c.move = h.body.grounded && h.body.pos.y > 26.5f ? Vec3{} : Vec3{0, 0, 1};  // arriba, se para
+                    if (!jumped && h.body.pos.z > 35.6f) c.jump = jumped = true;
+                    a.update(dt, c);
+                    grabbed = grabbed || h.climb() == Character::Climb::Ladder;
+                }
+                CHECK(grabbed && h.body.grounded && std::fabs(h.body.pos.y - 27) < 0.05f && a.part_ == 5,
+                      "andamios: salto a la escalera que cuelga y arriba, a la linterna (y=%.2f, tramos %zu/5)", h.body.pos.y, a.part_);
+            }
+            place(a, {20, 2, 0});  // sobre el vacío: vuelve al último tramo
+            run(a, 3.0f);
+            CHECK(h.body.pos.y > 26 && h.body.grounded, "andamios: quien cae vuelve al último tramo (y=%.1f)", h.body.pos.y);
+        }
         {  // Habitantes: pasean por su zona, sin hundirse ni salir volando
             Game h = fresh();
             h.loadLevel(LevelId::Cafetero);

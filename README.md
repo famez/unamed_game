@@ -71,7 +71,7 @@ Dependencias del sistema: `libOpenGL`/`libGLX` (glvnd + Mesa), `libX11` y `libXi
 (`sudo apt install libxi-dev`). Incluidas en el repositorio: `stb_truetype.h` y las
 fuentes Orbitron y Exo 2.
 
-Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena id` (reproduce una escena del guion), `--autoplay` (un bot combate solo, sin capturar el ratón), `--sombra` (empezar en modo sombra), `--exportar-modelos [carpeta]` (escribe a .glb los personajes que falten; `--forzar` los sustituye), `--visor fichero.glb` (visor de modelos), `--vitrina` (guion que enseña ataques, técnicas, formas y mecánicas), `--video fichero.mp4 [seg]` (graba a velocidad real con ffmpeg),
+Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena id` (reproduce una escena del guion), `--autoplay` (un bot combate solo, sin capturar el ratón), `--escalada` (con `--nivel andamios`: un bot hace la subida de Los Andamios), `--sombra` (empezar en modo sombra), `--exportar-modelos [carpeta]` (escribe a .glb los personajes que falten; `--forzar` los sustituye), `--visor fichero.glb` (visor de modelos), `--vitrina` (guion que enseña ataques, técnicas, formas y mecánicas), `--video fichero.mp4 [seg]` (graba a velocidad real con ffmpeg),
 `--screenshot fichero.ppm segundos [frames]` (guarda frames y sale), `--camyaw radianes` y `--efectos-golpe lista` (qué efectos de golpe se ven: `tajo`, `destello`, `materia` —esquirlas de cristal en los de luz, tinta que mancha el suelo en los de sombra—, `sacudida`, `camara`, `remate`; o `todos` / `ninguno`).
 
 ## Controles
@@ -79,7 +79,9 @@ Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena i
 | Tecla | Acción |
 |---|---|
 | W A S D | Correr (relativo a la cámara). **Shift**: correr más rápido |
-| Espacio | Saltar; en el aire, **doble salto** con voltereta |
+| Espacio | Saltar; en el aire, **doble salto** con voltereta. Agarrada a una pared: **salto de pared** |
+| W A S D contra una escalera | **Escalera de gato**: adelante sube, atrás baja, Espacio se suelta; arriba se encarama. Andando hacia el borde donde acaba una, se baja por ella |
+| Saltar contra una pared | Se **agarra** un momento (luego resbala); desde ahí, Espacio salta hacia fuera. La misma pared no vale dos veces sin pisar suelo; entre dos enfrentadas se sube. Si el borde queda a la altura del pecho, se **encarama** |
 | Clic izquierdo | Atacar (combo según el arma). **Mantener**: corte cargado (lanza una onda) |
 | Clic derecho (mantener) | Guardia (se puede andar mirando a la cámara). Justo antes del golpe: **bloqueo perfecto**, el enemigo queda aturdido y atacar lanza el **súper contraataque** |
 | C / Ctrl | Voltereta de esquiva (invulnerable); un golpe justo después es un **contraataque** |

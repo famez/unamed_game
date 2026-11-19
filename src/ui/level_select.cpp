@@ -17,6 +17,7 @@ const LevelSelect::Entry kEntries[] = {
     {"Mapa · Pueblo cafetero", "Plaza, casas de bahareque de colores y cafetales en la loma", false, LevelId::Cafetero},
     {"Mapa · Ciudad de la Bahía", "Al estilo de Río: playas salvajes, el centro colonial, el morro y el teleférico", false, LevelId::Rio},
     {"Mapa · Las Copas", "Una aldea en lo alto de árboles gigantes: pasarelas, la posada y vértigo", false, LevelId::Copas},
+    {"Puzles · Los Andamios", "Saltos sobre el vacío: escaleras de gato, paredes a las que agarrarse y saltos de pared", false, LevelId::Andamios},
 };
 constexpr int kCount = int(sizeof(kEntries) / sizeof(kEntries[0]));
 

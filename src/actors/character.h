@@ -130,8 +130,34 @@ public:
     bool rolling() const { return rollTime_ >= 0; }
     bool hurt() const { return hurtTimer_ > 0; }
     bool busy() const {
-        return move_ != Move::None || rolling() || hurt() || downTimer >= 0 || lying > 0.01f;
+        return move_ != Move::None || rolling() || hurt() || downTimer >= 0 || lying > 0.01f || climbing();
     }
+
+    // Trepar. Escaleras de gato (World::ladders): empujando hacia una se agarra; adelante sube,
+    // atrás baja, arriba se encarama al borde y saltar se suelta de espaldas. Andando hacia el
+    // borde donde acaba una, se baja por ella. Paredes: saltando contra una cara alta se queda
+    // pegada un momento (luego resbala) y saltar desde ahí impulsa hacia fuera y hacia arriba;
+    // la misma cara no vuelve a agarrarse hasta pisar suelo (entre dos paredes enfrentadas, sí
+    // se sube). Si al llegar el borde le queda a la altura del pecho, se encarama.
+    enum class Climb { None, Ladder, Wall, Mount };
+    enum class ClimbEvent { None, Grab, Cling, WallJump, LadderJump, Mount };
+    static constexpr float kLadderSpeed = 3.2f;
+    static constexpr float kClingHold = 0.5f, kClingTime = 1.6f;  // quieta en la pared; y hasta soltarse
+    static constexpr float kClingSlide = 2.2f;                    // m/s resbalando
+    static constexpr float kWallJumpUp = 8.5f, kWallJumpOut = 6.5f;
+    static constexpr float kMountTime = 0.42f;
+    Climb climb() const { return climb_; }
+    bool climbing() const { return climb_ != Climb::None; }
+    float climbTime() const { return climbTime_; }  // segundos en lo que esté trepando
+    float clingLeft() const { return climb_ == Climb::Wall ? clampf(1.0f - climbTime_ / kClingTime, 0, 1) : 0.0f; }
+    // Lo que acaba de pasar trepando (para el sonido), una sola vez.
+    ClimbEvent takeClimbEvent() {
+        ClimbEvent e = event_;
+        event_ = ClimbEvent::None;
+        return e;
+    }
+    // Lo suelta de lo que esté trepando (cae).
+    void releaseClimb();
     bool airComboSpent() const { return airComboSpent_; }
     // Acercamiento rápido en curso (para abrir un poco el campo de visión).
     float dashAmount() const { return dashTime_ > 0 ? 1.0f : 0.0f; }
@@ -149,6 +175,11 @@ public:
 
 private:
     void startMove(Move m, float faceYaw, float dash);
+    bool tryGrab(float input, const World& world);
+    void updateClimb(float dt, float input, bool jump, const World& world);
+    void startMount(Vec3 to, Climb after);
+    void animateClimb(Pose& out) const;
+    void finishPose(float dt);
     Move nextAttack() const;
     void animate(Pose& target) const;
     int stateKey() const;
@@ -184,6 +215,24 @@ private:
     bool doubleJumpUsed_ = false;
     float flipTime_ = -1;        // voltereta del doble salto
     float camYaw_ = 0;
+
+    // Trepar.
+    Climb climb_ = Climb::None;
+    int ladder_ = -1;
+    AABB wallBox_{};          // la caja de la pared a la que está pegada
+    Vec3 wallN_;              // su cara (hacia fuera)
+    AABB lastWall_{};         // la última cara de la que se soltó (no se repite sin pisar suelo)
+    Vec3 lastWallN_;
+    bool lastWallSet_ = false;
+    float climbTime_ = 0;     // segundos en la pared o en la escalera
+    float climbPhase_ = 0;    // ciclo de manos y pies en la escalera
+    float climbSpeed_ = 0;    // lo que sube (+) o baja (-) ahora
+    Vec3 mountFrom_, mountTo_;
+    Climb mountAfter_ = Climb::None;
+    float regrab_ = 0;        // tras soltarse, un momento sin volver a agarrarse
+    float jumpLock_ = 0;      // tras el salto de pared, la marcha sigue el impulso
+    float airTime_ = 0;
+    ClimbEvent event_ = ClimbEvent::None;
 
     // Fluidez.
     Pose blendFrom_;         // pose de la que se parte al cambiar de estado

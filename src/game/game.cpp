@@ -171,7 +171,7 @@ void Game::update(float dt, const Controls& input) {
         for (const Enemy& e : enemies_)
             danger = danger || (e.targetable() && length(flat(e.body.pos - hero_.body.pos)) < 16.0f);
         combatTimer_ = danger ? 5.0f : std::max(0.0f, combatTimer_ - dt);
-        hero_.setArmed(powers_.attack && combatTimer_ > 0);
+        hero_.setArmed(powers_.attack && combatTimer_ > 0 && !hero_.climbing());  // trepando, a la espalda
         bool alert = lock_ >= 0;  // en guardia: con un objetivo fijado o un Gris muy cerca
         for (const Enemy& e : enemies_)
             alert = alert || (e.targetable() && length(flat(e.body.pos - hero_.body.pos)) < 6.0f);
@@ -201,6 +201,21 @@ void Game::update(float dt, const Controls& input) {
     if (c.jump && wasGrounded && hero_.body.vel.y > 1.0f) {
         sound(Sfx::Jump, hero_.body.pos, 0.7f);
         voice(VoiceLine::Jump, 0.45f);
+    }
+    switch (hero_.takeClimbEvent()) {  // trepar: agarrarse, saltar de la pared, encaramarse
+        case Character::ClimbEvent::Grab: sound(Sfx::Guard, hero_.body.pos, 0.35f, 1.3f); break;
+        case Character::ClimbEvent::Cling:
+            sound(Sfx::Guard, hero_.body.pos, 0.5f, 0.8f);
+            spawnSparks(hero_.body.pos + Vec3{0, 1.0f, 0} - hero_.forward() * 0.3f, hero_.forward(), 8, rgba(200, 190, 170), 2.0f, false);
+            break;
+        case Character::ClimbEvent::WallJump:
+            sound(Sfx::Jump, hero_.body.pos, 0.8f, 1.1f);
+            voice(VoiceLine::Jump, 0.7f);
+            spawnRing(hero_.body.pos + Vec3{0, 0.9f, 0} - hero_.forward() * 0.35f, 0.7f, 0.25f, rgba(255, 220, 170));
+            break;
+        case Character::ClimbEvent::LadderJump: sound(Sfx::Jump, hero_.body.pos, 0.6f); break;
+        case Character::ClimbEvent::Mount: sound(Sfx::Dodge, hero_.body.pos, 0.4f, 1.2f); break;
+        case Character::ClimbEvent::None: break;
     }
     updateTravel(dt);
     constrainDive();

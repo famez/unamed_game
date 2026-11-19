@@ -524,6 +524,7 @@ void Game::buildPuente() {
 void Game::loadLevel(LevelId id) {
     saveBrains();  // lo aprendido por los Grises se guarda en cada cambio de escenario
     blocks_.clear();
+    world_.ladders.clear();
     decor_.clear();
     lamps_.clear();
     crates_.clear();
@@ -598,6 +599,7 @@ void Game::loadLevel(LevelId id) {
         case LevelId::Cafetero: buildCafetero(); break;
         case LevelId::Rio: buildRio(); break;
         case LevelId::Copas: buildCopas(); break;
+        case LevelId::Andamios: buildAndamios(); break;
         case LevelId::Count: break;
     }
     // Los mapas grandes: la Ciudad Neón a todo color; los demás, en el atardecer detenido con
@@ -611,6 +613,7 @@ void Game::loadLevel(LevelId id) {
     placeCitizens();
     placeCreatures();
     hero_.body.pos = checkpoint_ = heroStart_;
+    pendingCheckpoint_ = false;
     hero_.body.vel = {};
     hero_.yaw = checkpointYaw_ = heroStartYaw_;
     briznaPos_ = {};
@@ -762,6 +765,11 @@ void Game::updateLevel(float dt) {
             playScene(en.sceneClear);
         }
     }
+    if (pendingCheckpoint_ && hero_.body.grounded && !hero_.climbing()) {
+        pendingCheckpoint_ = false;
+        checkpoint_ = hero_.body.pos;
+        checkpointYaw_ = hero_.yaw;
+    }
     // Partes: al cumplir el objetivo se abren puertas, suena su escena y sigue la siguiente.
     const LevelPart* p = currentPart();
     if (!p) return;
@@ -774,10 +782,7 @@ void Game::updateLevel(float dt) {
         playScene(p->sceneDone);
         ++part_;
         partBanner_ = 3.5f;
-        if (hero_.body.grounded) {
-            checkpoint_ = hero_.body.pos;
-            checkpointYaw_ = hero_.yaw;
-        }
+        pendingCheckpoint_ = true;  // donde vuelva a pisar (si lo cumple en el aire o trepando)
         if (const LevelPart* next = currentPart()) playScene(next->sceneStart);
         uiSound(Sfx::ItemGet, 0.6f, 0.8f);
     }

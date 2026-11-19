@@ -21,6 +21,7 @@ find_package(Threads REQUIRED)  # el audio mezcla en su propio hilo
 set(LOGIC_SOURCES
     src/actors/skeleton.cpp
     src/actors/character.cpp
+    src/actors/climb.cpp
     src/actors/hero_clips.cpp
     src/actors/physics.cpp
     src/game/items.cpp
@@ -38,6 +39,7 @@ set(LOGIC_SOURCES
     src/game/levels_open.cpp
     src/game/levels_rio.cpp
     src/game/levels_copas.cpp
+    src/game/levels_andamios.cpp
     src/game/npcs.cpp
     src/game/wild.cpp
     src/game/swarm.cpp
@@ -77,6 +79,7 @@ add_executable(game
     src/ui/hud.cpp
     src/ui/level_select.cpp
     src/dev/showcase.cpp
+    src/dev/climb_bot.cpp
     src/dev/viewer.cpp
     src/render/glb_write.cpp
     src/render/hero_model.cpp

@@ -443,7 +443,7 @@ void Character::startMove(Move m, float faceYaw, float dash) {
 }
 
 bool Character::attack(float faceYaw, float dash) {
-    if (rolling() || hurt() || downTimer >= 0 || lying > 0.01f) return false;
+    if (rolling() || hurt() || downTimer >= 0 || lying > 0.01f || climbing()) return false;
     // Especiales según la situación (solo si no hay otro golpe en curso).
     if (move_ == Move::None) {
         Move special = Move::None;
@@ -478,7 +478,7 @@ bool Character::cast(float faceYaw) {
 }
 
 bool Character::dodge(Vec3 dir) {
-    if (rolling() || hurt() || downTimer >= 0 || !body.grounded) return false;
+    if (rolling() || hurt() || downTimer >= 0 || !body.grounded || climbing()) return false;
     // Se puede cancelar la recuperación de un golpe (no su preparación).
     if (move_ != Move::None && !impactDone_) return false;
     move_ = Move::None;
@@ -492,6 +492,7 @@ bool Character::dodge(Vec3 dir) {
 }
 
 void Character::flinch(float seconds, Vec3 push) {
+    if (climb_ == Climb::Ladder || climb_ == Climb::Wall) releaseClimb();  // un golpe la despega
     hurtTimer_ = seconds;
     // Sacudida: el tronco y la cabeza salen despedidos hacia donde empuja el golpe y los
     // muelles los devuelven con un rebote.
@@ -522,7 +523,7 @@ Move Character::takeImpact() {
 // Estados "discretos" de la animación: al cambiar alguno se funde la pose.
 int Character::stateKey() const {
     return int(move_) | (rolling() ? 1 << 5 : 0) | (body.grounded ? 1 << 6 : 0) | (guarding() ? 1 << 7 : 0) |
-           (hurt() ? 1 << 8 : 0) | (downTimer >= 0 ? 1 << 9 : 0);
+           (hurt() ? 1 << 8 : 0) | (downTimer >= 0 ? 1 << 9 : 0) | (int(climb_) << 10);
 }
 
 void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, float camYaw) {
@@ -536,6 +537,29 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
     hurtTimer_ = std::max(0.0f, hurtTimer_ - dt);
     float input = downTimer >= 0 ? 0.0f : std::min(length(moveDir), 1.0f);
     if (input > 0.01f) moveDir_ = normalize(moveDir);
+    regrab_ = std::max(0.0f, regrab_ - dt);
+    airTime_ = body.grounded ? 0.0f : airTime_ + dt;
+    if (body.grounded) lastWallSet_ = false;  // pisando suelo, cualquier pared vale otra vez
+
+    // Trepando (o agarrándose ahora): ni golpes ni carrera; la pose sale de animateClimb().
+    if (climbing() || tryGrab(input, world)) {
+        updateClimb(dt, input, jump, world);
+        if (climbing()) {
+            speed = 0;
+            moveVel_ = {};
+            airBlend_ = 0;
+            prevSpeed_ = 0;
+            prevYaw_ = yaw;
+            finishPose(dt);
+            return;
+        }
+    }
+    // Tras el salto de pared, la marcha sigue un momento el impulso (no se vuelve a la pared).
+    if (jumpLock_ > 0) {
+        jumpLock_ -= dt;
+        moveDir_ = forward();
+        input = 1;
+    }
 
     // Saltar cancela la recuperación de un golpe de suelo (no su preparación).
     if (jump && body.grounded && isAttack(move_) && !isAirAttack(move_) && impactDone_ && moveU() > 0.55f) {
@@ -720,8 +744,12 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
     }
     guardTime_ = guarding() ? guardTime_ + dt : 0.0f;
     guardBlend_ = moveTowards(guardBlend_, guarding() ? 1.0f : 0.0f, 12.0f * dt);
+    finishPose(dt);
+}
 
-    // Pose: la del estado actual, fundida desde la anterior si el estado ha cambiado.
+// La pose del estado actual, fundida desde la anterior si el estado ha cambiado, con sus
+// muelles; luego las matrices y el movimiento secundario.
+void Character::finishPose(float dt) {
     int key = stateKey();
     if (key != lastKey_) {
         bool toAttack = isAttack(move_);
@@ -852,6 +880,10 @@ void Character::interpolatedJoints(float alpha, Mat4 out[JointCount]) const {
 // atrás (-Z); rotar +Z lo lleva hacia +X (la izquierda del personaje).
 void Character::animate(Pose& out) const {
     out = Pose{};
+    if (climbing()) {
+        animateClimb(out);
+        return;
+    }
     Vec3* r = out.rotation;
 
     float run = clampf(speed / kRunSpeed, 0, 1) * (1.0f - airBlend_);
