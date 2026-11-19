@@ -219,9 +219,10 @@ vuelve al selector.
     fuente y calles de sobrados de colores); de allí la cuesta en zigzag de **Santa Teresa**
     sube al **Largo da Igreja**, que vuelve por la Rua Monte Alegre y el Largo dos Guimarães.
     Al oeste, los **becos del morro** suben a la cancha y bajan al mirador; al este, la **Rua da
-    Praia** lleva al **Largo do Bondinho**, con la estación del teleférico (estuco, azulejo y
-    teja, como las de Urca y el Pan de Azúcar; cabinas pintadas como el tranvía), y una senda
-    por la selva baja a la **Prainha**, otra playa virgen con su laguna. Seis nodos de color.
+    Praia** lleva al **Largo do Bondinho**, sobre la peña, y de allí una senda por la selva
+    baja a la **Prainha**, otra playa virgen con su laguna. La estación del teleférico está en
+    la caleta, al pie del paseo (estuco, azulejo y teja, como las de Urca y el Pan de Azúcar;
+    cabinas pintadas como el tranvía). Seis nodos de color.
     Lo lejano (el mar, los morros con la favela y la estatua del cerro) es telón de fondo. El
     borde de las zonas es un recinto en el terreno (`Terrain::fence`) que nadie cruza.
   - **Las Copas** (`--nivel copas`, al anochecer): una aldea en lo alto de árboles gigantes

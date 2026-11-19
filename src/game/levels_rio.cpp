@@ -9,9 +9,9 @@
 //   - Santa Teresa: la cuesta en zigzag hasta el Largo da Igreja, y la Rua Monte Alegre que
 //     vuelve por el Largo dos Guimarães y la Rua do Lavradio.
 //   - El Morro: los becos de la favela que suben a la cancha y bajan al mirador.
-//   - La Rua da Praia y el Largo do Bondinho: la estación del teleférico sobre la peña; de allí
-//     una senda por la selva baja a la Prainha, una playa virgen con su laguna.
-//   - El teleférico (F en el andén) sube al Morro da Urca y de allí al Pão de Açúcar: en lo alto
+//   - La Rua da Praia y el Largo do Bondinho, sobre la peña: de allí una senda por la selva baja
+//     a la Prainha, una playa virgen con su laguna.
+//   - El teleférico sale de la caleta, al pie del paseo (F en el andén), y sube al Morro da Urca y de allí al Pão de Açúcar: en lo alto
 //     de cada uno, una explanada con su estación y su mirador.
 // En las plazas, tiendas (el armazém, la botica, el amolador: F a quien atiende para comprar)
 // y tabernas (F al tabernero: se descansa, con la vida llena y punto de control).
@@ -78,6 +78,7 @@ float sandHeight(float z, float s, float top) {
     return -0.6f + 2.1f * smoothstep01((z - s) / std::max(1.0f, top - s));
 }
 
+
 // Pared alrededor de una zona: sube `wall` metros en `run` y luego sigue la ladera.
 float rise(float d, float wall, float run, float slope) {
     if (d <= 0) return 0;
@@ -93,6 +94,11 @@ const float kCoretoH = 2.5f, kIgrejaH = 15.0f, kBondinhoH = 3.5f, kQuadraH = 12.
 // El Morro da Urca y el Pão de Açúcar (cúpulas de roca en la bahía) con su explanada arriba.
 const Vec3 kUrca{18, 0, -92}, kPao{50, 0, -112};
 const float kUrcaTop = 22.0f, kPaoTop = 52.0f, kTopR = 10.0f;
+// La estación de abajo del teleférico: en la caleta, a la vista desde el paseo y a pie llano.
+// Su suelo es una explanada a la altura de la arena en su centro (cableBase).
+const Vec3 kCableBase{11, 0, -21};
+const float kCableBaseR = 7.5f;
+Vec3 cableBase() { return {kCableBase.x, sandHeight(kCableBase.z, shoreZ(kCableBase.x), -8), kCableBase.z}; }
 
 // Rectángulo orientado (las casas), para no ponerlas unas encima de otras.
 struct Footprint {
@@ -151,8 +157,6 @@ void Game::buildRio() {
         // La senda de la Prainha: baja por la selva desde el largo.
         {{{57, -13, kBondinhoH, 2.2f}, {66, -17, 2.6f, 2.2f}, {74, -24, 1.8f, 2.2f}, {80, -31, 1.5f, 2.4f}}, Tierra, 5, 3, 0.4f},
     };
-    const Vec3 dirUrca = normalize(flat(kUrca - kBondinho));
-    const Vec3 stationAt = kBondinho + dirUrca * 15.5f;
     const std::vector<Area> areas = {
         {{0, 0, 5}, 13, 12, 0, kPlazaH, Losas, true, 3, 3, 0.55f},  // el Largo de los Arcos
         {kMirador, kMiradorR, -1, 0, kMiradorH, PiedraClara},
@@ -161,7 +165,6 @@ void Game::buildRio() {
         {kGuimaraes, 7.5f, -1, 0, kGuimaraesH, PiedraClara},
         {kQuadra, 9, 6, 0, kQuadraH, Cancha},
         {kBondinho, 10, -1, 0, kBondinhoH, Losas},
-        {stationAt, 7, -1, 0, kBondinhoH, Fuera, false},          // bajo la estación
         {{96, 0, -24}, 5.5f, -1, 0, -1.4f, Sand, false, 1.5f, 2.5f, 0.3f},  // la laguna de la Prainha
         {kUrca, kTopR, -1, 0, kUrcaTop, PiedraClara, false},  // las explanadas del teleférico (se pisan en su zona)
         {kPao, kTopR, -1, 0, kPaoTop, PiedraClara, false},
@@ -226,6 +229,8 @@ void Game::buildRio() {
             }
             for (auto [c, top] : {std::pair<Vec3, float>{kUrca, kUrcaTop}, {kPao, kPaoTop}})  // la explanada, algo más ancha
                 if (length(flat(p - c)) < kTopR + 1.5f) h = std::max(h, top);                // que lo que se anda
+            if (float qb = length(flat(p - kCableBase)); qb < kCableBaseR + 3.0f)  // la explanada de la estación
+                h = lerpf(cableBase().y, h, smoothstep01((qb - kCableBaseR) / 3.0f));
             float qi = length(flat(p - kIslet));  // el islote del cocotero
             if (qi < 3.4f) h = std::max(h, -0.2f + 0.9f * (1 - (qi / 3.4f) * (qi / 3.4f)));
             float edge = std::min({x - t.x0, -t.x0 - x, -t.z0 - z});
@@ -388,20 +393,20 @@ void Game::buildRio() {
     // Sin quiosco, ni sombrillas, ni socorrista: cocoteros inclinados, matorral de duna, troncos
     // varados y la selva que baja hasta la arena. Solo la barca del barquero.
     addProp("barca", {-7, 0, -31}, 1.2f);
-    for (Vec3 p : {Vec3{-16.5f, 0, -11}, Vec3{16.5f, 0, -13}, Vec3{-17.5f, 0, -23}, Vec3{-13, 0, -19}, Vec3{12.5f, 0, -20},
-                   Vec3{17, 0, -26}, Vec3{-6, 0, -12.5f}, Vec3{7, 0, -14}})
+    for (Vec3 p : {Vec3{-16.5f, 0, -11}, Vec3{16.5f, 0, -13}, Vec3{-17.5f, 0, -23}, Vec3{-13, 0, -19}, Vec3{17.5f, 0, -29}, Vec3{-6, 0, -12.5f}, Vec3{7, 0, -14}})
         addProp(int(p.x) % 2 ? "cocotero" : "cocotero_alto", p, rng.range(0, 6.28f), rng.range(0.9f, 1.15f));
     for (int i = 0; i < 26; ++i) {  // matorral y flores en lo alto de la arena, al pie del paseo
         Vec3 p{rng.range(-18, 18), 0, rng.range(-15, -9.5f)};
+        if (length(flat(p - kCableBase)) < kCableBaseR + 3.0f) continue;  // el andén del teleférico, despejado
         float r = rng.next();
         addProp(r < 0.4f ? "hierba" : r < 0.65f ? "arbusto" : r < 0.85f ? "heliconia" : "platanera", p, rng.range(0, 6.28f),
                 rng.range(0.7f, 1.1f));
     }
-    for (Vec3 p : {Vec3{-11, 0, -22}, Vec3{4, 0, -19.5f}, Vec3{14, 0, -17}})  // troncos que trajo el mar
+    for (Vec3 p : {Vec3{-11, 0, -22}, Vec3{2, 0, -19.5f}, Vec3{17.5f, 0, -19}})  // troncos que trajo el mar
         addProp("tronco_caido", p, rng.range(0, 6.28f), rng.range(0.7f, 0.9f));
     for (int i = 0; i < 10; ++i) {  // piedras sueltas en la orilla
         Vec3 p{rng.range(-17, 17), 0, rng.range(-33, -24)};
-        if (length(flat(p - Vec3{-7, 0, -31})) < 3) continue;
+        if (length(flat(p - Vec3{-7, 0, -31})) < 3 || length(flat(p - kCableBase)) < kCableBaseR) continue;
         addProp(i % 3 ? "piedra" : "roca", p, rng.range(0, 6.28f), rng.range(0.5f, 1.0f));
     }
     // El fondo del mar, que se ve a través del agua: algas y corales donde hay poco fondo,
@@ -413,7 +418,7 @@ void Game::buildRio() {
         for (int tries = 0; tries < 1400 && (seabed < 110 || beach < 26); ++tries) {
             bool prainha = tries % 3 == 2;
             Vec3 p = prainha ? Vec3{rng.range(72, 110), 0, rng.range(-62, -32)} : Vec3{rng.range(-19, 19), 0, rng.range(-60, -24)};
-            if (length(flat(p - kIslet)) < 4.0f) continue;
+            if (length(flat(p - kIslet)) < 4.0f || length(flat(p - kCableBase)) < kCableBaseR) continue;
             float g = ground(p.x, p.z);
             if (g < -3.6f || g > 0.6f) continue;
             if (g < -0.6f && seabed < 110) {
@@ -530,17 +535,18 @@ void Game::buildRio() {
     for (Vec3 p : {Vec3{-6, 0, 6}, Vec3{6, 0, 6}, Vec3{-8, 0, -4}}) addProp("farol_colonial", kBondinho + p);
     addProp("almendro_playa", kBondinho + Vec3{4, 0, 3}, 0.3f, 1.1f);
     addProp("banca_parque", kBondinho + Vec3{0.5f, 0, 2}, kPi * 0.3f);
-    // Teleférico: de la estación del largo al Morro da Urca y de allí al Pão de Açúcar. Las tres
-    // estaciones, de estuco y azulejo como la ciudad; las cabinas, pintadas como el tranvía (van
-    // y vienen: Game::cableLines). Arriba, cada estación mira a la de abajo y tiene detrás su
-    // terraza, en la explanada del morro.
-    Vec3 station{stationAt.x, kBondinhoH, stationAt.z};
-    float yawU = std::atan2(dirUrca.x, dirUrca.z);
+    // Teleférico: de la estación de la caleta al Morro da Urca y de allí al Pão de Açúcar. Las
+    // tres estaciones, de estuco y azulejo como la ciudad; las cabinas, pintadas como el tranvía
+    // (van y vienen: Game::cableLines). Arriba, cada estación mira a la de abajo y tiene detrás
+    // su terraza, en la explanada del morro (la cima se traza sobre el eje del largo a Urca).
+    const Vec3 dirUrca = normalize(flat(kUrca - kBondinho)), dirCable = normalize(flat(kUrca - kCableBase));
+    Vec3 station = cableBase();
+    float yawU = std::atan2(dirCable.x, dirCable.z);
     addProp("estacion_teleferico", station, yawU, 1.0f, false);
     houses.push_back({station, yawU, 5.0f, 5.4f});
     const Vec3 dirPao = normalize(flat(kPao - kUrca));
     Vec3 topU = kUrca - dirUrca * 4.0f + Vec3{0, kUrcaTop, 0}, topP = kPao - dirPao * 4.0f + Vec3{0, kPaoTop, 0};
-    addProp("estacion_teleferico_morro", topU, std::atan2(-dirUrca.x, -dirUrca.z), 1.0f, false);
+    addProp("estacion_teleferico_morro", topU, std::atan2(-dirCable.x, -dirCable.z), 1.0f, false);
     addProp("estacion_teleferico_morro", topP, std::atan2(-dirPao.x, -dirPao.z), 1.0f, false);
     auto cable = [&](Vec3 a, Vec3 b) {
         for (float s : {-1.6f, 1.6f}) {
@@ -572,9 +578,10 @@ void Game::buildRio() {
         l.nameB = nameB;
         cables_.push_back(l);
     };
-    // (Fuera de la caja de choque de la estación, que al ir girada es más grande que ella.)
+    // (Fuera de la caja de choque de la estación, que al ir girada es más grande que ella; el
+    // andén de abajo, del lado del paseo.)
     Vec3 sideU{-dirUrca.z, 0, dirUrca.x};
-    cableLine(station, topU, station - dirUrca * 8.0f, topU + dirUrca * 9.0f + sideU * 2.2f, "Largo do Bondinho", "Morro da Urca");
+    cableLine(station, topU, station - dirCable * 8.0f, topU + dirUrca * 9.0f + sideU * 2.2f, "La Caleta", "Morro da Urca");
     cables_.back().toZone = LevelId::Urca;  // arriba es otra zona (levels_cimas.cpp): se carga al llegar
     cables_.back().toArrival = arrival::kUrcaFromBay;
     (void)topP;
@@ -819,10 +826,10 @@ void Game::buildSummit(bool pao) {
     };
 
     // La estación de esta cima (la de la otra y la de abajo ya están: son de la bahía).
-    const Vec3 station{kBondinho.x + dirUrca.x * 15.5f, kBondinhoH, kBondinho.z + dirUrca.z * 15.5f};
+    const Vec3 station = cableBase(), dirCable = normalize(flat(kUrca - kCableBase));
     const Vec3 topU = kUrca - dirUrca * 4.0f + Vec3{0, kUrcaTop, 0}, topP = kPao - dirPao * 4.0f + Vec3{0, kPaoTop, 0};
     const Vec3 sideU{-dirUrca.z, 0, dirUrca.x};
-    addProp("estacion_teleferico_morro", pao ? topP : topU, pao ? std::atan2(-dirPao.x, -dirPao.z) : std::atan2(-dirUrca.x, -dirUrca.z), 1.0f,
+    addProp("estacion_teleferico_morro", pao ? topP : topU, pao ? std::atan2(-dirPao.x, -dirPao.z) : std::atan2(-dirCable.x, -dirCable.z), 1.0f,
             false);
     auto line = [&](Vec3 a, Vec3 b, Vec3 stop, const char* nameA, const char* nameB, LevelId to, int arrival) {
         CableLine l;
@@ -840,7 +847,7 @@ void Game::buildSummit(bool pao) {
         arrivals_.push_back({l.stopA, l.yawA});  // y quien llega por esta línea, aparece en su andén
     };
     if (!pao) {
-        line(topU, station, topU + dirUrca * 9.0f + sideU * 2.2f, "Morro da Urca", "Largo do Bondinho", LevelId::Rio, arrival::kRioCable);
+        line(topU, station, topU + dirUrca * 9.0f + sideU * 2.2f, "Morro da Urca", "La Caleta", LevelId::Rio, arrival::kRioCable);
         line(topU, topP, topU + dirUrca * 9.0f - sideU * 2.2f, "Morro da Urca", "Pan de Azúcar", LevelId::PaoAcucar, arrival::kPaoFromUrca);
     } else {
         line(topP, topU, topP + dirPao * 9.0f, "Pan de Azúcar", "Morro da Urca", LevelId::Urca, arrival::kUrcaFromPao);

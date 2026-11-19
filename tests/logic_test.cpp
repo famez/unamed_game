@@ -493,7 +493,7 @@ int main() {
             ride(0, LevelId::Urca);
             ride(0, LevelId::Rio);
             Vec3 p = r.hero_.body.pos, want = r.arrivals_[size_t(arrival::kRioCable)].pos;
-            CHECK(length(flat(p - want)) < 0.6f, "bahía: de vuelta en el andén del Largo do Bondinho (%.1f, %.1f)", p.x, p.z);
+            CHECK(length(flat(p - want)) < 0.6f, "bahía: de vuelta en el andén de la caleta (%.1f, %.1f)", p.x, p.z);
         }
         {  // La Gruta de las Peñas: se entra desde el campo por la boca; las salas están unidas; el
             // puzle de los espejos tiene solución y abre la puerta; las escaleras sacan del foso,
