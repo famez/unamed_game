@@ -10,6 +10,7 @@
 #include "dev/showcase.h"
 #include "dev/viewer.h"
 #include "ui/level_select.h"
+#include "ui/map_screen.h"
 #include "ui/menu.h"
 #include "actors/hero_clips.h"
 #include "render/hero_model.h"
@@ -175,7 +176,8 @@ int main(int argc, char** argv) {
     DebugDraw dd, glow;   // líneas (modo debug) y efectos translúcidos
     UiLayer hud, overlay;  // HUD y menús (formas + texto)
     Renderer renderer;
-    if (!dd.init() || !glow.init() || !hud.init() || !overlay.init() || !renderer.init(quality)) return 1;
+    MapScreen mapScreen;   // el mapa del nivel (M)
+    if (!dd.init() || !glow.init() || !hud.init() || !overlay.init() || !renderer.init(quality) || !mapScreen.init()) return 1;
     // Fuentes: carpeta assets junto al directorio de trabajo o la del código fuente.
     // Carpeta assets: junto al directorio de trabajo o, si no, la del código fuente.
     const char* assetDir = "assets";
@@ -321,6 +323,7 @@ int main(int argc, char** argv) {
     // Opciones de desarrollo: --autoplay (un bot juega solo, sin capturar el ratón) y
     // --screenshot fichero.ppm segundos (guarda un frame en ese instante y sale).
     bool autoplay = false;
+    bool openMapAtStart = false;  // --mapa
     float flyFloor = -1;    // altura del relieve bajo el vuelo (suavizada)
     bool flyover = false;   // --vuelo: la cámara sobrevuela el mapa (para ver los mapas grandes)
     for (int i = 1; i < argc; ++i) flyover |= std::strcmp(argv[i], "--vuelo") == 0;
@@ -373,6 +376,7 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--escalada") == 0) autoplay = climbing = true;
         if (std::strcmp(argv[i], "--teleferico") == 0) autoplay = cableTour = true;
         if (std::strcmp(argv[i], "--vitrina") == 0) autoplay = true;
+        if (std::strcmp(argv[i], "--mapa") == 0) openMapAtStart = true;  // empezar con el mapa abierto (capturas)
         if (std::strcmp(argv[i], "--video") == 0 && i + 1 < argc) {
             videoPath = argv[++i];
             if (i + 1 < argc && argv[i + 1][0] != '-') videoSeconds = std::atof(argv[++i]);
@@ -393,6 +397,7 @@ int main(int argc, char** argv) {
     InventoryMenu inventory;
     LevelSelect selector;
     bool fromPause = false;  // el selector se abrió desde la pausa (Esc vuelve a ella)
+    if (openMapAtStart && levelGiven) mapScreen.open = true;  // se pinta en el primer fotograma (ya con el tamaño)
     if (!levelGiven && !autoplay) selector.show();
     Input input;
     PendingInput pending;
@@ -437,9 +442,9 @@ int main(int argc, char** argv) {
         uiInput.mouseDX /= uiScale;
         uiInput.mouseDY /= uiScale;
 
-        // Menús: Esc/P abren y cierran la pausa; I el inventario. La pausa también se abre
-        // sola si se pierde el ratón (alt-tab), para que el juego no siga sin control.
-        bool menuWasOpen = menu.open || inventory.open || selector.open;
+        // Menús: Esc/P abren y cierran la pausa; I el inventario; M el mapa. La pausa también se
+        // abre sola si se pierde el ratón (alt-tab), para que el juego no siga sin control.
+        bool menuWasOpen = menu.open || inventory.open || selector.open || mapScreen.open;
         bool captured = platform::mouseCaptured();
         if (selector.open) {
             int pick = selector.update(uiInput, uw, uh);
@@ -465,6 +470,11 @@ int main(int argc, char** argv) {
             if (inventory.update(uiInput, game, uw, uh) || cableBot.shopShown(120)) {
                 inventory.open = false;
                 platform::setMouseCaptured(true);
+            }
+        } else if (mapScreen.open) {
+            if (mapScreen.update(uiInput, game, uw, uh, float(frameDt))) {
+                mapScreen.open = false;
+                platform::setMouseCaptured(!autoplay);
             }
         } else if (input.wasPressed(Key::Escape) || input.wasPressed(Key::P)) {
             if (menu.open)
@@ -496,11 +506,14 @@ int main(int argc, char** argv) {
         } else if (input.wasPressed(Key::I) || input.wasPressed(Key::Tab)) {
             inventory.show();
             platform::setMouseCaptured(false);
+        } else if (input.wasPressed(Key::M) && !game.dialogueBlocking() && !game.changingZone() && !game.riding()) {
+            mapScreen.show(game, uw, uh);
+            platform::setMouseCaptured(false);
         } else if (wasCaptured && !captured && !autoplay) {
             openMenu();
         }
         wasCaptured = captured;
-        bool paused = menu.open || inventory.open || selector.open;
+        bool paused = menu.open || inventory.open || selector.open || mapScreen.open;
         bool playing = !paused && !menuWasOpen;  // el clic que cierra el menú no ataca
 
         if (input.wasPressed(Key::DebugView)) debugView = !debugView;
@@ -817,7 +830,12 @@ int main(int argc, char** argv) {
         ViewInfo uiView = vi;
         uiView.width = uw;
         uiView.height = uh;
-        if (!portrait && !flyover && !selector.open) game.drawHud(hud, uiView, debugView);
+        if (!portrait && !flyover && !selector.open && !mapScreen.open) game.drawHud(hud, uiView, debugView);
+        if (mapScreen.open) {
+            if (!mapScreen.ready()) mapScreen.show(game, uw, uh);  // --mapa: el primer fotograma
+            mapScreen.drawBack(hud, uw, uh);
+            mapScreen.drawFront(overlay, game, cam.yaw, uw, uh);
+        }
         if (menu.open) menu.draw(overlay, uw, uh);
         if (selector.open) selector.draw(overlay, uw, uh);
         if (inventory.open) inventory.draw(overlay, game, uw, uh);
@@ -865,7 +883,8 @@ int main(int argc, char** argv) {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         Mat4 pixels = ortho(0, float(uw), float(uh), 0, -1, 1);
         hud.flush(pixels);
-        if (!debugView && !portrait && !flyover && !selector.open) {  // la cara de la protagonista en el hexágono del HUD
+        if (mapScreen.open) mapScreen.drawImage(pixels, float(w) / float(uw), h, uw, uh);  // entre su fondo y sus marcas
+        if (!debugView && !portrait && !flyover && !selector.open && !mapScreen.open) {  // la cara de la protagonista en el hexágono del HUD
             float k = float(w) / float(uw);
             float cxp = (float(uw) - Game::kPortraitInset) * k, cyp = Game::kPortraitInset * k;  // desde abajo
             int hw = int(31.0f * k), hh = int(29.0f * k);
@@ -1047,6 +1066,7 @@ int main(int argc, char** argv) {
     }
     audio.shutdown();
     unloadFonts();
+    mapScreen.shutdown();
     overlay.shutdown();
     renderer.shutdown();
     hud.shutdown();

@@ -46,6 +46,7 @@ set(LOGIC_SOURCES
     src/game/levels_interiores.cpp
     src/game/levels_gruta.cpp
     src/game/levels_cumbres.cpp
+    src/game/level_map.cpp
     src/game/wild.cpp
     src/game/swarm.cpp
     src/game/light.cpp
@@ -83,6 +84,8 @@ add_executable(game
     src/ui/inventory_menu.cpp
     src/ui/hud.cpp
     src/ui/level_select.cpp
+    src/ui/map_screen.cpp
+    src/render/image_quad.cpp
     src/dev/showcase.cpp
     src/dev/climb_bot.cpp
     src/dev/cable_bot.cpp

@@ -10,6 +10,7 @@
 #include "render/debug_draw.h"
 #include "actors/enemy.h"
 #include "game/items.h"
+#include "game/level_map.h"
 #include "actors/physics.h"
 #include "render/renderer.h"
 #include "audio/sfx.h"
@@ -695,6 +696,15 @@ public:
         return r;
     }
     const std::string& levelName() const { return levelName_; }
+    // El mapa (M): la zona cargada vista desde arriba (level_map.cpp), con el lado más largo de
+    // `maxSide` píxeles como mucho. `levelSerial` cambia con cada zona que se carga (para saber
+    // si el mapa pintado sigue valiendo). Lo que se marca encima sale de aquí.
+    void buildLevelMap(LevelMap& out, int maxSide = 1400) const;
+    uint32_t levelSerial() const { return levelSerial_; }
+    const std::vector<TreasureChest>& chests() const { return chests_; }
+    const std::vector<ColorNode>& colorNodes() const { return nodes_; }
+    const std::vector<Lantern>& lanterns() const { return lanterns_; }
+    const std::vector<Interactable>& interactables() const { return interacts_; }
     int partIndex() const { return int(part_); }
     int partCount() const { return int(parts_.size()); }
     const LevelPart* currentPart() const { return part_ < parts_.size() ? &parts_[part_] : nullptr; }
@@ -1004,6 +1014,7 @@ private:
     float heroStartYaw_ = 0;
     LevelId level_ = LevelId::Plaza;
     std::string levelName_;
+    uint32_t levelSerial_ = 0;  // se cuenta una más con cada zona cargada (Game::loadLevel)
     std::vector<LevelPart> parts_;
     size_t part_ = 0;
     float partBanner_ = 0;

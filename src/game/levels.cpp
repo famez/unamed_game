@@ -589,6 +589,8 @@ void Game::loadLevel(LevelId id) {
     viewDistance_ = 200;
     diving_ = onWall_ = false;
     level_ = id;
+    static uint32_t zonesLoaded = 0;  // de todas las partidas: el mapa de otra no vale aunque sea la misma zona
+    levelSerial_ = ++zonesLoaded;
     part_ = 0;
     activeEncounter_ = -1;
     lock_ = -1;

@@ -10,6 +10,7 @@
 #include "game/props.h"
 #include "render/glb.h"
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <memory>
 
@@ -925,6 +926,47 @@ int main() {
                       "campo: sombra del sol junto al granero (%.1f) y no en el prado (%.1f)", g.shadowAt(shade), g.shadowAt(open));
             }
         }
+    }
+    {  // El mapa (M): se pinta en todas las zonas, con la protagonista y las puertas dentro de la
+        // imagen; en la gruta no salen los techos (se ve el suelo de las salas) y en las tabernas
+        // tampoco el tejado; y fuera de un interior no hay nada
+        for (int li = 0; li < int(LevelId::Count); ++li) {
+            LevelId id = LevelId(li);
+            if (id == LevelId::Prueba) continue;
+            Game g = fresh();
+            g.loadLevel(id);
+            auto t0 = std::chrono::steady_clock::now();
+            LevelMap m;
+            g.buildLevelMap(m);
+            double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+            auto inside = [&](Vec3 p) { return m.u(p) >= 0 && m.v(p) >= 0 && m.u(p) < float(m.w) && m.v(p) < float(m.h); };
+            bool doors = true;
+            for (const ZoneDoor& d : g.doors_) doors &= inside(d.pos);
+            size_t painted = 0;
+            for (uint32_t px : m.pixels) painted += (px >> 24) != 0;
+            CHECK(m.w > 0 && m.h > 0 && std::max(m.w, m.h) <= 1400 && inside(g.hero_.body.pos) && doors && painted > m.pixels.size() / 20 &&
+                      m.serial == g.levelSerial(),
+                  "mapa de %s: %dx%d (%.2f m/px, %.0f ms), con la protagonista y las puertas dentro", g.levelName().c_str(), m.w, m.h,
+                  double(m.cell), ms);
+        }
+        // Que mire el suelo: el color del píxel bajo la protagonista no es el de los techos de roca.
+        Game g = fresh();
+        g.loadLevel(LevelId::Gruta);
+        LevelMap m;
+        g.buildLevelMap(m);
+        Vec3 room{-18, 0, 36};  // el Río Negro, al sur del río
+        uint32_t px = m.pixels[size_t(int(m.v(room))) * size_t(m.w) + size_t(int(m.u(room)))];
+        float lum = float(px & 0xFF) * 0.3f + float((px >> 8) & 0xFF) * 0.59f + float((px >> 16) & 0xFF) * 0.11f;
+        CHECK(lum > 70, "gruta: en el mapa se ve el suelo claro de la sala, no el techo (luminancia %.0f)", double(lum));
+        Game b = fresh();
+        b.loadLevel(LevelId::Botequim);
+        LevelMap mb;
+        b.buildLevelMap(mb);
+        Vec3 bar{0, 0, 0};
+        uint32_t c = mb.pixels[size_t(int(mb.v(bar))) * size_t(mb.w) + size_t(int(mb.u(bar)))];
+        CHECK((c >> 24) != 0 && (mb.pixels[0] >> 24) == 0, "botequim: se ve la sala por dentro y nada fuera de ella");
+        // La orientación: a la derecha de quien mira a +z queda −x.
+        CHECK(mb.u({-1, 0, 0}) > mb.u({1, 0, 0}) && mb.v({0, 0, 1}) < mb.v({0, 0, -1}), "mapa: arriba +z y a la derecha −x");
     }
     {  // El tema «Farolas»: las dos capas (luz y sombra) se leen y duran lo mismo (bucle sincronizado)
         StereoBuffer luz, sombra;

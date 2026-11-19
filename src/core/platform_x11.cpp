@@ -72,6 +72,7 @@ bool mapKey(KeySym ks, Key& out) {
         case XK_v: out = Key::V; return true;
         case XK_t: out = Key::T; return true;
         case XK_z: out = Key::Z; return true;
+        case XK_m: out = Key::M; return true;
         case XK_Control_L:
         case XK_Control_R: out = Key::Ctrl; return true;
         case XK_1: out = Key::N1; return true;

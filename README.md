@@ -72,7 +72,7 @@ Dependencias del sistema: `libOpenGL`/`libGLX` (glvnd + Mesa), `libX11` y `libXi
 fuentes Orbitron y Exo 2.
 
 Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena id` (reproduce una escena del guion), `--autoplay` (un bot combate solo, sin capturar el ratón), `--escalada` (con `--nivel andamios`: un bot hace la subida de Los Andamios), `--sombra` (empezar en modo sombra), `--exportar-modelos [carpeta]` (escribe a .glb los personajes que falten; `--forzar` los sustituye), `--visor fichero.glb` (visor de modelos), `--vitrina` (guion que enseña ataques, técnicas, formas y mecánicas), `--video fichero.mp4 [seg]` (graba a velocidad real con ffmpeg),
-`--screenshot fichero.ppm segundos [frames]` (guarda frames y sale), `--camyaw radianes` y `--efectos-golpe lista` (qué efectos de golpe se ven: `tajo`, `destello`, `materia` —esquirlas de cristal en los de luz, tinta que mancha el suelo en los de sombra—, `sacudida`, `camara`, `remate`; o `todos` / `ninguno`).
+`--screenshot fichero.ppm segundos [frames]` (guarda frames y sale), `--mapa` (con `--nivel`: empezar con el mapa abierto), `--camyaw radianes` y `--efectos-golpe lista` (qué efectos de golpe se ven: `tajo`, `destello`, `materia` —esquirlas de cristal en los de luz, tinta que mancha el suelo en los de sombra—, `sacudida`, `camara`, `remate`; o `todos` / `ninguno`).
 
 ## Controles
 
@@ -93,6 +93,7 @@ Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena i
 | 1-5 · 6 7 8 · Rueda + E | Técnicas de la mitad activa · atajos de objetos · menú de comandos |
 | F | Interactuar: cápsulas, nodos, faroles, espejos, objetos e **interruptores de farolas** |
 | Tab / I | Inventario y **taller** (pausa) |
+| M | **Mapa** del nivel (pausa): la zona vista desde arriba con dónde estás y hacia dónde miras, el objetivo, los pasos a otras zonas, el teleférico, las cápsulas que quedan, nodos, faroles, portales, farolas y quien da descanso o vende. Rueda o Q/E acercan, arrastrar o WASD mueve, Espacio centra en ti, F lo enseña entero |
 | Esc / P | Pausa: sensibilidad, calidad gráfica, reiniciar, salir |
 | F12 / º | Modo debug (esqueletos, zonas, haces y la táctica de cada Gris) |
 
