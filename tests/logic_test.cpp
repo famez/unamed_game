@@ -444,6 +444,98 @@ int main() {
             Vec3 p = r.hero_.body.pos, want = r.arrivals_[size_t(arrival::kRioCable)].pos;
             CHECK(length(flat(p - want)) < 0.6f, "bahía: de vuelta en el andén del Largo do Bondinho (%.1f, %.1f)", p.x, p.z);
         }
+        {  // La Gruta de las Peñas: se entra desde el campo por la boca; las salas están unidas; el
+            // puzle de los espejos tiene solución y abre la puerta; las escaleras sacan del foso,
+            // suben al Pozo y salen del lago; por la grieta se vuelve al campo, junto a la boca
+            Game g = fresh();
+            g.loadLevel(LevelId::Campo);
+            int doors = 0, mouth = -1;
+            for (size_t i = 0; i < g.doors_.size(); ++i)
+                if (g.doors_[i].to == LevelId::Gruta) ++doors, mouth = mouth < 0 ? int(i) : mouth;
+            CHECK(doors == 2, "campo: la boca de la gruta y su grieta (%d puertas)", doors);
+            if (mouth >= 0) {
+                place(g, g.doors_[size_t(mouth)].pos + Vec3{0, 0.3f, 0});
+                run(g, 0.2f);
+                Controls f;
+                f.interact = true;
+                g.update(dt, f);
+                for (int i = 0; i < 60 * 3 && (g.changingZone() || g.rideFade() > 0.01f); ++i) g.update(dt, Controls{});
+            }
+            run(g, 0.5f);
+            Vec3 p = g.hero_.body.pos;
+            CHECK(g.level() == LevelId::Gruta && g.hero_.body.grounded && std::fabs(p.y) < 0.5f,
+                  "gruta: se entra por la boca (en %.1f, %.1f, %.1f; «%s»)", p.x, p.y, p.z, g.nearbyInteract().label.c_str());
+            if (g.level() != LevelId::Gruta) g.loadLevel(LevelId::Gruta), p = g.hero_.body.pos;
+            // Las diez salas, unidas por lo que se pisa (el foso se cruza por abajo; el Pozo, por la escalera).
+            const Terrain& t = *g.world_.terrain;
+            auto reach = [&](Vec3 from, Vec3 to) {
+                auto cell = [&](Vec3 q) { return int(std::lround((q.z - t.z0) / t.cell)) * t.nx + int(std::lround((q.x - t.x0) / t.cell)); };
+                std::vector<char> seen(size_t(t.nx) * size_t(t.nz), 0);
+                std::vector<int> queue{cell(from)};
+                seen[size_t(queue[0])] = 1;
+                int goal = cell(to);
+                for (size_t qi = 0; qi < queue.size(); ++qi) {
+                    if (queue[qi] == goal) return true;
+                    int cx = queue[qi] % t.nx, cz = queue[qi] / t.nx;
+                    for (auto [dx, dz] : {std::pair<int, int>{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+                        int nx = cx + dx, nz = cz + dz;
+                        if (nx < 0 || nz < 0 || nx >= t.nx || nz >= t.nz) continue;
+                        size_t k = size_t(nz) * size_t(t.nx) + size_t(nx);
+                        if (seen[k] || t.fence[k] > -0.4f) continue;
+                        seen[k] = 1;
+                        queue.push_back(int(k));
+                    }
+                }
+                return false;
+            };
+            CHECK(reach(p, {0, 0, 96}) && reach({0, 0, 109}, {22, 0, 50}) && reach({22, 0, 50}, {10.6f, 0, 40}) && !reach(p, {0, 0, 109}),
+                  "gruta: de la boca al Pozo y de su galería de arriba al Corazón y a la grieta (arriba, solo por la escalera)");
+            // El puzle: alguna orientación de los dos espejos lleva el haz al receptor y abre la puerta.
+            bool solved = false;
+            for (int a = 0; a < 8 && !solved; ++a)
+                for (int b = 0; b < 8 && !solved; ++b) {
+                    g.mirrors_[0].angle = a;
+                    g.mirrors_[1].angle = b;
+                    g.traceBeams();
+                    solved = !g.receptors_.empty() && g.receptors_[0].lit;
+                }
+            bool open = false;
+            for (const Gate& gt : g.gates_)
+                if (gt.id == "gruta_galeria") open = !gt.closed;
+            CHECK(solved && open, "gruta: los espejos de la Galería llevan el haz al receptor y abren la puerta");
+            auto climb = [&](Vec3 base, Vec3 push, float want, const char* what) {
+                place(g, base + Vec3{0, 0.2f, 0});
+                run(g, 0.3f);
+                Controls c;
+                c.move = push;
+                c.camForward = push;
+                float top = -1e9f;
+                for (int i = 0; i < 60 * 8; ++i) {
+                    g.update(dt, c);
+                    top = std::max(top, g.hero_.body.pos.y);
+                }
+                Vec3 q = g.hero_.body.pos;
+                CHECK(q.y > want - 0.3f && g.hero_.body.grounded, "gruta: %s (llega a %.1f, %.1f, %.1f; arriba %.1f)", what, q.x, q.y, q.z, top);
+            };
+            climb({-28.3f, -3, 88}, {-1, 0, 0}, 3, "del fondo de la Sima se sale por la escalera");
+            climb({0, 3, 103.8f}, {0, 0, 1}, 11, "en el Pozo, la escalera sube a la galería");
+            climb({49, -4.5f, 65.5f}, {0, 0, 1}, 2, "del agua del lago se sale por la escalera");
+            // Por la grieta se sale al campo, delante de ella.
+            int crack = -1;
+            for (size_t i = 0; i < g.doors_.size(); ++i)
+                if (g.doors_[i].arrival == arrival::kCampoGrieta) crack = int(i);
+            if (crack >= 0) {
+                place(g, g.doors_[size_t(crack)].pos + Vec3{0, 0.3f, 0});
+                run(g, 0.2f);
+                Controls f;
+                f.interact = true;
+                g.update(dt, f);
+                for (int i = 0; i < 60 * 3 && (g.changingZone() || g.rideFade() > 0.01f); ++i) g.update(dt, Controls{});
+            }
+            Vec3 q = g.hero_.body.pos;
+            CHECK(crack >= 0 && g.level() == LevelId::Campo && length(flat(q - g.arrivals_[size_t(arrival::kCampoGrieta)].pos)) < 0.6f,
+                  "gruta: por la grieta se sale al campo (en %.1f, %.1f, %.1f)", q.x, q.y, q.z);
+        }
         {  // Las Copas: por la escalera del tronco y la pasarela larga se llega al mirador; las
             // barandillas paran al que anda, y el que cae al vacío vuelve a un sitio seguro
             Game c = fresh();

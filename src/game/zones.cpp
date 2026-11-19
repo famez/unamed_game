@@ -98,3 +98,11 @@ void Game::restoreZoneState() {
     part_ = std::min(z.part, parts_.empty() ? size_t(0) : parts_.size() - 1);
     croma_ = cromaShown_ = std::max(croma_, z.croma);
 }
+
+void Game::devPlaceHero(float x, float z, float yaw) {
+    float y = world_.terrain ? world_.terrain->heightAt(x, z) : groundHeight({x, 200, z});  // bajo techo: el relieve
+    hero_.teleport({x, y + 0.05f, z}, yaw);
+    checkpoint_ = hero_.body.pos;
+    checkpointYaw_ = yaw;
+    cameraCut_ = true;
+}

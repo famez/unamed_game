@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <tuple>
 
 using namespace maptools;
 
@@ -197,7 +198,8 @@ void Game::buildCampo() {
     auto ground = [&](float x, float z) { return t.heightAt(x, z); };
     // Sitios que se dejan libres de árboles y rocas: el pueblo, la llegada, los nodos, los
     // portales, las cápsulas y la cima.
-    std::vector<std::pair<Vec3, float>> clearings = {{village, 40}, {road.front(), 22}, {summit, 12}};
+    std::vector<std::pair<Vec3, float>> clearings = {{village, 40}, {road.front(), 22}, {summit, 12},
+                                                     {toCrags.back() + Vec3{-2, 0, 6}, 12}};  // la boca y la grieta de la gruta
     auto clearOf = [&](Vec3 p, float pathGap, float riverGap) {
         if (pathDist(p) < pathGap || std::fabs(p.z - riverZ(p.x)) < riverGap) return false;
         if (std::fabs(p.x) > kHalf - 30 || std::fabs(p.z) > kHalf - 30) return false;
@@ -383,6 +385,38 @@ void Game::buildCampo() {
 
     heroStart_ = {road.front().x, ground(road.front().x, road.front().z), road.front().z};
     heroStartYaw_ = 0;
+    // La Gruta de las Peñas (otra zona, levels_gruta.cpp): su boca en la peña, al final del
+    // camino del este, con rocas grandes que hacen de ladera; y, unos pasos más allá, la grieta
+    // por la que se sale del fondo de la gruta. Las llegadas (arrival::kCampo…): el principio,
+    // delante de la boca y delante de la grieta.
+    arrivals_.push_back({heroStart_, heroStartYaw_});
+    {
+        Vec3 end = toCrags.back();
+        Vec3 mouth = end + Vec3{3, 0, 6}, crack = end + Vec3{-7, 0, 7};
+        for (auto [p, prop, to, arrival, label] :
+             {std::tuple<Vec3, const char*, LevelId, int, const char*>{mouth, "boca_gruta", LevelId::Gruta, arrival::kGrutaMouth, "Entrar · Gruta de las Peñas"},
+              {crack, "grieta_gruta", LevelId::Gruta, arrival::kGrutaGrieta, "Entrar · por la grieta"}}) {
+            // De cara al camino, a 90° justos (las cajas de choque de la pieza, sin girar de más).
+            Vec3 toEnd = flat(end - p);
+            Vec3 out = std::fabs(toEnd.x) > std::fabs(toEnd.z) ? Vec3{toEnd.x > 0 ? 1.0f : -1.0f, 0, 0} : Vec3{0, 0, toEnd.z > 0 ? 1.0f : -1.0f};
+            float yaw = std::atan2(out.x, out.z);
+            addProp(prop, p, yaw);
+            for (int k = -2; k <= 2; ++k) {  // la peña alrededor y por detrás
+                Vec3 side{-out.z, 0, out.x};
+                // (giradas de 90 en 90°: girada de otro modo, su caja de choque crece y taparía la entrada)
+                addProp(std::abs(k) == 2 ? "roca" : "roca_grande", p - out * (4.6f + 1.0f * float(std::abs(k))) + side * (float(k) * 3.2f),
+                        float(k + 2) * kPi * 0.5f, 1.1f + 0.15f * float(2 - std::abs(k)));
+            }
+            if (to == LevelId::Gruta && arrival == arrival::kGrutaMouth) {  // un farol y la señal, para que se vea de lejos
+                Vec3 side{-out.z, 0, out.x};
+                addProp("farol_camino", p + out * 2.2f + side * 2.6f, yaw);
+                addProp("senal_camino", p + out * 3.0f - side * 2.8f, yaw + 0.4f);
+            }
+            Vec3 door = p + out * 1.3f, outside = p + out * 3.0f;
+            doors_.push_back({{door.x, ground(door.x, door.z), door.z}, to, arrival, label});
+            arrivals_.push_back({{outside.x, ground(outside.x, outside.z), outside.z}, yaw});
+        }
+    }
     // Nodos de color: devuelven el color al valle.
     const uint32_t nodeColors[] = {rgba(255, 190, 60), rgba(255, 70, 190), rgba(40, 220, 255), rgba(120, 255, 140)};
     for (int k = 0; k < 4; ++k) {

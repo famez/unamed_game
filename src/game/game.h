@@ -470,7 +470,8 @@ namespace arrival {
 constexpr int kRioBotequim = 1, kRioLapa = 2, kRioCable = 3;  // la bahía: de las tabernas y en cabina desde Urca
 constexpr int kInside = 0;                                   // los interiores: por la puerta
 constexpr int kUrcaFromBay = 0, kUrcaFromPao = 1, kPaoFromUrca = 0;
-constexpr int kCampoGruta = 1, kGrutaMouth = 0;              // la boca de la gruta, fuera y dentro
+constexpr int kCampoGruta = 1, kCampoGrieta = 2;             // el campo: delante de la boca y de la grieta
+constexpr int kGrutaMouth = 0, kGrutaGrieta = 1;             // la gruta: entrando por la boca y por la grieta
 }  // namespace arrival
 
 // Habitante: pasea por su zona (en torno a `home`), se para de vez en cuando (en su pose de
@@ -682,6 +683,7 @@ public:
     void goToZone(LevelId to, int arrival, bool black = false);
     void enterZone(LevelId to, int arrival);
     bool changingZone() const { return zoneTo_ != LevelId::Count; }
+    void devPlaceHero(float x, float z, float yaw);  // --en: ahí, en el suelo
     const std::vector<ZoneDoor>& zoneDoors() const { return doors_; }
     const std::vector<ZoneArrival>& zoneArrivals() const { return arrivals_; }
     // Al subir o bajar de la cabina la protagonista cambia de sitio de golpe: corte de plano.

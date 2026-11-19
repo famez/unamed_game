@@ -114,6 +114,7 @@ const char kHelp[] =
     "  --demo                        el bot enseña técnicas, formas y armas de luz y de sombra\n"
     "  --retrato | --cuerpo          cámara frente a la cara o al cuerpo del protagonista\n"
     "  --camyaw RADIANES             orientación inicial de la cámara\n"
+    "  --en X Z GIRO                 empezar en ese punto del mapa, mirando hacia GIRO (radianes)\n"
     "  --visor FICHERO.glb [--anim N] ver un modelo como lo pinta el juego, animado; se recarga\n"
     "                                al volver a exportarlo (o con R)\n"
     "  --exportar-modelos [CARPETA]  escribe en .glb los enemigos, Ilse y el lobo de sombra que falten\n"
@@ -287,6 +288,8 @@ int main(int argc, char** argv) {
         game.loadBrains(dataDir);
         for (int i = 1; i + 1 < argc; ++i)  // --escena id: reproduce ya esa escena (para escribirlas)
             if (std::strcmp(argv[i], "--escena") == 0) game.jumpToScene(argv[i + 1]);
+        for (int i = 1; i + 3 < argc; ++i)  // --en X Z YAW: empezar ahí (para mirar un rincón de un mapa)
+            if (std::strcmp(argv[i], "--en") == 0) game.devPlaceHero(float(std::atof(argv[i + 1])), float(std::atof(argv[i + 2])), float(std::atof(argv[i + 3])));
     };
     startGame();
     for (int i = 1; i + 1 < argc; ++i)  // --efectos-golpe tajo,destello,...: solo esos efectos de golpe
