@@ -141,7 +141,7 @@ public:
     // se sube). Si al llegar el borde le queda a la altura del pecho, se encarama.
     enum class Climb { None, Ladder, Wall, Mount };
     enum class ClimbEvent { None, Grab, Cling, WallJump, LadderJump, Mount };
-    static constexpr float kLadderSpeed = 3.2f;
+    static constexpr float kLadderSpeed = 2.4f;
     static constexpr float kClingHold = 0.5f, kClingTime = 1.6f;  // quieta en la pared; y hasta soltarse
     static constexpr float kClingSlide = 2.2f;                    // m/s resbalando
     static constexpr float kWallJumpUp = 8.5f, kWallJumpOut = 6.5f;

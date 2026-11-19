@@ -246,20 +246,47 @@ void Character::updateClimb(float dt, float input, bool jump, const World& world
 void Character::animateClimb(Pose& out) const {
     Vec3* r = out.rotation;
     if (climb_ == Climb::Ladder) {
-        float s = std::sin(climbPhase_);
-        r[ShoulderL].x = -2.5f + 0.35f * s;
-        r[ShoulderR].x = -2.5f - 0.35f * s;
-        r[ShoulderL].z = 0.22f;
-        r[ShoulderR].z = -0.22f;
-        r[ElbowL].x = -1.0f + 0.5f * s;
-        r[ElbowR].x = -1.0f - 0.5f * s;
-        r[HipL].x = -0.75f - 0.45f * s;
-        r[HipR].x = -0.75f + 0.45f * s;
-        r[KneeL].x = 1.25f + 0.6f * s;
-        r[KneeR].x = 1.25f - 0.6f * s;
-        r[Spine].x = 0.05f;
-        r[Neck].x = -0.3f;
-        out.rootOffset.y = 0.03f * std::fabs(std::cos(climbPhase_));
+        // Cada mano (y el pie contrario) se queda en su peldaño mientras el cuerpo sube: baja
+        // respecto al hombro durante el 65 % del ciclo, de estirada arriba a recogida al pecho, y
+        // luego se suelta y va rápido, separándose un poco, a por el siguiente. Bajando, al revés.
+        auto limb = [](float phase, float& reach) {
+            float u = phase / (2.0f * kPi);
+            u -= std::floor(u);
+            constexpr float kHold = 0.65f;
+            if (u < kHold) {
+                reach = 0;
+                return 1.0f - u / kHold;  // 1 = estirada arriba, 0 = recogida
+            }
+            float v = (u - kHold) / (1.0f - kHold);
+            reach = std::sin(v * kPi);
+            return smoothstep01(v);
+        };
+        float reachL, reachR;
+        float hl = limb(climbPhase_, reachL);
+        float hr = limb(climbPhase_ + kPi, reachR);
+        auto arm = [](float h, float reach, Vec3& shoulder, Vec3& elbow, float side) {
+            shoulder.x = lerpf(-1.55f, -2.95f, h) + 0.25f * reach;
+            shoulder.z = side * (0.18f + 0.25f * reach);
+            elbow.x = lerpf(-2.0f, -0.25f, h) - 0.5f * reach;
+        };
+        arm(hl, reachL, r[ShoulderL], r[ElbowL], 1.0f);
+        arm(hr, reachR, r[ShoulderR], r[ElbowR], -1.0f);
+        // El pie contrario a cada mano: arriba (rodilla recogida) cuando esa mano está abajo.
+        auto leg = [](float h, float reach, Vec3& hip, Vec3& knee) {
+            hip.x = lerpf(-0.25f, -1.35f, h) - 0.2f * reach;
+            knee.x = lerpf(0.45f, 1.95f, h) + 0.3f * reach;
+        };
+        leg(hr, reachR, r[HipL], r[KneeL]);
+        leg(hl, reachL, r[HipR], r[KneeR]);
+        float sway = hl - hr;  // hacia el lado de la mano que está arriba
+        r[Spine].x = 0.08f;
+        r[Spine].z = 0.06f * sway;
+        r[Chest].y = 0.12f * sway;
+        r[Chest].z = 0.05f * sway;
+        r[Pelvis].y = -0.08f * sway;
+        r[Neck].x = -0.35f - 0.15f * std::max(reachL, reachR);
+        r[Neck].y = -0.1f * sway;
+        out.rootOffset.y = 0.04f * std::max(reachL, reachR);  // el tirón al subir
         return;
     }
     if (climb_ == Climb::Wall) {
