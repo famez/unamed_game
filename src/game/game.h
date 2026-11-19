@@ -229,7 +229,7 @@ struct Companion {
 // suena su escena y empieza la siguiente.
 
 // Campo, Neon, Cafetero y Rio: mapas grandes (terreno con relieve y piezas .glb de assets/props).
-enum class LevelId { Plaza, Mercado, Puente, Prueba, Selva, Cueva, Callejones, Campo, Neon, Cafetero, Rio, Copas, Count };
+enum class LevelId { Plaza, Mercado, Puente, Prueba, Selva, Cueva, Callejones, Campo, Neon, Cafetero, Rio, Copas, Andamios, Count };
 
 // Modos de prueba (sin historia, con vida, Luz y Sombra infinitas): un escenario aleatorio
 // con Grises sin fin, un archipiélago de islas flotantes para practicar el viaje por la luz,
@@ -679,6 +679,9 @@ private:
     void buildCafetero();
     void buildRio();
     void buildCopas();
+    void buildAndamios();
+    // Escalera de gato (World::ladders) con sus largueros y peldaños; ver Character::Climb.
+    void addLadder(Vec3 base, float top, Vec3 normal, float halfWidth = 0.32f);
     // Mapas grandes: terreno de `size` m de lado con puntos cada `cell` m (alturas a cero).
     void makeTerrain(float size, float cell);
     // Pinta un punto del terreno (color y material del suelo).
@@ -899,6 +902,7 @@ private:
     std::vector<std::vector<uint32_t>> beamColors_;  // color de cada tramo
     int activeEncounter_ = -1;
     Vec3 checkpoint_;
+    bool pendingCheckpoint_ = false;  // tramo cumplido sin pisar suelo: se guarda al pisar
     float checkpointYaw_ = 0;
     LevelId nextLevel_ = LevelId::Plaza;
     bool lastLevel_ = false;

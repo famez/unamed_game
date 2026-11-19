@@ -5,10 +5,12 @@
 #include "game/props.h"
 #include "core/gl.h"
 #include "ui/inventory_menu.h"
+#include "dev/climb_bot.h"
 #include "dev/showcase.h"
 #include "dev/viewer.h"
 #include "ui/level_select.h"
 #include "ui/menu.h"
+#include "actors/hero_clips.h"
 #include "render/hero_model.h"
 #include "render/models.h"
 #include "core/platform.h"
@@ -94,7 +96,8 @@ const char kHelp[] =
     "\n"
     "Niveles (sin opciones, se elige en el selector del principio)\n"
     "  --nivel NOMBRE                entra directamente en ese nivel: plaza, mercado, puente,\n"
-    "                                selva, cueva, callejones o los mapas grandes: campo, neon, cafetero, rio\n"
+    "                                selva, cueva, callejones o los mapas grandes: campo, neon, cafetero, rio, copas;\n"
+    "                                y los puzles de saltos: andamios\n"
     "  --prueba [semilla]            patio de combate: enemigos sin fin; F1 y F2 hacen infinitos\n"
     "                                la vida y el Poder; Z cambia de modo\n"
     "  --historia                    la historia (capítulo 1), aparcada por ahora\n"
@@ -103,6 +106,7 @@ const char kHelp[] =
     "Desarrollo\n"
     "  --debug                       solo esqueletos y cajas en alambre (también F12)\n"
     "  --autoplay                    un bot juega solo\n"
+    "  --escalada                    un bot hace la subida de Los Andamios (con --nivel andamios)\n"
     "  --giros                       el bot solo corre haciendo curvas (para ver el giro)\n"
     "  --cambios                     el bot cambia de luz a sombra y vuelta (para ver el cambio)\n"
     "  --demo                        el bot enseña técnicas, formas y armas de luz y de sombra\n"
@@ -197,6 +201,8 @@ int main(int argc, char** argv) {
     double modelStart = platform::timeSeconds();
     buildModels(renderer);
     loadHeroModels(renderer, assetDir);  // Vela y Hollín (.glb); sin ellos, el modelo de siempre
+    if (std::string error; !loadHeroClips(std::string(assetDir) + "/models/vela_animaciones.glb", error))
+        std::fprintf(stderr, "Animaciones de Vela: %s (se usan las procedurales)\n", error.c_str());
     loadCharacterGlbs(renderer, std::string(assetDir) + "/models");  // enemigos, Ilse y el lobo
     propLibrary().loadDir(std::string(assetDir) + "/props");          // piezas del escenario
     loadInhabitants(renderer, std::string(assetDir) + "/models/habitantes");
@@ -254,6 +260,7 @@ int main(int argc, char** argv) {
                         : std::strcmp(n, "cafetero") == 0   ? LevelId::Cafetero
                         : std::strcmp(n, "rio") == 0        ? LevelId::Rio
                         : std::strcmp(n, "copas") == 0      ? LevelId::Copas
+                        : std::strcmp(n, "andamios") == 0   ? LevelId::Andamios
                                                             : LevelId::Plaza;
             levelGiven = true;
         }
@@ -308,6 +315,7 @@ int main(int argc, char** argv) {
     bool turnsBot = false;  // --giros: el bot solo corre haciendo curvas y medias vueltas
     bool swapBot = false;   // --cambios: el bot se queda quieto y cambia de luz a sombra y vuelta
     bool demoBot = false;   // --demo: el bot enseña técnicas, formas y armas de las dos mitades
+    bool climbing = false;  // --escalada: el bot hace la subida de Los Andamios
     float camYaw0 = 0;  // --camyaw: orientación inicial de la cámara (radianes)
     const char* shotPath = nullptr;
     double shotTime = 0;
@@ -320,6 +328,7 @@ int main(int argc, char** argv) {
     int videoFrames = 0, videoW = 0, videoH = 0;
     std::vector<unsigned char> videoPx;
     Showcase vitrina;
+    ClimbBot climbBot;  // --escalada: la subida de Los Andamios
     for (int i = 1; i + 1 < argc; ++i)  // --vitrina 5,16: solo esos actos (contados desde 1)
         if (std::strcmp(argv[i], "--vitrina") == 0 && argv[i + 1][0] != '-') {
             std::vector<int> acts;
@@ -345,6 +354,7 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--giros") == 0) autoplay = turnsBot = true;
         if (std::strcmp(argv[i], "--cambios") == 0) autoplay = swapBot = true;
         if (std::strcmp(argv[i], "--demo") == 0) autoplay = demoBot = true;
+        if (std::strcmp(argv[i], "--escalada") == 0) autoplay = climbing = true;
         if (std::strcmp(argv[i], "--vitrina") == 0) autoplay = true;
         if (std::strcmp(argv[i], "--video") == 0 && i + 1 < argc) {
             videoPath = argv[++i];
@@ -612,12 +622,16 @@ int main(int argc, char** argv) {
                         d.swapMode = t == 260;
                         c = d;
                     }
+                    if (climbing) {
+                        c = climbBot.step(game, cam.yaw, c);
+                        if (climbBot.done()) quit = true;
+                    }
                     if (showcase) {
                         c = vitrina.step(game, cam.yaw, c);
                         if (vitrina.done()) quit = true;
                     }
                     // En los modos de prueba también cambia a sombra y lanza agujeros negros.
-                    if (turnsBot || swapBot || demoBot || showcase) {
+                    if (turnsBot || swapBot || demoBot || showcase || climbing) {
                     } else if (game.testMode() != TestMode::None) {
                         c.swapMode = botStep == 30;
                         if (botStep % 240 == 120) c.command = 4;  // la técnica grande de cada mitad
@@ -726,13 +740,17 @@ int main(int argc, char** argv) {
             float r = 95.0f + 55.0f * std::sin(tt * 0.09f), hgt = 22.0f + 16.0f * std::sin(tt * 0.13f + 1.0f), a = tt * 0.11f;
             if (game.level() == LevelId::Neon) hgt += 34;  // por encima de las torres
             look = {0, 6.0f, 0};
-            if (game.level() == LevelId::Rio) {  // el diorama de la bahía: de cerca
-                r = 46.0f + 12.0f * std::sin(tt * 0.09f), hgt = 20.0f + 8.0f * std::sin(tt * 0.13f + 1.0f);
-                look = {-6, 4.0f, -8};
+            if (game.level() == LevelId::Rio) {  // la bahía: alrededor de la ciudad y la caleta
+                r = 105.0f + 30.0f * std::sin(tt * 0.09f), hgt = 40.0f + 14.0f * std::sin(tt * 0.13f + 1.0f);
+                look = {15, 6.0f, 30};
             }
             if (game.level() == LevelId::Copas) {  // la aldea de las copas: de cerca, entre los troncos
                 r = 38.0f + 10.0f * std::sin(tt * 0.09f), hgt = 10.0f + 8.0f * std::sin(tt * 0.13f + 1.0f);
                 look = {0, 2.0f, 12};
+            }
+            if (game.level() == LevelId::Andamios) {  // los andamios: alrededor de la subida
+                r = 34.0f + 8.0f * std::sin(tt * 0.09f), hgt = 8.0f + 6.0f * std::sin(tt * 0.13f + 1.0f);
+                look = {5, 13.0f, 22};
             }
             a += camYaw0;  // --camyaw: desde qué lado empieza
             eye = look + Vec3{std::cos(a) * r, hgt, std::sin(a) * r};

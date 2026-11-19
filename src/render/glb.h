@@ -42,8 +42,24 @@ struct GlbNode {
     Mat4 world = Mat4::identity();  // con los padres aplicados
 };
 
+// Pista de una animación: los valores de una propiedad de un nodo en cada instante.
+struct GlbChannel {
+    enum Path { Translation, Rotation, Scale } path = Rotation;
+    int node = -1;
+    bool step = false;            // interpolación STEP (si no, lineal)
+    std::vector<float> times;     // segundos
+    std::vector<float> values;    // 3 (traslación, escala) o 4 (cuaternión x, y, z, w) por instante
+};
+
+struct GlbAnimation {
+    std::string name;
+    float duration = 0;
+    std::vector<GlbChannel> channels;
+};
+
 struct GlbFile {
     std::vector<GlbNode> nodes;
+    std::vector<GlbAnimation> animations;
     std::vector<std::vector<GlbPrimitive>> meshes;
     std::vector<GlbMaterial> materials;
     std::vector<GlbSkin> skins;

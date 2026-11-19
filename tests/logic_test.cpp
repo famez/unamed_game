@@ -4,6 +4,7 @@
 #define private public  // solo para el test: acceso al estado interno
 #include "game/game.h"
 #undef private
+#include "actors/hero_clips.h"
 #include "audio/barks.h"
 #include "audio/synth.h"
 #include "game/props.h"
@@ -74,7 +75,84 @@ Enemy& addEnemy(Game& g, EnemyKind k, Vec3 pos, AiState state = AiState::Idle) {
     return g.enemies_.back();
 }
 
+// Matriz mundo de un nodo del .glb en el instante `t` de una animación (independiente de
+// hero_clips.cpp: lo que el juego tiene que reproducir).
+Mat4 glbWorldAt(const GlbFile& f, const GlbAnimation& a, int node, float t) {
+    if (node < 0) return Mat4::identity();
+    Mat4 local = f.nodes[size_t(node)].local;
+    Vec3 tr = translationOf(local);
+    Mat4 rot = local;
+    rot.m[12] = rot.m[13] = rot.m[14] = 0;
+    for (const GlbChannel& ch : a.channels) {
+        if (ch.node != node) continue;
+        size_t i = 0;
+        while (i + 1 < ch.times.size() && ch.times[i + 1] <= t) ++i;
+        size_t j = std::min(i + 1, ch.times.size() - 1);
+        float u = j > i ? clampf((t - ch.times[i]) / (ch.times[j] - ch.times[i]), 0, 1) : 0.0f;
+        int n = ch.path == GlbChannel::Rotation ? 4 : 3;
+        float v[4], d = 0;
+        for (int k = 0; k < n; ++k) d += ch.values[i * n + k] * ch.values[j * n + k];
+        for (int k = 0; k < n; ++k) v[k] = ch.values[i * n + k] + ((n == 4 && d < 0 ? -1 : 1) * ch.values[j * n + k] - ch.values[i * n + k]) * u;
+        if (ch.path == GlbChannel::Translation) tr = {v[0], v[1], v[2]};
+        if (ch.path == GlbChannel::Rotation) {
+            float l = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2] + v[3] * v[3]);
+            float x = v[0] / l, y = v[1] / l, z = v[2] / l, w = v[3] / l;
+            rot = Mat4::identity();
+            rot.m[0] = 1 - 2 * (y * y + z * z), rot.m[1] = 2 * (x * y + z * w), rot.m[2] = 2 * (x * z - y * w);
+            rot.m[4] = 2 * (x * y - z * w), rot.m[5] = 1 - 2 * (x * x + z * z), rot.m[6] = 2 * (y * z + x * w);
+            rot.m[8] = 2 * (x * z + y * w), rot.m[9] = 2 * (y * z - x * w), rot.m[10] = 1 - 2 * (x * x + y * y);
+        }
+    }
+    return glbWorldAt(f, a, f.nodes[size_t(node)].parent, t) * translate(tr) * rot;
+}
+
 int main() {
+    {  // Animaciones de Vela (vela_animaciones.glb): pasadas al esqueleto del juego, las manos,
+        // los pies y la cabeza quedan donde los pone el .glb en cada instante de cada clip
+        const std::string path = std::string(GAME_ASSET_DIR) + "/models/vela_animaciones.glb";
+        std::string err;
+        bool ok = loadHeroClips(path, err);
+        CHECK(ok, "vela_animaciones.glb: cinco clips leídos %s", err.c_str());
+        GlbFile f;
+        f.load(path, err);
+        const char* names[] = {"correr", "caminar", "saltar", "combo"};
+        const std::pair<int, const char*> ends[] = {{WristR, "Hand_R"}, {WristL, "Hand_L"}, {AnkleL, "Foot_L"},
+                                                    {AnkleR, "Foot_R"}, {Head, "Head"}, {ElbowR, "LowerArm_R"}};
+        float worst = 0;
+        for (int c = 0; ok && c < 4; ++c) {
+            const GlbAnimation* a = nullptr;
+            for (const GlbAnimation& x : f.animations)
+                if (x.name == names[c]) a = &x;
+            for (float t = 0; a && t < a->duration; t += 0.037f) {
+                Mat4 w[JointCount];
+                computeWorldMatrices(sampleHeroClip(HeroClip(c), t).pose, Mat4::identity(), w);
+                for (auto [joint, node] : ends)
+                    worst = std::max(worst, length(translationOf(w[joint]) - translationOf(glbWorldAt(f, *a, f.find(node), t))));
+            }
+        }
+        CHECK(ok && worst < 0.01f, "animaciones de Vela: manos, pies y cabeza donde los pone el .glb (error máximo %.1f mm)", worst * 1000);
+        float spin = sampleHeroClip(HeroClip::Roll, 0.9f).spin;
+        CHECK(std::fabs(spin - 2 * kPi) < 0.05f, "voltereta: la cadera da una vuelta entera (%.2f rad)", spin);
+        // Con los clips, la voltereta del juego acaba de pie y el combo de la hoja sigue
+        // golpeando a su ritmo (los clips no cambian los tiempos).
+        Character h;
+        World flat;
+        flat.solids.push_back(boxFromCenter({0, -0.5f, 0}, {50, 0.5f, 50}));
+        for (int i = 0; i < 30; ++i) h.update(dt, {}, false, flat);
+        h.dodge({0, 0, 1});
+        for (int i = 0; i < 40; ++i) h.update(dt, {}, false, flat);
+        Mat4 w[JointCount];
+        computeWorldMatrices(h.pose, h.modelMatrix(), w);
+        float headY = translationOf(w[Head]).y - h.body.pos.y;
+        CHECK(!h.rolling() && headY > 1.4f, "con los clips, tras la voltereta queda de pie (cabeza a %.2f m)", headY);
+        int impacts = 0;
+        for (int i = 0; i < 240; ++i) {
+            if (i % 12 == 0) h.attack(0, 0);
+            h.update(dt, {}, false, flat);
+            impacts += h.takeImpact() != Move::None;
+        }
+        CHECK(impacts >= 4, "con los clips, el combo de la hoja encadena sus golpes (%d impactos en 4 s)", impacts);
+    }
     {  // Terreno con relieve: se baja una cuesta andando sin despegarse, y la rejilla de cajas
         // encuentra lo mismo que mirar todas
         auto t = std::make_shared<Terrain>();
@@ -165,7 +243,7 @@ int main() {
                 const char* what;
             };
             for (Walk w : {Walk{{0, 0, -22}, {0, 0, -1}, "mar adentro"}, Walk{{-28, 0, -22.5f}, {1, 0, 0}, "del mirador a la playa"},
-                           Walk{{0, 0, 5}, {0, 0, 1}, "bajo los arcos"}, Walk{{-23.5f, 0, 5}, {-1, 0, 0}, "fuera de la escalera"}}) {
+                           Walk{{0, 0, 40}, {0, 0, 1}, "al norte de la praça"}, Walk{{-23.5f, 0, 5}, {-1, 0, 0}, "fuera de la escalera"}}) {
                 place(r, {w.from.x, r.world_.groundAt(w.from.x, w.from.z) + 2.0f, w.from.z});
                 Controls c;
                 c.move = w.dir;
@@ -173,6 +251,42 @@ int main() {
                 Vec3 p = r.hero_.body.pos;
                 CHECK(t.fenceAt(p.x, p.z) < 0.1f, "bahía: %s se queda dentro del recinto (%.1f, %.1f; fuera %.2f m)", w.what, p.x, p.z,
                       t.fenceAt(p.x, p.z));
+            }
+        }
+        {  // La bahía se recorre andando: del centro a la iglesia, la vuelta por Guimarães, los
+            // becos del morro hasta el mirador y la Rua da Praia hasta la Prainha
+            Game r = fresh();
+            r.loadLevel(LevelId::Rio);
+            struct Route {
+                const char* what;
+                std::vector<Vec3> pts;
+            };
+            const Route routes[] = {
+                {"bajo los arcos a la iglesia", {{0, 0, 5}, {0, 0, 30}, {0, 0, 42}, {14, 0, 46}, {40, 0, 46}, {46, 0, 58}, {36, 0, 68},
+                                                 {44, 0, 80}, {40, 0, 90}, {40, 0, 96}}},
+                {"de la iglesia por Guimarães a la praça", {{30, 0, 97}, {10, 0, 95}, {-8, 0, 93}, {-14, 0, 91}, {-20, 0, 84},
+                                                            {-22, 0, 70}, {-8, 0, 58}, {0, 0, 50}}},
+                {"por los becos del morro al mirador", {{-14, 0, 46}, {-40, 0, 46}, {-46, 0, 40}, {-54, 0, 30}, {-62, 0, 20},
+                                                        {-58, 0, 8}, {-58, 0, 0}, {-52, 0, -3}, {-42, 0, -10}, {-32, 0, -17}, {-28, 0, -19}}},
+                {"por la Rua da Praia a la Prainha", {{8, 0, -4}, {12, 0, -7.5f}, {26, 0, -9.5f}, {42, 0, -12}, {50, 0, -14},
+                                                      {57, 0, -13}, {66, 0, -17}, {74, 0, -24}, {80, 0, -31}, {90, 0, -38}}},
+            };
+            for (const Route& rt : routes) {
+                Vec3 a = rt.pts[0];
+                place(r, {a.x, r.world_.groundAt(a.x, a.z) + 0.5f, a.z});
+                size_t next = 1;
+                for (int i = 0; i < 60 * 120 && next < rt.pts.size(); ++i) {
+                    Vec3 to = rt.pts[next], p = r.hero_.body.pos;
+                    if (length(flat(to - p)) < 1.5f) {
+                        ++next;
+                        continue;
+                    }
+                    Controls c;
+                    c.move = normalize(flat(to - p));
+                    r.update(dt, c);
+                }
+                Vec3 p = r.hero_.body.pos;
+                CHECK(next == rt.pts.size(), "bahía: %s (llega a %zu/%zu, en %.1f, %.1f, %.1f)", rt.what, next, rt.pts.size(), p.x, p.y, p.z);
             }
         }
         {  // Las Copas: por la escalera del tronco y la pasarela larga se llega al mirador; las
@@ -213,6 +327,113 @@ int main() {
             place(c, {0, 0.1f, -14});  // fuera de la plaza, sobre el vacío
             run(c, 4.0f);
             CHECK(c.hero_.body.pos.y > -1.0f && c.hp_ < c.maxHp_, "copas: quien cae vuelve a un sitio seguro (y=%.1f)", c.hero_.body.pos.y);
+        }
+        {  // Los Andamios: cada tramo se puede hacer con lo que enseña, y no sin ello
+            Game a = fresh();
+            a.freePlay_ = true;  // como desde el selector: los tramos avanzan
+            a.loadLevel(LevelId::Andamios);
+            run(a, 0.5f);
+            Character& h = a.hero_;
+            CHECK(h.body.grounded && std::fabs(h.body.pos.y) < 0.05f && a.world_.ladders.size() == 2 && a.parts_.size() == 5,
+                  "andamios: de pie en el rellano (y=%.2f), %zu escaleras y %zu tramos", h.body.pos.y, a.world_.ladders.size(), a.parts_.size());
+            // Un salto de `from` hacia `to`: corre, salta al pasar por `takeoff` y, si hace falta,
+            // el doble salto en lo alto. Devuelve la altura a la que queda de pie.
+            auto hop = [&](Vec3 from, Vec3 takeoff, Vec3 to, bool twice) {
+                place(a, from);
+                Vec3 dir = normalize(flat(to - from));
+                bool jumped = false, doubled = false;
+                for (int i = 0; i < 60 * 3; ++i) {
+                    Controls c;
+                    c.move = length(flat(to - h.body.pos)) > 0.4f ? normalize(flat(to - h.body.pos)) : Vec3{};
+                    if (!jumped && dot(flat(h.body.pos - takeoff), dir) > 0) c.jump = jumped = true;
+                    else if (twice && jumped && !doubled && h.body.vel.y < 0.5f) c.jump = doubled = true;
+                    a.update(dt, c);
+                }
+                return h.body.grounded ? h.body.pos.y : -100.0f;
+            };
+            {  // 1. la escalera de gato: empujando contra ella se sube y arriba se encarama
+                place(a, {0, 0.1f, 3});
+                Controls c;
+                c.move = {0, 0, 1};
+                bool climbed = false;
+                for (int i = 0; i < 60 * 4; ++i) {
+                    a.update(dt, c);
+                    climbed = climbed || h.climb() == Character::Climb::Ladder;
+                }
+                CHECK(climbed && h.body.grounded && std::fabs(h.body.pos.y - 5) < 0.05f && a.part_ >= 1,
+                      "andamios: por la escalera de gato a lo alto de la torre (y=%.2f, tramo %zu)", h.body.pos.y, a.part_);
+                place(a, {0, 5.1f, 7.2f});  // y se baja andando hacia el borde de la escalera
+                bool down = false;
+                for (int i = 0; i < 60 * 4; ++i) {
+                    down = down || h.climb() == Character::Climb::Ladder;
+                    c.move = down && h.body.grounded ? Vec3{} : Vec3{0, 0, -1};  // abajo, se para
+                    a.update(dt, c);
+                }
+                CHECK(down && h.body.grounded && std::fabs(h.body.pos.y) < 0.05f && !h.climbing(), "andamios: por la escalera se baja (y=%.2f)", h.body.pos.y);
+                CHECK(hop({1.6f, 0.1f, 3}, {1.6f, 0, 4.5f}, {1.6f, 0, 9}, true) < 1.0f, "andamios: sin la escalera no se llega a la torre (ni con el doble salto)");
+            }
+            {  // 2. los saltos (el último, con doble salto; sin él no se llega)
+                float y1 = hop({0, 5.1f, 7.5f}, {0, 0, 9.6f}, {0, 0, 13.5f}, false);
+                float y2 = hop({0, 5.1f, 13.0f}, {0, 0, 14.6f}, {0, 0, 18.0f}, false);
+                float y3 = hop({0, 6.3f, 16.8f}, {0, 0, 18.6f}, {3.0f, 0, 22.5f}, true);
+                CHECK(std::fabs(y1 - 5) < 0.05f && std::fabs(y2 - 6.2f) < 0.05f && std::fabs(y3 - 8.6f) < 0.05f,
+                      "andamios: de losa en losa (%.2f, %.2f, %.2f)", y1, y2, y3);
+            }
+            // Bot de paredes: corre hacia `first`; agarrado, salta en cuanto puede; en el aire, sigue
+            // hacia donde mira y, tras un salto de pared, gasta el doble salto si `twice`. Para al
+            // pisar por encima de `goal`.
+            auto wallBot = [&](Vec3 from, Vec3 first, float goal, bool twice, int& clings) {
+                place(a, from);
+                clings = 0;
+                bool started = false, wallJumped = false, doubled = false;
+                float best = -100;
+                for (int i = 0; i < 60 * 8; ++i) {
+                    Controls c;
+                    bool high = h.body.grounded && h.body.pos.y > from.y + 0.5f;  // encaramada a medio camino
+                    c.move = started && !high ? h.forward() : first;
+                    if (!started && i > 20) c.jump = started = true;
+                    if (high && !h.climbing() && dot(h.forward(), first) > 0.95f) c.jump = true, wallJumped = true, doubled = false;  // ya vuelta
+                    else if (h.climb() == Character::Climb::Wall && h.climbTime_ > 0.08f) c.jump = wallJumped = true, doubled = false;
+                    else if (twice && wallJumped && !doubled && !h.climbing() && !h.body.grounded && h.body.vel.y < 1.0f) c.jump = doubled = true;
+                    Character::Climb before = h.climb();
+                    a.update(dt, c);
+                    if (h.climb() == Character::Climb::Wall && before != Character::Climb::Wall) ++clings;
+                    if (h.body.grounded && h.body.pos.y > goal - 0.1f) {
+                        best = h.body.pos.y;
+                        break;
+                    }
+                }
+                return best;
+            };
+            {  // 3. el pozo: de pared en pared hasta arriba
+                int clings = 0;
+                float y = wallBot({8.2f, 8.7f, 23}, {1, 0, 0}, 15.2f, true, clings);
+                CHECK(std::fabs(y - 15.2f) < 0.05f && clings >= 2, "andamios: el pozo se sube saltando de pared en pared (y=%.2f, %d agarres)", y, clings);
+                CHECK(hop({4.0f, 8.7f, 21.0f}, {5.0f, 0, 21.0f}, {11.0f, 0, 21.0f}, true) < 15.0f, "andamios: el pozo no se salta con el doble salto");
+            }
+            {  // 4. la cornisa: agarrarse a la pared suelta, salto de pared y doble salto
+                int clings = 0;
+                float y = wallBot({8.6f, 16.5f, 34}, {1, 0, 0}, 21.2f, true, clings);
+                CHECK(std::fabs(y - 21.2f) < 0.05f && clings >= 1, "andamios: a la cornisa con un salto de pared (y=%.2f, %d agarres)", y, clings);
+                CHECK(hop({9.4f, 16.5f, 34}, {8.0f, 0, 34}, {4.0f, 0, 34}, true) < 21.0f, "andamios: a la cornisa no se llega solo con el doble salto");
+            }
+            {  // 5. de la cornisa a la escalera que cuelga y arriba, a la linterna
+                a.part_ = 4;
+                place(a, {4.5f, 21.3f, 34.5f});
+                bool jumped = false, grabbed = false;
+                for (int i = 0; i < 60 * 6; ++i) {
+                    Controls c;
+                    c.move = h.body.grounded && h.body.pos.y > 26.5f ? Vec3{} : Vec3{0, 0, 1};  // arriba, se para
+                    if (!jumped && h.body.pos.z > 35.6f) c.jump = jumped = true;
+                    a.update(dt, c);
+                    grabbed = grabbed || h.climb() == Character::Climb::Ladder;
+                }
+                CHECK(grabbed && h.body.grounded && std::fabs(h.body.pos.y - 27) < 0.05f && a.part_ == 5,
+                      "andamios: salto a la escalera que cuelga y arriba, a la linterna (y=%.2f, tramos %zu/5)", h.body.pos.y, a.part_);
+            }
+            place(a, {20, 2, 0});  // sobre el vacío: vuelve al último tramo
+            run(a, 3.0f);
+            CHECK(h.body.pos.y > 26 && h.body.grounded, "andamios: quien cae vuelve al último tramo (y=%.1f)", h.body.pos.y);
         }
         {  // Habitantes: pasean por su zona, sin hundirse ni salir volando
             Game h = fresh();

@@ -308,6 +308,35 @@ bool GlbFile::load(const std::string& path, std::string& error) {
             while (sk.inverseBind.size() < sk.joints.size()) sk.inverseBind.push_back(Mat4::identity());
             skins.push_back(std::move(sk));
         }
+    if (const Json* animsJ = root.get("animations"))
+        for (const Json& a : animsJ->items) {
+            GlbAnimation ga;
+            if (const Json* n = a.get("name")) ga.name = n->text;
+            const Json* samplers = a.get("samplers");
+            if (const Json* chs = a.get("channels"))
+                for (const Json& c : chs->items) {
+                    const Json* target = c.get("target");
+                    int s = c.integer("sampler", -1);
+                    if (!target || !target->get("path") || !samplers || s < 0 || size_t(s) >= samplers->items.size()) continue;
+                    GlbChannel ch;
+                    ch.node = target->integer("node", -1);
+                    const std::string& what = target->get("path")->text;
+                    if (what == "translation") ch.path = GlbChannel::Translation;
+                    else if (what == "rotation") ch.path = GlbChannel::Rotation;
+                    else if (what == "scale") ch.path = GlbChannel::Scale;
+                    else continue;  // pesos de morph: no se usan
+                    const Json& sm = samplers->items[size_t(s)];
+                    if (const Json* in = sm.get("interpolation")) ch.step = in->text == "STEP";
+                    int comps = ch.path == GlbChannel::Rotation ? 4 : 3;
+                    if (!readAccessor(sm.integer("input", -1), 1, &ch.times, nullptr) ||
+                        !readAccessor(sm.integer("output", -1), comps, &ch.values, nullptr) || ch.times.empty() ||
+                        ch.values.size() < ch.times.size() * size_t(comps) || ch.node < 0 || size_t(ch.node) >= nodes.size())
+                        continue;
+                    ga.duration = std::max(ga.duration, ch.times.back());
+                    ga.channels.push_back(std::move(ch));
+                }
+            animations.push_back(std::move(ga));
+        }
     const Json* scenes = root.get("scenes");
     if (scenes && !scenes->items.empty()) {
         if (const Json* sn = scenes->items[size_t(root.integer("scene", 0))].get("nodes"))

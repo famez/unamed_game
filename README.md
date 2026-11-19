@@ -23,6 +23,15 @@ palabras (`assets/story/capitulo1.txt`, formato en `src/game/story.h` y `src/gam
 
 Para escribir escenas: `./build/game --escena eco_alba` salta la intro y la reproduce.
 
+## Animaciones de Vela
+
+Correr, caminar, saltar, el combo de la espada (tajo, revés y golpe al suelo con salto) y la
+voltereta están hechos a mano en `assets/models/vela_animaciones.glb` (fuentes en
+`tools/vela_animaciones/`). Al arrancar se pasan al esqueleto del juego
+(`src/actors/hero_clips.cpp`) y se mezclan con la animación procedural: los ciclos van a la
+fase de las pisadas, los golpes conservan sus tiempos de impacto y la voltereta su duración.
+Sin el fichero, todo vuelve a ser procedural. Hollín, con el mismo esqueleto, las comparte.
+
 ## Música y sonido
 
 Todo está sintetizado por código (`src/audio/synth.cpp`), sin ficheros de audio en el
@@ -62,7 +71,7 @@ Dependencias del sistema: `libOpenGL`/`libGLX` (glvnd + Mesa), `libX11` y `libXi
 (`sudo apt install libxi-dev`). Incluidas en el repositorio: `stb_truetype.h` y las
 fuentes Orbitron y Exo 2.
 
-Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena id` (reproduce una escena del guion), `--autoplay` (un bot combate solo, sin capturar el ratón), `--sombra` (empezar en modo sombra), `--exportar-modelos [carpeta]` (escribe a .glb los personajes que falten; `--forzar` los sustituye), `--visor fichero.glb` (visor de modelos), `--vitrina` (guion que enseña ataques, técnicas, formas y mecánicas), `--video fichero.mp4 [seg]` (graba a velocidad real con ffmpeg),
+Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena id` (reproduce una escena del guion), `--autoplay` (un bot combate solo, sin capturar el ratón), `--escalada` (con `--nivel andamios`: un bot hace la subida de Los Andamios), `--sombra` (empezar en modo sombra), `--exportar-modelos [carpeta]` (escribe a .glb los personajes que falten; `--forzar` los sustituye), `--visor fichero.glb` (visor de modelos), `--vitrina` (guion que enseña ataques, técnicas, formas y mecánicas), `--video fichero.mp4 [seg]` (graba a velocidad real con ffmpeg),
 `--screenshot fichero.ppm segundos [frames]` (guarda frames y sale), `--camyaw radianes` y `--efectos-golpe lista` (qué efectos de golpe se ven: `tajo`, `destello`, `materia` —esquirlas de cristal en los de luz, tinta que mancha el suelo en los de sombra—, `sacudida`, `camara`, `remate`; o `todos` / `ninguno`).
 
 ## Controles
@@ -70,7 +79,9 @@ Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena i
 | Tecla | Acción |
 |---|---|
 | W A S D | Correr (relativo a la cámara). **Shift**: correr más rápido |
-| Espacio | Saltar; en el aire, **doble salto** con voltereta |
+| Espacio | Saltar; en el aire, **doble salto** con voltereta. Agarrada a una pared: **salto de pared** |
+| W A S D contra una escalera | **Escalera de gato**: adelante sube, atrás baja, Espacio se suelta; arriba se encarama. Andando hacia el borde donde acaba una, se baja por ella |
+| Saltar contra una pared | Se **agarra** un momento (luego resbala); desde ahí, Espacio salta hacia fuera. La misma pared no vale dos veces sin pisar suelo; entre dos enfrentadas se sube. Si el borde queda a la altura del pecho, se **encarama** |
 | Clic izquierdo | Atacar (combo según el arma). **Mantener**: corte cargado (lanza una onda) |
 | Clic derecho (mantener) | Guardia (se puede andar mirando a la cámara). Justo antes del golpe: **bloqueo perfecto**, el enemigo queda aturdido y atacar lanza el **súper contraataque** |
 | C / Ctrl | Voltereta de esquiva (invulnerable); un golpe justo después es un **contraataque** |
@@ -198,16 +209,20 @@ vuelve al selector.
     alto de una loma, plaza empedrada con iglesia, kiosco, bancas, palmas y yipaos; calles de
     casas de bahareque con zócalos, puertas y balcones de colores; alrededor, cafetales con
     plataneras de sombrío, un guadual en la cañada y palmas de cera en los cerros.
-  - **Ciudad de la Bahía** (`--nivel rio`; al estilo de Río, pero como un diorama: pocas
-    zonas pequeñas y cerradas, a pocos pasos una de otra, talladas en los morros): **la
-    Caleta**, una playa recogida entre dos peñas con el cocotero del islote en el centro, las
-    sombrillas cerradas y las barcas; **el Largo de los Arcos**, una plaza pequeña tras el paseo
-    de ondas, cerrada por casas, con los arcos y el tranvía al fondo y un músico debajo; y **la
-    Ladeira**, un callejón por detrás de las casas con la escalera de azulejos que sube al
-    **Mirador** del almendro viejo, sobre la caleta. Lo lejano (el mar, el Pan de Azúcar y Urca
-    con el teleférico, la favela encendida en la ladera y la estatua del cerro) es telón de
-    fondo: se ve, no se pisa. El borde de las zonas es un recinto en el terreno
-    (`Terrain::fence`) que nadie cruza hacia fuera; las peñas, las casas y las laderas lo tapan.
+  - **Ciudad de la Bahía** (`--nivel rio`; al estilo de Río): una ciudad colonial que trepa por
+    los morros sobre una bahía salvaje, con calles, plazas y escaleras talladas en el relieve.
+    **La Caleta**, una playa virgen entre dos peñas (cocoteros inclinados, matorral, troncos
+    varados, el cocotero del islote y solo la barca del barquero); **el Largo de los Arcos**,
+    tras el paseo de ondas; **la Ladeira** con la escalera de azulejos hasta el **Mirador** del
+    almendro viejo. Bajo el arco central se pasa a la **Praça do Coreto** (quiosco de música,
+    fuente y calles de sobrados de colores); de allí la cuesta en zigzag de **Santa Teresa**
+    sube al **Largo da Igreja**, que vuelve por la Rua Monte Alegre y el Largo dos Guimarães.
+    Al oeste, los **becos del morro** suben a la cancha y bajan al mirador; al este, la **Rua da
+    Praia** lleva al **Largo do Bondinho**, con la estación del teleférico (estuco, azulejo y
+    teja, como las de Urca y el Pan de Azúcar; cabinas pintadas como el tranvía), y una senda
+    por la selva baja a la **Prainha**, otra playa virgen con su laguna. Seis nodos de color.
+    Lo lejano (el mar, los morros con la favela y la estatua del cerro) es telón de fondo. El
+    borde de las zonas es un recinto en el terreno (`Terrain::fence`) que nadie cruza.
   - **Las Copas** (`--nivel copas`, al anochecer): una aldea en lo alto de árboles gigantes
     cuyos troncos se pierden en un mar de nubes. Cuatro rincones, cada uno en su árbol: **el
     Tronco Mayor** (la plaza de tablas con la posada, que cura y guarda, dos casitas, un puesto de

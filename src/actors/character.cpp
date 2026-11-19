@@ -1,5 +1,7 @@
 #include "actors/character.h"
 
+#include "actors/hero_clips.h"
+
 #include <algorithm>
 
 namespace {
@@ -289,6 +291,45 @@ float stepSpeed(const MoveDef& d, float u, float duration) {
     return d.step / len * (kPi * 0.5f) * std::sin(t * kPi);  // ∫ sin(πt) dt = 2/π: recorre `step` metros
 }
 
+// Animaciones hechas a mano (hero_clips.h). Los ciclos traen dos pasos completos: un paso
+// (izquierda y derecha) dura la mitad del clip, y su fase es la del ciclo procedural.
+constexpr float kRunCycle = 0.62f, kWalkCycle = 1.05f;
+constexpr float kRollClipEnd = 0.9f;  // la voltereta acaba de pie en la guardia; luego solo espera
+
+// Tramos del combo (combo ×3 del clip) que hace cada golpe de la hoja: empieza, instante en
+// que la hoja pasa por delante (el impacto del juego) y acaba.
+struct ClipSegment {
+    float from, impact, to;
+};
+const ClipSegment* comboSegment(Move m, MoveSet set) {
+    static const ClipSegment kTajo{0.0f, 0.24f, 0.46f}, kReves{0.46f, 0.53f, 0.74f}, kAlSuelo{0.74f, 1.06f, 1.6f};
+    if (set != MoveSet::Blade || !heroClipsLoaded()) return nullptr;
+    switch (m) {
+        case Move::Slash1: return &kTajo;
+        case Move::Slash2: return &kReves;
+        case Move::Finisher: return &kAlSuelo;  // golpe descendente con salto (sin la voltereta procedural)
+        default: return nullptr;
+    }
+}
+// Instante del clip para el punto `u` (0..1) del golpe: el impacto del juego cae en el del clip.
+float segmentTime(const ClipSegment& s, float u, float impactU) {
+    if (u < impactU) return s.from + (s.impact - s.from) * (u / std::max(impactU, 1e-3f));
+    return s.impact + (s.to - s.impact) * ((u - impactU) / std::max(1.0f - impactU, 1e-3f));
+}
+
+// Funde la pose de un clip sobre `out` con peso `w`; el brazo derecho (el del arma) con
+// `armW` y la altura de la cadera con `rootW` (en el aire la pone la física, no el clip).
+void mixClip(Pose& out, const Pose& clip, float w, float armW, float rootW) {
+    for (int j = 0; j < JointCount; ++j) {
+        float k = j == ShoulderR || j == ElbowR || j == WristR ? armW : w;
+        if (k <= 0) continue;
+        Vec3& r = out.rotation[j];
+        const Vec3& c = clip.rotation[j];
+        r = {lerpAngle(r.x, c.x, k), lerpAngle(r.y, c.y, k), lerpAngle(r.z, c.z, k)};
+    }
+    out.rootOffset.y = lerpf(out.rootOffset.y, clip.rootOffset.y, rootW);
+}
+
 }  // namespace
 
 void Character::reset() { *this = Character{}; }
@@ -326,7 +367,7 @@ Mat4 Character::modelMatrix() const {
         // El giro arranca fuerte y frena al final (la hoja "corta" en la primera vuelta).
         float t = ease(Strike, (moveU() - d.turnFrom) / (d.turnTo - d.turnFrom));
         if (d.spin != 0) m = m * rotateY(d.spin * t);
-        if (d.flip != 0) {  // voltereta alrededor del centro del cuerpo
+        if (d.flip != 0 && !comboSegment(move_, moveSet)) {  // voltereta alrededor del centro del cuerpo
             const Vec3 pivot{0, 0.9f, 0};
             m = m * translate(pivot) * rotateX(d.flip * smoothstep01((moveU() - d.turnFrom) / (d.turnTo - d.turnFrom))) *
                 translate(-pivot);
@@ -340,7 +381,8 @@ Mat4 Character::modelMatrix() const {
         // Voltereta: el cuerpo encogido da una vuelta sobre el eje lateral.
         float u = clampf(rollTime_ / kRollDuration, 0, 1);
         const Vec3 pivot{0, 0.5f, 0};
-        m = m * translate(pivot) * rotateX(smoothstep01(u) * 2.0f * kPi) * translate(-pivot);
+        float turn = heroClipsLoaded() ? sampleHeroClip(HeroClip::Roll, u * kRollClipEnd).spin : smoothstep01(u) * 2.0f * kPi;
+        m = m * translate(pivot) * rotateX(turn) * translate(-pivot);
     }
     return m;
 }
@@ -401,7 +443,7 @@ void Character::startMove(Move m, float faceYaw, float dash) {
 }
 
 bool Character::attack(float faceYaw, float dash) {
-    if (rolling() || hurt() || downTimer >= 0 || lying > 0.01f) return false;
+    if (rolling() || hurt() || downTimer >= 0 || lying > 0.01f || climbing()) return false;
     // Especiales según la situación (solo si no hay otro golpe en curso).
     if (move_ == Move::None) {
         Move special = Move::None;
@@ -436,7 +478,7 @@ bool Character::cast(float faceYaw) {
 }
 
 bool Character::dodge(Vec3 dir) {
-    if (rolling() || hurt() || downTimer >= 0 || !body.grounded) return false;
+    if (rolling() || hurt() || downTimer >= 0 || !body.grounded || climbing()) return false;
     // Se puede cancelar la recuperación de un golpe (no su preparación).
     if (move_ != Move::None && !impactDone_) return false;
     move_ = Move::None;
@@ -450,6 +492,7 @@ bool Character::dodge(Vec3 dir) {
 }
 
 void Character::flinch(float seconds, Vec3 push) {
+    if (climb_ == Climb::Ladder || climb_ == Climb::Wall) releaseClimb();  // un golpe la despega
     hurtTimer_ = seconds;
     // Sacudida: el tronco y la cabeza salen despedidos hacia donde empuja el golpe y los
     // muelles los devuelven con un rebote.
@@ -480,7 +523,7 @@ Move Character::takeImpact() {
 // Estados "discretos" de la animación: al cambiar alguno se funde la pose.
 int Character::stateKey() const {
     return int(move_) | (rolling() ? 1 << 5 : 0) | (body.grounded ? 1 << 6 : 0) | (guarding() ? 1 << 7 : 0) |
-           (hurt() ? 1 << 8 : 0) | (downTimer >= 0 ? 1 << 9 : 0);
+           (hurt() ? 1 << 8 : 0) | (downTimer >= 0 ? 1 << 9 : 0) | (int(climb_) << 10);
 }
 
 void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, float camYaw) {
@@ -494,6 +537,29 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
     hurtTimer_ = std::max(0.0f, hurtTimer_ - dt);
     float input = downTimer >= 0 ? 0.0f : std::min(length(moveDir), 1.0f);
     if (input > 0.01f) moveDir_ = normalize(moveDir);
+    regrab_ = std::max(0.0f, regrab_ - dt);
+    airTime_ = body.grounded ? 0.0f : airTime_ + dt;
+    if (body.grounded) lastWallSet_ = false;  // pisando suelo, cualquier pared vale otra vez
+
+    // Trepando (o agarrándose ahora): ni golpes ni carrera; la pose sale de animateClimb().
+    if (climbing() || tryGrab(input, world)) {
+        updateClimb(dt, input, jump, world);
+        if (climbing()) {
+            speed = 0;
+            moveVel_ = {};
+            airBlend_ = 0;
+            prevSpeed_ = 0;
+            prevYaw_ = yaw;
+            finishPose(dt);
+            return;
+        }
+    }
+    // Tras el salto de pared, la marcha sigue un momento el impulso (no se vuelve a la pared).
+    if (jumpLock_ > 0) {
+        jumpLock_ -= dt;
+        moveDir_ = forward();
+        input = 1;
+    }
 
     // Saltar cancela la recuperación de un golpe de suelo (no su preparación).
     if (jump && body.grounded && isAttack(move_) && !isAirAttack(move_) && impactDone_ && moveU() > 0.55f) {
@@ -678,8 +744,12 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
     }
     guardTime_ = guarding() ? guardTime_ + dt : 0.0f;
     guardBlend_ = moveTowards(guardBlend_, guarding() ? 1.0f : 0.0f, 12.0f * dt);
+    finishPose(dt);
+}
 
-    // Pose: la del estado actual, fundida desde la anterior si el estado ha cambiado.
+// La pose del estado actual, fundida desde la anterior si el estado ha cambiado, con sus
+// muelles; luego las matrices y el movimiento secundario.
+void Character::finishPose(float dt) {
     int key = stateKey();
     if (key != lastKey_) {
         bool toAttack = isAttack(move_);
@@ -810,6 +880,10 @@ void Character::interpolatedJoints(float alpha, Mat4 out[JointCount]) const {
 // atrás (-Z); rotar +Z lo lleva hacia +X (la izquierda del personaje).
 void Character::animate(Pose& out) const {
     out = Pose{};
+    if (climbing()) {
+        animateClimb(out);
+        return;
+    }
     Vec3* r = out.rotation;
 
     float run = clampf(speed / kRunSpeed, 0, 1) * (1.0f - airBlend_);
@@ -966,6 +1040,20 @@ void Character::animate(Pose& out) const {
     r[ShoulderR].z -= 0.12f * roll;
     r[Neck].x -= 0.25f * roll;
 
+    // Andar y correr hechos a mano, en cuanto se mueve (parado, el reposo procedural). La fase
+    // es la de las pisadas, así los pies no patinan; andando hacia atrás, el ciclo al revés. El
+    // brazo del arma: con ella en la mano, el procedural (la lleva atrás al correr); andando,
+    // siempre (el clip la apoya en el hombro).
+    bool clips = heroClipsLoaded();
+    if (float w = clips ? smoothstep01(speed / 1.2f) * (1.0f - airBlend_) : 0.0f; w > 0) {
+        float cycle = back * phase_ / (2.0f * kPi);
+        Pose loco = lerpPose(sampleHeroClip(HeroClip::Walk, cycle * kWalkCycle).pose,
+                             sampleHeroClip(HeroClip::Run, cycle * kRunCycle).pose, gait, JointCount);
+        mixClip(out, loco, w, w * gait * (1.0f - armedBlend_), w);
+        r[Spine].x += (lean_ + 0.15f * sprint) * w;  // se inclina al acelerar y al girar
+        r[Spine].z += bank_ * w;
+    }
+
     // Gesto de desenvainar o envainar: la mano derecha va al hombro (donde está la empuñadura).
     if (drawTime_ < kDrawTime) {
         float w = std::sin(drawTime_ / kDrawTime * kPi);
@@ -976,18 +1064,30 @@ void Character::animate(Pose& out) const {
     }
 
     // En el aire: piernas recogidas (más al subir), brazos abiertos.
+    // Con el salto hecho a mano: al subir, brazos arriba; en lo alto, piernas recogidas; al
+    // caer, se estira esperando el suelo (0,40 → 0,62 → 0,84 s del clip según la velocidad).
     float a = airBlend_;
     float rising = clampf(body.vel.y / kJumpSpeed, -1, 1);
-    r[HipL].x = lerpf(r[HipL].x, -0.9f - 0.3f * rising, a);
-    r[HipR].x = lerpf(r[HipR].x, -0.25f + 0.15f * rising, a);
-    r[KneeL].x = lerpf(r[KneeL].x, 1.4f + 0.2f * rising, a);
-    r[KneeR].x = lerpf(r[KneeR].x, 0.7f - 0.2f * rising, a);
-    r[ShoulderL].z += 0.7f * a;
-    r[ShoulderR].z -= 0.4f * a;
-    r[Spine].x -= 0.1f * rising * a;
+    if (clips) {
+        if (a > 0) mixClip(out, sampleHeroClip(HeroClip::Jump, 0.62f - 0.22f * rising).pose, a, a * (1.0f - armedBlend_), 0);
+    } else {
+        r[HipL].x = lerpf(r[HipL].x, -0.9f - 0.3f * rising, a);
+        r[HipR].x = lerpf(r[HipR].x, -0.25f + 0.15f * rising, a);
+        r[KneeL].x = lerpf(r[KneeL].x, 1.4f + 0.2f * rising, a);
+        r[KneeR].x = lerpf(r[KneeR].x, 0.7f - 0.2f * rising, a);
+        r[ShoulderL].z += 0.7f * a;
+        r[ShoulderR].z -= 0.4f * a;
+        r[Spine].x -= 0.1f * rising * a;
+    }
 
-    // Aterrizaje: rodillas que absorben el golpe y vuelven con un pequeño rebote.
-    if (landTimer_ > 0) {
+    // Aterrizaje: rodillas que absorben el golpe y vuelven con un pequeño rebote. Con el clip,
+    // su caída (se agacha y se levanta); corriendo, solo en parte, para no frenar las piernas.
+    if (landTimer_ > 0 && clips) {
+        float k = 1.0f - landTimer_ / 0.3f;
+        float w = std::min(1.0f, 0.4f + landStrength_) * (1.0f - smoothstep01((k - 0.5f) / 0.5f)) *
+                  (1.0f - 0.6f * clampf(speed / kRunSpeed, 0, 1));
+        mixClip(out, sampleHeroClip(HeroClip::Jump, 0.92f + 0.38f * k).pose, w, w * (1.0f - armedBlend_), w);
+    } else if (landTimer_ > 0) {
         float t = 1.0f - landTimer_ / 0.3f;
         float w = std::sin(t * kPi) * (1.0f - t * 0.5f) * landStrength_;
         r[KneeL].x += 0.8f * w;
@@ -1001,7 +1101,10 @@ void Character::animate(Pose& out) const {
     }
 
     // Voltereta: cuerpo hecho una bola (el giro lo da modelMatrix()).
-    if (rolling()) {
+    if (rolling() && clips) {  // la hecha a mano (la vuelta, en modelMatrix())
+        float u = clampf(rollTime_ / kRollDuration, 0, 1);
+        mixClip(out, sampleHeroClip(HeroClip::Roll, u * kRollClipEnd).pose, 1, 1, 1);
+    } else if (rolling()) {
         float u = clampf(rollTime_ / kRollDuration, 0, 1);
         float w = clampf(std::min(u / 0.12f, (1.0f - u) / 0.2f), 0, 1);
         r[Spine].x = lerpf(r[Spine].x, 0.7f, w);
@@ -1022,26 +1125,30 @@ void Character::animate(Pose& out) const {
         float wIn = d.blendIn > 0 ? u / d.blendIn : 1.0f;
         float wOut = d.blendOut > 0 ? (1.0f - u) / d.blendOut : 1.0f;
         float w = clampf(std::min(wIn, wOut), 0, 1);
-        ArmKey k = sampleOverlap(d, u, moveDuration(move_, attackSpeed));
-        applyArm(r, k, w, d.leftArm);
-        if (moveSet == MoveSet::Fists && !d.leftArm && move_ != Move::Cast)  // guardia con el otro puño
-            applyArm(r, {0, -0.6f, 0, -0.1f, -1.9f, 0, 0, Smooth}, w * 0.8f, true);
-        float commit = clampf((u - d.impactU + 0.12f) / 0.12f, 0, 1);  // 0 preparando, 1 golpeado
-        r[Spine].x += (d.lean * commit - 0.08f * (1.0f - commit)) * w;
-        r[Spine].y += k.chestY * 0.35f * w;  // la cadera acompaña la torsión
-        r[Head].y -= k.chestY * 0.5f * w;
-        if (moveSet != MoveSet::Fists) {  // brazo libre equilibrando
-            r[ShoulderL].x = lerpAngle(r[ShoulderL].x, -0.5f, w);
-            r[ShoulderL].z = lerpAngle(r[ShoulderL].z, 0.9f, w);
-            r[ElbowL].x = lerpAngle(r[ElbowL].x, -0.5f, w);
-        }
-        if (body.grounded) {
-            float lunge = 0.15f + 0.25f * commit;  // zancada que se abre al golpear
-            r[HipL].x = lerpAngle(r[HipL].x, -0.35f - lunge, w);  // pierna izquierda adelantada
-            r[HipR].x = lerpAngle(r[HipR].x, 0.2f + lunge, w);
-            r[KneeL].x = lerpAngle(r[KneeL].x, 0.5f + 0.2f * commit, w);
-            r[KneeR].x = lerpAngle(r[KneeR].x, 0.25f, w);
-            out.rootOffset.y -= (0.05f + 0.05f * commit) * w;
+        if (const ClipSegment* seg = comboSegment(move_, moveSet)) {  // combo hecho a mano: todo el cuerpo
+            mixClip(out, sampleHeroClip(HeroClip::Combo, segmentTime(*seg, u, d.impactU)).pose, w, w, w);
+        } else {
+            ArmKey k = sampleOverlap(d, u, moveDuration(move_, attackSpeed));
+            applyArm(r, k, w, d.leftArm);
+            if (moveSet == MoveSet::Fists && !d.leftArm && move_ != Move::Cast)  // guardia con el otro puño
+                applyArm(r, {0, -0.6f, 0, -0.1f, -1.9f, 0, 0, Smooth}, w * 0.8f, true);
+            float commit = clampf((u - d.impactU + 0.12f) / 0.12f, 0, 1);  // 0 preparando, 1 golpeado
+            r[Spine].x += (d.lean * commit - 0.08f * (1.0f - commit)) * w;
+            r[Spine].y += k.chestY * 0.35f * w;  // la cadera acompaña la torsión
+            r[Head].y -= k.chestY * 0.5f * w;
+            if (moveSet != MoveSet::Fists) {  // brazo libre equilibrando
+                r[ShoulderL].x = lerpAngle(r[ShoulderL].x, -0.5f, w);
+                r[ShoulderL].z = lerpAngle(r[ShoulderL].z, 0.9f, w);
+                r[ElbowL].x = lerpAngle(r[ElbowL].x, -0.5f, w);
+            }
+            if (body.grounded) {
+                float lunge = 0.15f + 0.25f * commit;  // zancada que se abre al golpear
+                r[HipL].x = lerpAngle(r[HipL].x, -0.35f - lunge, w);  // pierna izquierda adelantada
+                r[HipR].x = lerpAngle(r[HipR].x, 0.2f + lunge, w);
+                r[KneeL].x = lerpAngle(r[KneeL].x, 0.5f + 0.2f * commit, w);
+                r[KneeR].x = lerpAngle(r[KneeR].x, 0.25f, w);
+                out.rootOffset.y -= (0.05f + 0.05f * commit) * w;
+            }
         }
     }
 

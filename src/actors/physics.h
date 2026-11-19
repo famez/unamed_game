@@ -53,8 +53,19 @@ struct SolidGrid {
     std::vector<std::vector<int>> cells;
 };
 
+// Escalera de gato pegada a una cara vertical. `base`: el pie de la escalera, sobre la cara
+// de la pared; `normal`: hacia fuera de la pared (por donde se sube); `top`: la altura del
+// borde al que lleva (arriba se sale hacia dentro, en -normal).
+struct Ladder {
+    Vec3 base;
+    float top = 0;
+    Vec3 normal{0, 0, 1};
+    float halfWidth = 0.32f;
+};
+
 struct World {
     std::vector<AABB> solids;
+    std::vector<Ladder> ladders;
     bool ground = true;  // suelo infinito en y = 0 (sin él se puede caer al vacío)
     std::shared_ptr<const Terrain> terrain;  // relieve (sustituye al suelo plano)
     SolidGrid grid;

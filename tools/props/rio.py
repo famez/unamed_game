@@ -295,14 +295,194 @@ def bonde(name):
     return p
 
 
-def teleferico(name):
+AZULEJO = ['#1f4f9a', '#f2efe8', '#3d78c4', '#f2efe8']  # azul y blanco, como los paneles portugueses
+TEJA = '#a4532f'
+YELLOW = '#f2c230'
+NAVY = '#2a4a7a'
+
+
+def tiles_band(p, x0, x1, y0, y1, z, seed, along_x=True):
+    """Franja de azulejos azules y blancos (cuadritos) en una fachada."""
+    rnd = random.Random(seed)
+    n, m = max(1, int((x1 - x0) / 0.4)), max(1, int((y1 - y0) / 0.4))
+    for i in range(n):
+        for j in range(m):
+            c = (x0 + (i + 0.5) * (x1 - x0) / n, y0 + (j + 0.5) * (y1 - y0) / m)
+            col = AZULEJO[(i + j) % 2 * 2 + (1 if rnd.random() < 0.2 else 0)] if (i + j) % 2 else AZULEJO[0]
+            h = ((x1 - x0) / n * 0.46, (y1 - y0) / m * 0.46, 0.01)
+            if along_x:
+                p.add(box(*h), col, 'Stone', T(c[0], c[1], z))
+            else:
+                p.add(box(h[2], h[1], h[0]), col, 'Stone', T(z, c[1], c[0]))
+
+
+def arch_opening(p, x, y, z, w, h, color, mat='Cloth', depth=0.04):
+    """Hueco en arco de medio punto: rectángulo con su semicírculo encima (mirando a +z)."""
+    p.add(box(w / 2, (h - w / 2) / 2, depth), color, mat, T(x, y + (h - w / 2) / 2, z))
+    p.add(cylinder(w / 2, w / 2, depth * 2, 12), color, mat, mul(T(x, y + h - w / 2, z - depth), RX(math.pi / 2)))
+
+
+def estacion_teleferico(name, seed, terrace=False):
+    """Estación del teleférico en el estilo de la ciudad: estuco claro con zócalo de azulejo,
+    arcos de medio punto, cornisa amarilla y tejado de teja a cuatro aguas. Por delante (+z), el
+    gran arco por el que entran las cabinas y la rueda de la polea, con los cables a 9 m y a
+    ±1,6 m del eje. `terrace`: la de los morros, con su terraza y barandilla de hierro."""
     p = Piece(name)
-    p.box((0, 1.1, 0), (1.3, 1.0, 1.9), '#e8e4dc')
-    p.add(box(1.31, 0.45, 1.6), '#2c3e50', 'Glass', T(0, 1.4, 0))
-    p.add(box(1.25, 0.45, 1.91), '#2c3e50', 'Glass', T(0, 1.4, 0))
-    p.box((0, 2.2, 0), (1.4, 0.12, 2.0), '#d8402a')
-    p.rod((0, 2.3, 0), (0, 3.6, 0), 0.08, '#5d6070', 'Metal')
-    p.box((0, 3.7, 0), (0.25, 0.15, 0.9), '#5d6070', 'Metal')
+    w, d, h = 4.6, 5.0, 10.4
+    wall, trim = '#f1e8d8', '#e3b448'
+    p.box((0, h / 2, 0), (w, h / 2, d), wall, 'Stone')
+    p.box((0, 0.6, 0), (w + 0.08, 0.6, d + 0.08), '#b9ab94', 'Stone')  # basamento
+    for sx in (-1, 1):  # pilastras de esquina, amarillas como la cornisa
+        for sz in (-1, 1):
+            p.box((sx * w, h / 2, sz * d), (0.32, h / 2, 0.32), trim, 'Stone')
+    p.box((0, h + 0.15, 0), (w + 0.35, 0.18, d + 0.35), trim, 'Stone')  # cornisa
+    p.add(pyramid(w + 0.5, d + 0.5, 3.0), lambda q: shade(TEJA, 0.8 if int(q[1] * 5) % 2 else 1.0), m=T(0, h + 0.3, 0))
+    # Frente: el arco grande de las cabinas (oscuro por dentro) con la rueda de la polea.
+    arch_opening(p, 0, 4.4, d + 0.02, 5.2, 5.6, '#1d1f26')
+    for k in range(13):  # dovelas claras alrededor del arco
+        a = math.pi * k / 12
+        p.add(box(0.3, 0.22, 0.12), '#fbf6ea', 'Stone', mul(T(math.cos(a) * 2.75, 7.4 + math.sin(a) * 2.75, d + 0.08), RZ(a)))
+    for x in (-2.75, 2.75):  # jambas
+        p.box((x, 5.9, d + 0.08), (0.22, 1.5, 0.12), '#fbf6ea', 'Stone')
+    p.add(cylinder(1.6, 1.6, 0.18, 20), '#3a3d46', 'Metal', T(0, 8.9, d - 0.6))  # rueda de la polea
+    p.add(cylinder(0.25, 0.25, 0.5, 8), '#c9a646', 'Metal', T(0, 8.8, d - 0.6))
+    for k in range(6):
+        a = k * math.pi / 3
+        p.beam((0, 9.0, d - 0.6), (math.cos(a) * 1.55, 9.0, d - 0.6 + math.sin(a) * 1.55), 0.08, '#3a3d46', 'Metal')
+    p.box((0, 4.4, d + 0.6), (3.0, 0.1, 0.65), '#8a8d96', 'Metal')  # andén asomado
+    for x in (-2.8, 2.8):
+        p.rod((x, 4.5, d + 1.2), (x, 5.5, d + 1.2), 0.03, '#2a2a2e', 'Metal', seg=4)
+    p.box((0, 5.5, d + 1.2), (2.8, 0.03, 0.03), '#2a2a2e', 'Metal')
+    # Abajo, la puerta y dos ventanas en arco, con el zócalo de azulejo.
+    for z, along in ((d + 0.02, True), (-d - 0.02, True)):
+        sgn = 1 if z > 0 else -1
+        tiles_band(p, -w + 0.4, w - 0.4, 1.2, 2.6, z + sgn * 0.01, seed + (1 if z > 0 else 2))
+    arch_opening(p, 0, 1.2, -d - 0.03, 1.8, 3.2, '#5a3622')  # la puerta, detrás (de la calle)
+    p.add(cylinder(0.5, 0.5, 0.05, 12), '#fff0c8', 'Glow', mul(T(0, 5.0, -d - 0.08), RX(math.pi / 2)))  # reloj
+    p.add(box(0.03, 0.35, 0.02), '#2a2a2e', m=T(0, 5.12, -d - 0.12))
+    for sx in (-1, 1):
+        x = w + 0.03
+        tiles_band(p, -d + 0.4, d - 0.4, 1.2, 2.6, sx * x, seed + 3, along_x=False)
+        for z in (-2.4, 0.0, 2.4):
+            lit = (z == 0.0) != (sx > 0)
+            p.add(box(0.04, 0.8, 0.45), '#d9a35a' if lit else '#2c3a48', 'Glow' if lit else 'Glass', T(sx * x, 4.4, z))
+            p.add(cylinder(0.45, 0.45, 0.08, 10), '#d9a35a' if lit else '#2c3a48', 'Glow' if lit else 'Glass',
+                  mul(T(sx * x, 5.2, z), RZ(math.pi / 2), T(0, -0.04, 0)))
+            p.add(box(0.06, 1.1, 0.55), '#2a7d4f', m=T(sx * (x + 0.02), 4.6, z + 0.75))  # contraventanas verdes
+        p.add(box(0.06, 1.1, 0.55), '#2a7d4f', m=T(sx * (x + 0.02), 4.6, -2.4 - 0.75))
+    # Faroles a los lados de la puerta.
+    for x in (-1.6, 1.6):
+        p.rod((x, 3.3, -d - 0.05), (x, 3.3, -d - 0.5), 0.03, '#2a2a2e', 'Metal', seg=4)
+        p.add(box(0.14, 0.22, 0.14), '#ffe2a8', 'Glow', T(x, 3.05, -d - 0.55))
+    p.light((0, 3.2, -d - 1.2), '#FFDDA0')
+    if terrace:  # la terraza del morro, con barandilla de hierro verde
+        p.box((0, 0.15, -d - 3.0), (w + 1.5, 0.15, 3.0), '#cfc6b8', 'Stone')
+        for k in range(9):
+            x = -w - 1.5 + k * (2 * w + 3) / 8
+            p.rod((x, 0.3, -d - 5.9), (x, 1.3, -d - 5.9), 0.03, '#2f6f6a', 'Metal', seg=4)
+        p.box((0, 1.3, -d - 5.9), (w + 1.5, 0.04, 0.04), '#2f6f6a', 'Metal')
+    p.collider((-w - 0.3, 0, -d - 0.3), (w + 0.3, h, d + 0.3))
+    return p
+
+
+def teleferico(name):
+    """Cabina del teleférico, pintada como el tranvía: amarilla con la franja azul, marcos de
+    madera, techo claro y el brazo de hierro que la cuelga del cable."""
+    p = Piece(name)
+    p.box((0, 0.55, 0), (1.25, 0.45, 1.85), NAVY)
+    p.box((0, 1.05, 0), (1.3, 0.06, 1.9), '#d8d2c8')
+    p.box((0, 1.6, 0), (1.25, 0.5, 1.85), YELLOW)
+    for z in (-1.2, -0.4, 0.4, 1.2):  # ventanas con marco de madera
+        for x in (-1.26, 1.26):
+            p.add(box(0.02, 0.32, 0.32), '#2c3e50', 'Glass', T(x, 1.62, z))
+            p.add(box(0.025, 0.36, 0.03), '#8a5a34', m=T(x, 1.62, z + 0.34))
+    for z in (-1.86, 1.86):
+        p.add(box(0.95, 0.32, 0.02), '#2c3e50', 'Glass', T(0, 1.62, z))
+        p.add(cylinder(0.09, 0.09, 0.04, 8), '#fff1c8', 'Glow', mul(T(0, 0.75, z), RX(math.pi / 2), T(0, -0.02, 0)))
+    p.box((0, 2.15, 0), (1.35, 0.06, 1.95), YELLOW)
+    p.add(gable(1.95, 1.35, 0.25), '#d8d2c8', m=mul(T(0, 2.21, 0), RY(math.pi / 2)))
+    p.rod((0, 2.4, 0), (0, 3.6, 0), 0.08, '#2a2a2e', 'Metal')
+    p.box((0, 3.7, 0), (0.25, 0.15, 0.9), '#2a2a2e', 'Metal')
+    for z in (-0.7, 0.7):
+        p.add(cylinder(0.14, 0.14, 0.12, 10), '#5d6070', 'Metal', mul(T(0, 3.85, z), RZ(math.pi / 2), T(0, -0.06, 0)))
+    return p
+
+
+SOBRADO = [('#e9b949', '#2a7d4f'), ('#d9786a', '#f2efe8'), ('#7fb2c9', '#f2efe8'), ('#f2efe8', '#1f4f9a'),
+           ('#a7c48a', '#5a3622'), ('#e58f5e', '#2a4a7a'), ('#c9a0d6', '#f2efe8'), ('#f4d9a6', '#c8202f')]
+
+
+def sobrado(name, seed, floors=2, width=7.0):
+    """Sobrado colonial (Lapa, Santa Teresa): fachada de color con pilastras y cornisas
+    blancas, ventanas altas en arco con contraventanas, balcones de hierro, puertas en arco
+    abajo y la platibanda que esconde el tejado de teja. La fachada mira a +z."""
+    p = Piece(name)
+    rnd = random.Random(seed)
+    color, shutter = SOBRADO[seed % len(SOBRADO)]
+    w, d, fh = width / 2, 4.5, 3.3
+    h = floors * fh
+    white = '#fbf6ea'
+    p.box((0, h / 2, 0), (w, h / 2, d), color, 'Stone')
+    p.box((0, 0.35, 0), (w + 0.04, 0.35, d + 0.04), shade(color, 0.7), 'Stone')  # zócalo
+    for x in (-w, w):
+        p.box((x, h / 2, d), (0.22, h / 2, 0.08), white, 'Stone')
+    for f in range(1, floors):
+        p.box((0, f * fh, d), (w + 0.05, 0.1, 0.12), white, 'Stone')
+    p.box((0, h + 0.5, d - 0.05), (w + 0.15, 0.5, 0.15), color, 'Stone')  # platibanda
+    p.box((0, h + 1.03, d - 0.05), (w + 0.2, 0.06, 0.2), white, 'Stone')
+    p.box((0, h + 0.05, d), (w + 0.15, 0.08, 0.18), white, 'Stone')
+    for x in (-w * 0.6, 0, w * 0.6):  # jarrones en la platibanda
+        p.add(sphere(0.15, 0.2, 0.15, 8, 5), white, 'Stone', T(x, h + 1.3, d - 0.05))
+    p.add(gable(w, d - 0.3, 1.6), tiles_lambda(), m=mul(T(0, h, -0.3), RY(0)))
+    n = max(2, int(width / 2.3))
+    for f in range(floors):
+        y = f * fh
+        for k in range(n):
+            x = -w + (k + 0.5) * 2 * w / n
+            if f == 0:
+                if k == n // 2 or rnd.random() < 0.3:  # puerta
+                    arch_opening(p, x, 0.05, d + 0.02, 1.1, 2.6, rnd.choice(['#5a3622', shutter, '#3d2a1e']))
+                else:
+                    lit = rnd.random() < 0.4
+                    arch_opening(p, x, 0.9, d + 0.02, 0.9, 1.8, '#d9a35a' if lit else '#2c3a48', 'Glow' if lit else 'Glass')
+                    for b in range(3):  # reja
+                        p.box((x - 0.3 + b * 0.3, 1.6, d + 0.07), (0.02, 0.7, 0.02), '#2a2a2e', 'Metal')
+                continue
+            lit = rnd.random() < 0.35
+            arch_opening(p, x, y + 0.5, d + 0.02, 0.95, 2.3, '#d9a35a' if lit else '#2c3a48', 'Glow' if lit else 'Glass')
+            for s in (-1, 1):  # contraventanas abiertas
+                p.add(box(0.24, 0.9, 0.03), shutter, m=T(x + s * 0.75, y + 1.4, d + 0.06))
+            p.box((x, y + 2.95, d + 0.06), (0.62, 0.06, 0.06), white, 'Stone')  # sobrearco
+            p.box((x, y + 0.45, d + 0.35), (0.7, 0.05, 0.35), '#cfc6b8', 'Stone')  # balcón
+            p.box((x, y + 1.4, d + 0.7), (0.7, 0.03, 0.02), '#2a2a2e', 'Metal')
+            for b in range(6):
+                p.box((x - 0.65 + b * 0.26, y + 0.95, d + 0.7), (0.012, 0.45, 0.012), '#2a2a2e', 'Metal')
+            if rnd.random() < 0.35:  # una maceta con flores
+                p.add(sphere(0.22, 0.18, 0.18, 8, 5), rnd.choice(['#e0245e', '#ff9f1c', '#c13fd6']), m=T(x + 0.45, y + 0.7, d + 0.5))
+    p.collider((-w, 0, -d), (w, h + 1.0, d))
+    return p
+
+
+def tiles_lambda():
+    return lambda q: shade(TEJA, 0.8 if int(q[1] * 5) % 2 else 1.0)
+
+
+def chafariz(name):
+    """Fuente de piedra de la plaza: pilón octogonal, columna y dos tazas con agua."""
+    p = Piece(name)
+    stone = '#d8cfbe'
+    p.add(cylinder(2.6, 2.6, 0.7, 8, smooth=False), stone, 'Stone')
+    p.add(cylinder(2.35, 2.35, 0.05, 8, smooth=False), '#4f8fae', 'Glass', T(0, 0.6, 0))
+    p.add(cylinder(0.35, 0.28, 2.4, 10), stone, 'Stone')
+    p.add(cylinder(0.4, 1.2, 0.35, 12), stone, 'Stone', T(0, 1.7, 0))
+    p.add(cylinder(1.1, 1.1, 0.03, 12), '#5fa2c2', 'Glass', T(0, 2.03, 0))
+    p.add(cylinder(0.2, 0.6, 0.25, 10), stone, 'Stone', T(0, 2.6, 0))
+    p.add(sphere(0.18, seg=8, rings=6), '#bfe6f2', 'Glass', T(0, 3.05, 0))
+    for k in range(8):
+        a = k * math.pi / 4
+        p.add(box(0.25, 0.4, 0.25), shade(stone, 0.9), 'Stone', T(math.cos(a) * 2.6, 0.4, math.sin(a) * 2.6))
+    p.collider((-2.4, 0, -2.4), (2.4, 0.75, 2.4))
+    p.collider((-0.4, 0, -0.4), (0.4, 3.0, 0.4))
     return p
 
 
@@ -385,7 +565,10 @@ def piezas():
            edificio_playa('edificio_playa_blanco', 14, '#f2efe8', 1), edificio_playa('edificio_playa_crema', 11, '#e9dcc0', 2),
            edificio_playa('edificio_playa_rosa', 16, '#f1c9c3', 3), edificio_playa('edificio_playa_azul', 12, '#c9dbe6', 4, 18, 12),
            escadaria('escalera_azulejos', 1), arcos('arcos'), bonde('tranvia_amarillo'), teleferico('teleferico'),
+           estacion_teleferico('estacion_teleferico', 1), estacion_teleferico('estacion_teleferico_morro', 2, True),
+           chafariz('chafariz'),
            cristo('estatua_cerro'), farola_rio('farola_paseo'), almendro('almendro_playa', 1), barca('barca', '#2a7fc4'),
            barca('barca_roja', '#c8202f')]
     out += [casa_favela('casa_favela_%d' % (i + 1), 100 + i * 7) for i in range(8)]
+    out += [sobrado('sobrado_%d' % (i + 1), i, 2 if i % 3 else 3, 6.0 + (i % 3) * 1.5) for i in range(8)]
     return out
