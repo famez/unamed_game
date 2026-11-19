@@ -115,6 +115,7 @@ const char kHelp[] =
     "  --retrato | --cuerpo          cámara frente a la cara o al cuerpo del protagonista\n"
     "  --camyaw RADIANES             orientación inicial de la cámara\n"
     "  --en X Z GIRO                 empezar en ese punto del mapa, mirando hacia GIRO (radianes)\n"
+    "  --croma 0..1                  el color del mundo desde el principio (1: como con los nodos encendidos)\n"
     "  --visor FICHERO.glb [--anim N] ver un modelo como lo pinta el juego, animado; se recarga\n"
     "                                al volver a exportarlo (o con R)\n"
     "  --exportar-modelos [CARPETA]  escribe en .glb los enemigos, Ilse y el lobo de sombra que falten\n"
@@ -288,6 +289,8 @@ int main(int argc, char** argv) {
         game.loadBrains(dataDir);
         for (int i = 1; i + 1 < argc; ++i)  // --escena id: reproduce ya esa escena (para escribirlas)
             if (std::strcmp(argv[i], "--escena") == 0) game.jumpToScene(argv[i + 1]);
+        for (int i = 1; i + 1 < argc; ++i)  // --croma 0..1: el color del mundo (para ver un mapa como será)
+            if (std::strcmp(argv[i], "--croma") == 0) game.devSetCroma(float(std::atof(argv[i + 1])));
         for (int i = 1; i + 3 < argc; ++i)  // --en X Z YAW: empezar ahí (para mirar un rincón de un mapa)
             if (std::strcmp(argv[i], "--en") == 0) game.devPlaceHero(float(std::atof(argv[i + 1])), float(std::atof(argv[i + 2])), float(std::atof(argv[i + 3])));
     };

@@ -533,6 +533,7 @@ struct PropInstance {
     Mat4 transform;
     Vec3 center;   // de su caja envolvente, en el mundo (para no dibujar lo que no se ve)
     float radius;
+    bool floats = false;  // flota en el agua (las barcas fondeadas): sube, baja y se mece con las olas
 };
 
 struct Decor {
@@ -684,6 +685,7 @@ public:
     void enterZone(LevelId to, int arrival);
     bool changingZone() const { return zoneTo_ != LevelId::Count; }
     void devPlaceHero(float x, float z, float yaw);  // --en: ahí, en el suelo
+    void devSetCroma(float c) { croma_ = cromaShown_ = clampf(c, 0, 1); }
     const std::vector<ZoneDoor>& zoneDoors() const { return doors_; }
     const std::vector<ZoneArrival>& zoneArrivals() const { return arrivals_; }
     // Al subir o bajar de la cabina la protagonista cambia de sitio de golpe: corte de plano.
@@ -1027,6 +1029,11 @@ private:
     bool daylight_ = false;     // de día (mapas abiertos): la sombra es la que hace el sol
     float waterLevel_ = -1000;  // agua (ríos) por debajo de esta altura; muy abajo: sin agua
     float seaReach_ = 0;        // el agua sigue tanto más allá del borde del relieve (el mar hasta el horizonte)
+    float seaWaves_ = 0.04f;    // altura de las olas (el mar de la bahía; los ríos y lagos, casi quietos)
+    float splashTimer_ = 0;     // salpicaduras al andar por el agua
+    // La altura del agua en (x, z) ahora mismo: la misma suma de olas que shaders/water.vert
+    // (solo lo vertical), calmada donde el fondo está cerca.
+    float seaSurface(float x, float z) const;
     Material floorMaterial_ = Material::Ground;
     Character hero_;
     Inventory inv_;

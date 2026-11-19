@@ -196,6 +196,10 @@ void Game::update(float dt, const Controls& input) {
     bool light = inLight_ || travel_;
     // Fundido con la sombra: dentro de un charco, en modo sombra, corre más.
     hero_.speedScale = formSpeed() * (diving_ ? 1.7f : 1.0f) * (powers_.strong ? 1.0f : 0.4f);  // sin fuerzas, apenas camina
+    // En el agua: cuanto más hondo, más despacio (hasta la cintura, a poco más de la mitad).
+    float surface = seaSurface(hero_.body.pos.x, hero_.body.pos.z);
+    float wade = clampf((surface - hero_.body.pos.y) / 0.9f, 0, 1);
+    hero_.speedScale *= 1.0f - 0.45f * wade;
     if (diving_ && !onWall_) tryWallClimb(c);
     if (diving_ && onWall_)
         updateWallClimb(dt, c);
@@ -204,6 +208,19 @@ void Game::update(float dt, const Controls& input) {
                      !down && !light && !diving_ && !riding() && !changingZone() && c.jump, world_,
                      std::atan2(c.camForward.x, c.camForward.z));
     updateWolf(dt);
+    if (wade > 0.05f) {  // salpica al andar por el agua y, mucho, al caer en ella
+        Vec3 at{hero_.body.pos.x, surface + 0.05f, hero_.body.pos.z};
+        float speed = length(flat(hero_.body.vel));
+        splashTimer_ -= dt * (0.4f + speed * 0.25f);
+        uint32_t spray = rgba(214, 232, 236);
+        if (!wasGrounded && hero_.body.grounded) {
+            spawnSparks(at, {0, 1, 0}, 26, spray, 4.0f, false);
+            sound(Sfx::Dodge, hero_.body.pos, 0.45f, 0.6f);
+        } else if (speed > 1.2f && splashTimer_ <= 0) {
+            splashTimer_ = 0.16f;
+            spawnSparks(at + flat(hero_.body.vel) * 0.08f, normalize(flat(hero_.body.vel) + Vec3{0, 2.0f, 0}), 5, spray, 2.2f, false);
+        }
+    }
     if (c.jump && wasGrounded && hero_.body.vel.y > 1.0f) {
         sound(Sfx::Jump, hero_.body.pos, 0.7f);
         voice(VoiceLine::Jump, 0.45f);

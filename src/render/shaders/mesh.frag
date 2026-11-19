@@ -25,6 +25,7 @@ uniform int uLitCount;
 uniform vec4 uLit[24];          // fuentes de luz (farolas, nodos, faroles): xyz, radio
 uniform vec4 uOutlineColor;  // a > 0: pasada de silueta (color plano, sin iluminación)
 uniform float uTime;
+uniform float uSeaLevel;        // el agua de los mapas con relieve (muy abajo: no hay)
 out vec4 fragColor;
 
 float shadowFactor(float ndl) {
@@ -59,6 +60,7 @@ void main() {
     vec3 n = normalize(vNormal);
     vec3 base = toLinear(vColor.rgb);
     float seamGlow = 0.0;  // juntas luminosas del suelo (emisión que alimenta el bloom)
+    float sandWet = 0.0;   // arena mojada: brilla
 
     if (material == 3) {  // plaza: losas de 2 m nacaradas, juntas finas y cada 6 m una línea de luz
         vec2 w = vWorldPos.xz / 2.0;
@@ -75,6 +77,18 @@ void main() {
         float g = max(lineA * 0.6, ring);
         base = mix(base, neon * 1.2, g);
         seamGlow = g * 0.5;
+    } else if (material == 8) {  // arena: ondas que deja el viento, el grano y lo mojado junto al agua
+        vec2 p = vWorldPos.xz;
+        float warp = fbm(p * 0.12) * 7.0;
+        float ripples = sin(dot(p, vec2(0.42, 0.91)) * 4.2 + warp);
+        float far = 1.0 - smoothstep(25.0, 70.0, length(uCameraPos - vWorldPos));
+        base *= 1.0 + 0.07 * ripples * far * smoothstep(0.85, 1.0, n.y);
+        base *= mix(0.9, 1.08, noise(p * 0.6)) * mix(0.93, 1.05, hash(floor(p * 24.0)));
+        if (uSeaLevel > -100.0) {  // la franja mojada sube y baja con las olas que llegan
+            float line = uSeaLevel + 0.3 + 0.16 * sin(uTime * 0.9 + p.x * 0.07 + p.y * 0.03);
+            sandWet = 1.0 - smoothstep(line - 0.1, line + 0.45, vWorldPos.y);
+            base = mix(base, base * vec3(0.6, 0.58, 0.56), sandWet * 0.85);
+        }
     } else if (material == 5) {  // césped: manchas de ruido en dos tonos
         // Dos lecturas de ruido (no fbm): el césped ocupa media pantalla y es barato así.
         float n = 0.65 * noise(vWorldPos.xz * 0.35) + 0.35 * noise(vWorldPos.xz * 1.3);
@@ -193,12 +207,18 @@ void main() {
     vec3 ambient = mix(kBounce * 1.6, skyAmbient, n.y * 0.5 + 0.5) * 0.5;
     vec3 fillDir = normalize(vec3(-uSunDir.x, 0.3, -uSunDir.z));
     ambient += kFillColor * max(dot(n, fillDir), 0.0);
-    float specPower = material == 2 ? 80.0 : 20.0;
+    float specPower = material == 2 ? 80.0 : (material == 8 ? mix(12.0, 70.0, sandWet) : 20.0);
     // La tela de los cuerpos redondeados (normales suaves) brilla menos que la de las cajas.
     float specAmount = material == 2 ? 1.2 : (material == 6 ? 2.0 : (material == 3 || material == 5 ? 0.04 : (vParams.z > 0.5 ? 0.05 : 0.15)));
     if (material == 6) specPower = 120.0;
+    if (material == 8) specAmount = mix(0.03, 0.5, sandWet);
     vec3 H = normalize(uSunDir + V);
     float spec = pow(max(dot(n, H), 0.0), specPower) * specAmount * step(0.0, dot(n, uSunDir));
+    if (material == 8) {  // granos sueltos que destellan al sol (cerca)
+        vec2 gp = floor(vWorldPos.xz * 55.0);
+        float g = step(0.985, hash(gp + floor(uTime * 0.0)));
+        spec += g * pow(max(dot(n, H), 0.0), 6.0) * 1.2 * (1.0 - smoothstep(6.0, 18.0, length(uCameraPos - vWorldPos)));
+    }
 
     vec3 color = base * (ambient + kSunColor * ndl * shadow) + kSunColor * spec * shadow;
     // Luces puntuales (fuego): atenuación cuadrática hasta el radio y algo de "wrap" para
@@ -217,6 +237,16 @@ void main() {
     if (material == 6) {  // reflejo del cielo (Fresnel)
         float fr = pow(1.0 - max(dot(n, V), 0.0), 4.0);
         color = mix(color, mix(kHorizon, kZenith, 0.3) * 1.4, 0.3 + 0.6 * fr);
+    }
+    // Bajo el agua: las cáusticas (la luz que las olas concentran en el fondo) y el agua, que
+    // tiñe y apaga lo que tiene encima según la profundidad.
+    if (scenery && uSeaLevel > -100.0 && vWorldPos.y < uSeaLevel) {
+        float d = uSeaLevel - vWorldPos.y;
+        vec2 cp = vWorldPos.xz * 0.8;
+        float c1 = noise(cp + vec2(uTime * 0.31, uTime * 0.17)), c2 = noise(cp * 1.37 - vec2(uTime * 0.23, -uTime * 0.29));
+        float caustic = pow(1.0 - abs(c1 - c2), 8.0);
+        color += kSunColor * base * caustic * 1.4 * exp(-d * 0.4) * shadow * max(n.y, 0.0);
+        color = mix(color, color * mix(vec3(0.7), vec3(0.45, 0.75, 0.8), uWorldColor), clamp(d * 0.3, 0.0, 0.75));
     }
     color *= edge;
     // Oscuridad: fuera del alcance de toda luz (o dentro de un foco de sombra) el escenario

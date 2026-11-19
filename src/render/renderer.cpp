@@ -69,6 +69,8 @@ bool Renderer::init(Quality q) {
     glGenBuffers(1, &propVbo_);
     shadowProgram_ = link(kShadowVs, kShadowFs, false);
     skyProgram_ = link(kSkyVs, kSkyFs, true);
+    waterProgram_ = link(kWaterVs, kWaterFs, true);
+    createWaterGrid();
     fxProgram_ = link(kSmokeVs, kSmokeFs, true);
     volumeProgram_ = link(kVolumeVs, kVolumeFs, true);
     compositeProgram_ = link(kCompositeVs, kCompositeFs, false);
@@ -186,6 +188,11 @@ void Renderer::shutdown() {
     }
     glDeleteProgram(shadowProgram_);
     glDeleteProgram(skyProgram_);
+    glDeleteProgram(waterProgram_);
+    glDeleteVertexArrays(1, &waterVao_);
+    glDeleteBuffers(1, &waterVbo_);
+    glDeleteBuffers(1, &waterEbo_);
+    if (seaFloorTex_) glDeleteTextures(1, &seaFloorTex_);
     glDeleteProgram(fxProgram_);
     glDeleteBuffers(1, &fxVbo_);
     glDeleteVertexArrays(1, &fxVao_);
@@ -412,11 +419,18 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
     if (!propRanges_.empty()) {
         sceneUniforms(propProgram_);
         glUniform1f(glGetUniformLocation(propProgram_, "uPropScenery"), propScenery_ ? 1.0f : 0.0f);
+        glUniform1f(glGetUniformLocation(propProgram_, "uSeaLevel"), seaOn_ ? seaLevel_ : -1000.0f);
         drawProps(false);
     }
     sceneUniforms(meshProgram_);
+    glUniform1f(glGetUniformLocation(meshProgram_, "uSeaLevel"), seaOn_ ? seaLevel_ : -1000.0f);
     drawBatch(boxes_);
     drawBatch(spheres_);
+    if (seaOn_ && waterProgram_) {  // el agua, encima de todo lo opaco (deja ver el fondo)
+        sceneUniforms(waterProgram_);
+        drawSea();
+        glUseProgram(meshProgram_);
+    }
 
     // 4) Objetivo resaltado con el stencil buffer:
     //    a) se dibuja normal, escribiendo 1 en el stencil donde queda visible;
@@ -458,8 +472,86 @@ void Renderer::render(const RenderCamera& cam, Vec3 shadowCenter, int width, int
     smoke_.clear();
     volumes_.clear();
     lights_.clear();
+    seaOn_ = false;
     scorches_.clear();
     paints_.clear();
     zones_.clear();
     litAreas_.clear();
+}
+
+// --- El mar ----------------------------------------------------------------------------------
+
+void Renderer::createWaterGrid() {
+    const int n = 220;  // vértices por lado (la densidad la reparte el shader: más cerca)
+    std::vector<float> grid;
+    grid.reserve(size_t(n) * size_t(n) * 2);
+    for (int z = 0; z < n; ++z)
+        for (int x = 0; x < n; ++x) grid.push_back(float(x) / float(n - 1) * 2 - 1), grid.push_back(float(z) / float(n - 1) * 2 - 1);
+    std::vector<uint32_t> idx;
+    idx.reserve(size_t(n - 1) * size_t(n - 1) * 6);
+    for (int z = 0; z + 1 < n; ++z)
+        for (int x = 0; x + 1 < n; ++x) {
+            uint32_t a = uint32_t(z * n + x), b = a + 1, c = a + uint32_t(n), d = c + 1;
+            idx.insert(idx.end(), {a, c, b, b, c, d});
+        }
+    glGenVertexArrays(1, &waterVao_);
+    glGenBuffers(1, &waterVbo_);
+    glGenBuffers(1, &waterEbo_);
+    glBindVertexArray(waterVao_);
+    glBindBuffer(GL_ARRAY_BUFFER, waterVbo_);
+    glBufferData(GL_ARRAY_BUFFER, GLsizeiptr(grid.size() * sizeof(float)), grid.data(), GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, waterEbo_);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, GLsizeiptr(idx.size() * sizeof(uint32_t)), idx.data(), GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 8, nullptr);
+    glBindVertexArray(0);
+    waterCount_ = GLsizei(idx.size());
+}
+
+void Renderer::setSeaFloor(const std::vector<float>& heights, int nx, int nz, float x0, float z0, float cell, uint32_t version) {
+    if (version == seaFloorVersion_ || heights.empty()) return;
+    seaFloorVersion_ = version;
+    if (!seaFloorTex_) glGenTextures(1, &seaFloorTex_);
+    glBindTexture(GL_TEXTURE_2D, seaFloorTex_);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, nx, nz, 0, GL_RED, GL_FLOAT, heights.data());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    // El centro de los texels de las esquinas cae en los puntos de las esquinas del relieve.
+    float w = float(nx - 1) * cell, h = float(nz - 1) * cell;
+    seaRect_[0] = x0 - 0.5f * cell;
+    seaRect_[1] = z0 - 0.5f * cell;
+    seaRect_[2] = w + cell;
+    seaRect_[3] = h + cell;
+}
+
+void Renderer::sea(float level, float waves, float reach) {
+    seaOn_ = seaFloorTex_ != 0;
+    seaLevel_ = level;
+    seaWaves_ = waves;
+    seaReach_ = reach;
+}
+
+void Renderer::drawSea() {
+    GLuint p = waterProgram_;
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, seaFloorTex_);
+    glUniform1i(glGetUniformLocation(p, "uFloor"), 1);
+    glUniform4fv(glGetUniformLocation(p, "uFloorRect"), 1, seaRect_);
+    glUniform1f(glGetUniformLocation(p, "uSeaLevel"), seaLevel_);
+    glUniform1f(glGetUniformLocation(p, "uWaves"), seaWaves_);
+    glUniform1f(glGetUniformLocation(p, "uReach"), seaReach_);
+    glEnable(GL_BLEND);
+    // El alfa del destino es la máscara del bloom: se deja como está.
+    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+    glDisable(GL_CULL_FACE);
+    glBindVertexArray(waterVao_);
+    glDrawElements(GL_TRIANGLES, waterCount_, GL_UNSIGNED_INT, nullptr);
+    glBindVertexArray(0);
+    glEnable(GL_CULL_FACE);
+    glDisable(GL_BLEND);
+    glActiveTexture(GL_TEXTURE0);
 }

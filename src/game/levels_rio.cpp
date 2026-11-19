@@ -248,7 +248,7 @@ void Game::buildRio() {
             Material m = Material::Stone;
             switch (zone[idx]) {
                 case Sand:
-                    col = mixRgb(rgba(236, 216, 168), rgba(222, 200, 150), v), m = Material::Cloth;
+                    col = mixRgb(rgba(236, 216, 168), rgba(222, 200, 150), v), m = Material::Sand;
                     if (h < 0.1f) col = mixRgb(rgba(190, 172, 132), col, clampf((h + 0.6f) / 0.7f, 0, 1));  // arena mojada
                     break;
                 case Losas: col = mixRgb(rgba(214, 206, 190), rgba(190, 182, 168), cob); break;
@@ -266,12 +266,13 @@ void Game::buildRio() {
                     col = mixRgb(rgba(48, 104, 52), rgba(78, 138, 62), v), m = Material::Grass;
                     if (slope > 0.3f) col = mixRgb(col, mixRgb(rgba(118, 108, 98), rgba(150, 140, 126), v), clampf((slope - 0.3f) * 4, 0, 1)),
                     m = Material::Stone;
-                    if (h < 0.3f) col = rgba(190, 172, 132), m = Material::Cloth;  // fondo del mar
+                    if (h < 0.3f) col = mixRgb(rgba(196, 178, 138), rgba(176, 160, 124), v), m = Material::Sand;  // fondo del mar
             }
             paintTerrain(ix, iz, col, m);
         }
     waterLevel_ = -0.25f;
-    seaReach_ = 500;  // al sur, la bahía se abre al mar: que llegue al horizonte (se ve desde los morros)
+    seaReach_ = 500;
+    seaWaves_ = 0.32f;  // oleaje de mar abierto que llega a la caleta  // al sur, la bahía se abre al mar: que llegue al horizonte (se ve desde los morros)
     auto ground = [&](float x, float z) { return t.heightAt(x, z); };
 
     // Casas que no pisen las calles ni a otras casas.
@@ -402,6 +403,30 @@ void Game::buildRio() {
         Vec3 p{rng.range(-17, 17), 0, rng.range(-33, -24)};
         if (length(flat(p - Vec3{-7, 0, -31})) < 3) continue;
         addProp(i % 3 ? "piedra" : "roca", p, rng.range(0, 6.28f), rng.range(0.5f, 1.0f));
+    }
+    // El fondo del mar, que se ve a través del agua: algas y corales donde hay poco fondo,
+    // estrellas y conchas en la orilla; y dos barcas fondeadas que se mecen con las olas.
+    {
+        const char* deep[] = {"alga", "alga_alta", "coral_rosa", "coral_naranja", "coral_violeta", "alga", "roca", "piedra"};
+        const char* shore[] = {"conchas", "estrella_mar", "estrella_mar_morada", "conchas", "piedra"};
+        int seabed = 0, beach = 0;
+        for (int tries = 0; tries < 1400 && (seabed < 110 || beach < 26); ++tries) {
+            bool prainha = tries % 3 == 2;
+            Vec3 p = prainha ? Vec3{rng.range(72, 110), 0, rng.range(-62, -32)} : Vec3{rng.range(-19, 19), 0, rng.range(-60, -24)};
+            if (length(flat(p - kIslet)) < 4.0f) continue;
+            float g = ground(p.x, p.z);
+            if (g < -3.6f || g > 0.6f) continue;
+            if (g < -0.6f && seabed < 110) {
+                addProp(deep[seabed % 8], p, rng.range(0, 6.28f), rng.range(0.7f, 1.3f));
+                ++seabed;
+            } else if (g > -0.25f && beach < 26) {
+                addProp(shore[beach % 5], p, rng.range(0, 6.28f), rng.range(0.8f, 1.2f));
+                ++beach;
+            }
+        }
+        for (auto [p, prop, yaw] : {std::tuple<Vec3, const char*, float>{{-12, 0, -42}, "barca_roja", 0.6f}, {{5, 0, -48}, "barca", -0.9f},
+                                    {{93, 0, -50}, "barca", 2.2f}})
+            if (addProp(prop, {p.x, -0.25f - 0.12f, p.z}, yaw, 1.0f, false)) props_.back().floats = true;
     }
     // El paseo de ondas entre la playa y la plaza, con dos farolas.
     for (float x : {-12.0f, 0.0f, 12.0f}) addProp("paseo_ondas", {x, kPlazaH, -5.5f}, 0, 1.0f, false);

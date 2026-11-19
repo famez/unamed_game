@@ -357,10 +357,10 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
     // Suelo del escenario (el relieve de los mapas grandes) o, sobre el vacío, un mar de nubes muy abajo.
     if (world_.terrain) {
         drawTerrain(*solid);
-        if (waterLevel_ > -100) {
+        if (waterLevel_ > -100) {  // el agua: el relieve le dice dónde es honda y dónde rompe
             const Terrain& t = *world_.terrain;
-            float hx = float(t.nx - 1) * t.cell * 0.5f;
-            solid->box(id, {t.x0 + hx, waterLevel_ - 0.05f, t.z0 + hx}, {hx + seaReach_, 0.05f, hx + seaReach_}, rgba(70, 120, 140), Material::Water);
+            solid->setSeaFloor(t.heights, t.nx, t.nz, t.x0, t.z0, t.cell, terrainVersion_);
+            solid->sea(waterLevel_, seaWaves_, std::max(300.0f, seaReach_ + 100.0f));
         }
     } else if (world_.ground)
         solid->box(id, {0, -0.5f, 0}, {200, 0.5f, 200}, floorColor_, floorMaterial_);
@@ -664,6 +664,14 @@ void Game::drawProps(Renderer& r, const ViewInfo& view, float alpha) const {
         if (!visible) continue;
         float dh = length(flat(p.center - hero)) - p.radius;
         bool shadow = dh < 34.0f && p.radius > 0.5f;
+        if (p.floats) {  // sube y baja con la ola que tiene debajo y se mece según su pendiente
+            Vec3 o{p.transform.m[12], 0, p.transform.m[14]};
+            float h = seaSurface(o.x, o.z), hx = seaSurface(o.x + 1.0f, o.z) - seaSurface(o.x - 1.0f, o.z),
+                  hz = seaSurface(o.x, o.z + 1.0f) - seaSurface(o.x, o.z - 1.0f);
+            Mat4 bob = translate({o.x, h - waterLevel_, o.z}) * rotateZ(-hx * 0.4f) * rotateX(hz * 0.4f) * translate({-o.x, 0, -o.z});
+            r.prop(lib[size_t(p.def)].mesh, bob * p.transform, shadow);
+            continue;
+        }
         r.prop(lib[size_t(p.def)].mesh, p.transform, shadow);
     }
     // Las cabinas del teleférico, donde las tenga el cable (miran hacia B).

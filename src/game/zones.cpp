@@ -7,6 +7,7 @@
 #include "game/game.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace {
 
@@ -105,4 +106,22 @@ void Game::devPlaceHero(float x, float z, float yaw) {
     checkpoint_ = hero_.body.pos;
     checkpointYaw_ = yaw;
     cameraCut_ = true;
+}
+
+// --- El agua ---------------------------------------------------------------------------------
+
+float Game::seaSurface(float x, float z) const {
+    if (waterLevel_ < -100) return -1000;
+    // Los cuatro trenes de olas de water.vert: dirección, longitud de onda y altura relativa.
+    static const float kWave[4][4] = {{0.12f, 1.0f, 14.0f, 0.55f}, {-0.35f, 0.94f, 9.0f, 0.30f}, {0.55f, 0.83f, 6.0f, 0.18f}, {-0.1f, 0.99f, 3.6f, 0.08f}};
+    float bed = world_.terrain ? world_.terrain->heightAt(x, z) : -40.0f;
+    float depth = waterLevel_ - bed;
+    float amp = seaWaves_ * clampf(0.25f + depth * 0.3f, 0, 1) * (depth > -0.5f ? 1.0f : 0.0f);
+    float h = 0;
+    for (const auto& w : kWave) {
+        float len = std::sqrt(w[0] * w[0] + w[1] * w[1]);
+        float k = 6.2831f / w[2], c = std::sqrt(9.8f / k);
+        h += amp * w[3] * std::sin(k * ((w[0] * x + w[1] * z) / len - c * time_));
+    }
+    return waterLevel_ + h;
 }

@@ -32,6 +32,8 @@ enum class Material : int {
     Glow = 4,   // emisivo: no lo oscurecen las sombras (ojos, cristales, orbes, farolas)
     Grass = 5,  // césped con variación de color procedural
     Water = 6,  // agua: ondas animadas y reflejo del cielo
+    // (7: el pelo, solo en los personajes)
+    Sand = 8,   // arena: ondas del viento, grano que destella y la franja mojada junto al mar
 };
 
 // Vértice de una malla deformada por huesos (skinning en la GPU): hasta 2 huesos.
@@ -127,6 +129,12 @@ public:
     // dibujada con instancias. `prop` encola una copia con su matriz; las del mismo modelo
     // salen en una sola llamada. `shadow`: falso para las lejanas (fuera del mapa de sombras).
     void prop(int mesh, const Mat4& transform, bool shadow = true);
+    // El mar (y los ríos y lagos de los mapas con relieve): olas, transparencia según la
+    // profundidad, reflejo del cielo y espuma (shaders/water.*). `setSeaFloor` sube el relieve
+    // como textura de alturas (solo si cambia `version`); `sea` lo pide para este fotograma, a la
+    // altura `level`, con olas de `waves` metros y hasta `reach` metros de la cámara.
+    void setSeaFloor(const std::vector<float>& heights, int nx, int nz, float x0, float z0, float cell, uint32_t version);
+    void sea(float level, float waves, float reach);
     // Las piezas se pintan como escenario (por defecto) o con el sombreado de los personajes.
     void setPropScenery(bool on) { propScenery_ = on; }
     size_t propCount() const { return propCount_; }
@@ -234,6 +242,15 @@ private:
     std::vector<float> zones_;   // x, y, z, radio
     std::vector<float> litAreas_;  // x, y, z, radio
     float darkness_ = 0;
+    // El mar: la rejilla, el relieve como textura y lo pedido este fotograma.
+    GLuint waterProgram_ = 0, waterVao_ = 0, waterVbo_ = 0, waterEbo_ = 0, seaFloorTex_ = 0;
+    GLsizei waterCount_ = 0;
+    uint32_t seaFloorVersion_ = ~0u;
+    float seaRect_[4] = {0, 0, 1, 1};
+    bool seaOn_ = false;
+    float seaLevel_ = -1000, seaWaves_ = 0, seaReach_ = 0;
+    void createWaterGrid();
+    void drawSea();
     uint32_t highlightColor_ = 0;
     std::vector<PointLight> lights_;
     std::vector<float> scorches_;  // x, y, z, radio, intensidad por mancha

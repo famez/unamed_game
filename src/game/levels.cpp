@@ -575,6 +575,7 @@ void Game::loadLevel(LevelId id) {
     daylight_ = false;
     waterLevel_ = -1000;
     seaReach_ = 0;
+    seaWaves_ = 0.04f;
     fogScale_ = 1;
     propScenery_ = true;
     darkScale_ = 1;

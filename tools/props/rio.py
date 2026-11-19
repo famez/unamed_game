@@ -753,6 +753,74 @@ def barca(name, color):
     return p
 
 
+# --- El fondo del mar -------------------------------------------------------------------------
+
+def alga(name, seed, h=1.6):
+    """Mata de algas: cintas que suben ondulando desde una piedra."""
+    p = Piece(name)
+    rnd = random.Random(seed)
+    p.add(rock(0.35, 0.18, 0.3, seed), '#5a5e58', 'Stone')
+    for k in range(7):
+        a, d = rnd.random() * 6.28, rnd.uniform(0.05, 0.25)
+        x, z, y = math.cos(a) * d, math.sin(a) * d, 0.1
+        hh = h * rnd.uniform(0.6, 1.1)
+        col = rnd.choice(['#3f7a3a', '#5a8a2e', '#6b6a2a', '#2f6b4a'])
+        steps = 5
+        for s_ in range(steps):
+            nx = x + math.sin(s_ * 1.3 + seed) * 0.12
+            nz = z + math.cos(s_ * 1.1 + seed) * 0.12
+            ny = y + hh / steps
+            p.beam((x, y, z), (nx, ny, nz), 0.07 * (1 - s_ / steps) + 0.025, col, d=0.012)
+            x, y, z = nx, ny, nz
+    return p
+
+
+def coral(name, color, seed):
+    """Coral ramificado sobre su base, con las puntas más claras."""
+    p = Piece(name)
+    rnd = random.Random(seed)
+    p.add(rock(0.4, 0.2, 0.35, seed), mix(color, '#6a6058', 0.6), 'Stone')
+    def branch(x, y, z, ang, tilt, length, r, depth):
+        ex = x + math.cos(ang) * math.sin(tilt) * length
+        ez = z + math.sin(ang) * math.sin(tilt) * length
+        ey = y + math.cos(tilt) * length
+        p.rod((x, y, z), (ex, ey, ez), r, mix(color, '#ffffff', 0.25 * depth / 3), seg=6)
+        if depth < 3:
+            for _ in range(2):
+                branch(ex, ey, ez, ang + rnd.uniform(-1.2, 1.2), min(1.2, tilt + rnd.uniform(-0.2, 0.4)), length * 0.7, r * 0.7, depth + 1)
+        else:
+            p.add(sphere(r * 1.3, seg=6, rings=4), mix(color, '#ffffff', 0.45), m=T(ex, ey, ez))
+    for k in range(3):
+        branch(rnd.uniform(-0.1, 0.1), 0.15, rnd.uniform(-0.1, 0.1), rnd.random() * 6.28, rnd.uniform(0.15, 0.5), 0.35, 0.06, 0)
+    return p
+
+
+def estrella_mar(name, color):
+    p = Piece(name)
+    for k in range(5):
+        a = k * 2 * math.pi / 5
+        p.add(box(0.16, 0.025, 0.045), color, m=mul(T(math.cos(a) * 0.13, 0.025, math.sin(a) * 0.13), RY(-a)))
+    p.add(cylinder(0.07, 0.06, 0.05, 8), color, m=T(0, 0, 0))
+    return p
+
+
+def conchas(name, seed):
+    """Unas conchas y caracolas sueltas en la arena."""
+    p = Piece(name)
+    rnd = random.Random(seed)
+    for k in range(6):
+        a, d = rnd.random() * 6.28, rnd.uniform(0.1, 0.6)
+        x, z = math.cos(a) * d, math.sin(a) * d
+        c = rnd.choice(['#f4e6d0', '#e8c0a8', '#d8d0c0', '#f0d8b8'])
+        if k % 3 == 0:  # caracola
+            p.add(cylinder(0.06, 0.0, 0.16, 7), c, m=mul(T(x, 0.04, z), RZ(math.pi / 2.3), RY(a)))
+        else:  # concha abierta
+            p.add(sphere(0.07, 0.025, 0.06, 8, 4), c, m=mul(T(x, 0.01, z), RY(a)))
+            for r_ in range(3):
+                p.add(box(0.005, 0.027, 0.055), shade(c, 0.85), m=mul(T(x, 0.012, z), RY(a + (r_ - 1) * 0.5)))
+    return p
+
+
 def piezas():
     out = [coqueiro('cocotero', 1), coqueiro('cocotero_alto', 2, 10.5), quiosque('quiosco_playa', '#2a9d55'),
            quiosque('quiosco_playa_azul', '#1b6fbc'), sombrilla('sombrilla_playa', '#ff5a5f', '#f4f1de', 1),
@@ -769,4 +837,7 @@ def piezas():
     out += [sobrado('sobrado_%d' % (i + 1), i, 2 if i % 3 else 3, 6.0 + (i % 3) * 1.5) for i in range(8)]
     out += [venda('tienda_armazem', 0, 'armazem'), venda('tienda_botica', 6, 'botica'), venda('tienda_amolador', 3, 'amolador'),
             taberna('taberna_arco', 1), taberna('taberna_lapa', 5)]
+    out += [alga('alga', 1), alga('alga_alta', 2, 2.4), coral('coral_rosa', '#e86a8a', 1), coral('coral_naranja', '#f08a3a', 2),
+            coral('coral_violeta', '#9a6ad0', 3), estrella_mar('estrella_mar', '#e8603a'), estrella_mar('estrella_mar_morada', '#a04a9a'),
+            conchas('conchas', 1)]
     return out
