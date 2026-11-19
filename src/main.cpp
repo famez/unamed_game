@@ -123,6 +123,7 @@ const char kHelp[] =
     "  --sombra                      empezar en modo sombra\n"
     "  --medir                       sin vsync: escribe los fps reales por la consola\n"
     "  --vuelo                       la cámara sobrevuela el escenario (para ver los mapas grandes)\n"
+    "  --cenital [X Z [ALTO]]        visor desde arriba (sin el personaje); en el juego, V entra y sale\n"
     "  --vitrina [N,M...]            guion que enseña ataques, técnicas, formas y mecánicas (en el patio);\n"
     "                                con números, solo esos actos (6: romper farolas, 17: polillas)\n"
     "  --video FICHERO.mp4 [SEG]     graba a velocidad real (30 fps, con ffmpeg); sale a los SEG segundos\n"
@@ -332,6 +333,13 @@ int main(int argc, char** argv) {
     bool climbing = false;  // --escalada: el bot hace la subida de Los Andamios
     bool cableTour = false; // --teleferico: el bot compra, descansa y sube en el teleférico (la bahía)
     float camYaw0 = 0;  // --camyaw: orientación inicial de la cámara (radianes)
+    // Visor cenital (--cenital o V): la zona vista desde arriba, sin el personaje, que se queda
+    // quieto. WASD mueve, Q/E gira, la rueda (o R/F) sube y baja, flechas arriba/abajo inclinan;
+    // Shift va más deprisa. Abajo, el punto del centro (para --en).
+    struct Overhead {
+        bool on = false, placed = false;
+        float x = 0, z = 0, height = 60, yaw = 0, tilt = 0.25f;
+    } oh;
     const char* shotPath = nullptr;
     double shotTime = 0;
     int shotCount = 1, shotIndex = 0;
@@ -378,6 +386,18 @@ int main(int argc, char** argv) {
             if (i + 1 < argc && argv[i + 1][0] != '-') videoSeconds = std::atof(argv[++i]);
         }
         if (std::strcmp(argv[i], "--camyaw") == 0 && i + 1 < argc) camYaw0 = float(std::atof(argv[++i]));
+        if (std::strcmp(argv[i], "--cenital") == 0) {
+            oh.on = true;
+            auto number = [&](int k) {  // (los negativos empiezan por '-' como las opciones)
+                char* end = nullptr;
+                return k < argc && (std::strtod(argv[k], &end), end != argv[k] && *end == 0);
+            };
+            if (number(i + 1) && number(i + 2)) {
+                oh.x = float(std::atof(argv[++i])), oh.z = float(std::atof(argv[++i]));
+                oh.placed = true;
+                if (number(i + 1)) oh.height = float(std::atof(argv[++i]));
+            }
+        }
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 2 < argc) {
             shotPath = argv[i + 1];
             shotTime = std::atof(argv[i + 2]);
@@ -557,6 +577,26 @@ int main(int argc, char** argv) {
         }
         cam.pitch = clampf(cam.pitch, -0.3f, 1.3f);
 
+        // Visor cenital: V entra y sale; dentro, el teclado mueve la cámara y no al personaje.
+        if (playing && input.wasPressed(Key::V)) oh.on = !oh.on;
+        if (oh.on && !oh.placed) {  // empieza sobre ella, mirando hacia donde mira la cámara
+            Vec3 hp = game.hero().body.pos;
+            oh.x = hp.x, oh.z = hp.z, oh.yaw = cam.yaw;
+            oh.placed = true;
+        }
+        if (!oh.on) oh.placed = false;
+        if (oh.on && playing) {
+            Vec3 f{std::sin(oh.yaw), 0, std::cos(oh.yaw)}, r{-std::cos(oh.yaw), 0, std::sin(oh.yaw)};
+            float speed = (input.isDown(Key::Shift) ? 3.0f : 1.0f) * std::max(10.0f, oh.height * 0.8f) * fd;
+            Vec3 m = f * (float(input.isDown(Key::W)) - float(input.isDown(Key::S))) + r * (float(input.isDown(Key::D)) - float(input.isDown(Key::A)));
+            oh.x += m.x * speed, oh.z += m.z * speed;
+            oh.yaw += (float(input.isDown(Key::Q)) - float(input.isDown(Key::E))) * 1.5f * fd;
+            float zoom = -input.wheel * 0.15f + (float(input.isDown(Key::F)) - float(input.isDown(Key::R))) * 1.2f * fd;
+            oh.height = clampf(oh.height * (1.0f + zoom), 8.0f, 600.0f);
+            oh.tilt = clampf(oh.tilt + (float(input.isDown(Key::Down)) - float(input.isDown(Key::Up))) * 0.8f * fd, 0.02f, 1.5f);
+        }
+        game.setHeroHidden(oh.on);
+
         // Simulación a paso fijo.
         accumulator += frameDt;
         int steps = 0;
@@ -659,6 +699,7 @@ int main(int argc, char** argv) {
                         if (botStep % 240 == 120) c.command = 4;  // la técnica grande de cada mitad
                     }
                 }
+                if (oh.on) c = Controls{};  // en el visor, quieta
                 game.update(float(kFixedDt), c);
                 pending = PendingInput{};
                 if (game.takeShopRequest() && !inventory.open) {  // la Doctora Umbra abre el taller
@@ -795,8 +836,13 @@ int main(int argc, char** argv) {
             flyFloor = flyFloor < 0 ? floor : flyFloor + (floor - flyFloor) * std::min(1.0f, fd * 1.5f);
             eye.y = std::max(eye.y, flyFloor + 18.0f);
         }
+        if (oh.on) {  // el visor: desde arriba, un poco inclinado hacia donde mira (tilt: atrás por altura)
+            float ground = game.world().groundAt(oh.x, oh.z);
+            look = {oh.x, ground, oh.z};
+            eye = look + Vec3{-std::sin(oh.yaw) * oh.height * oh.tilt, oh.height, -std::cos(oh.yaw) * oh.height * oh.tilt};
+        }
         rc.view = lookAt(eye, look, {0, 1, 0});
-        rc.zFar = game.viewDistance();
+        rc.zFar = oh.on ? std::max(game.viewDistance(), oh.height * 3.0f) : game.viewDistance();
         rc.proj = perspective(rc.fovY, rc.aspect, rc.zNear, rc.zFar);
         rc.position = eye;
         rc.forward = normalize(look - rc.position);
@@ -817,9 +863,22 @@ int main(int argc, char** argv) {
         ViewInfo uiView = vi;
         uiView.width = uw;
         uiView.height = uh;
-        if (!portrait && !flyover && !selector.open) game.drawHud(hud, uiView, debugView);
+        if (!portrait && !flyover && !oh.on && !selector.open) game.drawHud(hud, uiView, debugView);
         if (menu.open) menu.draw(overlay, uw, uh);
         if (selector.open) selector.draw(overlay, uw, uh);
+        if (oh.on && !selector.open && !menu.open) {  // el visor: dónde está el centro y cómo se maneja
+            char buf[160];
+            std::snprintf(buf, sizeof buf, "Visor cenital · centro %.1f %.1f · altura %.0f m · giro %.2f", oh.x, oh.z, oh.height, oh.yaw);
+            TextStyle st;
+            st.align = Align::Center;
+            overlay.shapes.quad({float(uw) * 0.5f - 6, float(uh) * 0.5f - 1, 0}, {float(uw) * 0.5f + 6, float(uh) * 0.5f - 1, 0},
+                                {float(uw) * 0.5f + 6, float(uh) * 0.5f + 1, 0}, {float(uw) * 0.5f - 6, float(uh) * 0.5f + 1, 0}, rgba(255, 255, 255, 200));
+            overlay.shapes.quad({float(uw) * 0.5f - 1, float(uh) * 0.5f - 6, 0}, {float(uw) * 0.5f + 1, float(uh) * 0.5f - 6, 0},
+                                {float(uw) * 0.5f + 1, float(uh) * 0.5f + 6, 0}, {float(uw) * 0.5f - 1, float(uh) * 0.5f + 6, 0}, rgba(255, 255, 255, 200));
+            drawText(overlay, float(uw) * 0.5f, float(uh) - 62, 18, buf, rgba(236, 234, 228), st);
+            drawText(overlay, float(uw) * 0.5f, float(uh) - 36, 15,
+                     "WASD mover · Q/E girar · rueda o R/F altura · flechas inclinar · Shift deprisa · V salir", rgba(150, 150, 156), st);
+        }
         if (inventory.open) inventory.draw(overlay, game, uw, uh);
         if (showcase && vitrina.captionAlpha() > 0) {  // rótulo del acto
             float a = vitrina.captionAlpha();
@@ -865,7 +924,7 @@ int main(int argc, char** argv) {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         Mat4 pixels = ortho(0, float(uw), float(uh), 0, -1, 1);
         hud.flush(pixels);
-        if (!debugView && !portrait && !flyover && !selector.open) {  // la cara de la protagonista en el hexágono del HUD
+        if (!debugView && !portrait && !flyover && !oh.on && !selector.open) {  // la cara de la protagonista en el hexágono del HUD
             float k = float(w) / float(uw);
             float cxp = (float(uw) - Game::kPortraitInset) * k, cyp = Game::kPortraitInset * k;  // desde abajo
             int hw = int(31.0f * k), hh = int(29.0f * k);

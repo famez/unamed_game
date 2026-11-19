@@ -563,6 +563,7 @@ public:
     bool sandbox() const { return testMode_ != TestMode::None || freePlay_; }
     TestMode testMode() const { return testMode_; }
     void setTestCheats(bool hp, bool power);
+    void setHeroHidden(bool hidden) { heroHidden_ = hidden; }  // el visor cenital: la zona sin ella
     // Para los guiones de grabación (--vitrina): colocar al protagonista, quitar o poner Grises
     // y parar los que aparecen solos en el patio.
     void devPlace(Vec3 pos, float yaw);
@@ -999,6 +1000,7 @@ private:
     float darkScale_ = 1;       // cuánto oscurece la oscuridad (en los mapas abiertos, menos: se ve el paisaje)
     bool propScenery_ = true;   // las piezas, como escenario (la Ciudad Neón, con su sombreado propio)
     float viewDistance_ = 200;  // hasta dónde se dibuja
+    bool heroHidden_ = false;
     std::vector<Lamp> lamps_;
     Vec3 heroStart_;
     float heroStartYaw_ = 0;
