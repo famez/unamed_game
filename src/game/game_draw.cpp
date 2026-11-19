@@ -299,7 +299,7 @@ void drawWeapon(Renderer& r, const Mat4& w, const WeaponStats& ws, Move m, float
 void Game::draw(DebugDraw& dd, DebugDraw& glow, Renderer* solid, const DrawFlags& f, const ViewInfo& view,
                 float alpha) const {
     drawLevel(dd, solid, f, view, alpha);
-    drawHero(dd, solid, f, alpha);
+    if (!heroHidden_) drawHero(dd, solid, f, alpha);
     drawGhosts(solid, dd, alpha);
     if (solid) drawNpcs(*solid, view, alpha);
     if (solid) drawCreatures(*solid, view, alpha);

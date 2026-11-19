@@ -240,6 +240,7 @@ vuelve al selector.
     en su pose de reposo y miran a la protagonista si se acerca.
 
   - `--vuelo` sobrevuela el mapa y `--medir` escribe los fps reales por la consola.
+  - `--cenital [X Z [ALTO]]` abre el visor desde arriba (también con V en el juego): la zona sin el personaje, que se queda quieto. WASD mueve, Q/E gira, la rueda o R/F cambia la altura, las flechas inclinan; abajo sale el punto del centro, para usarlo con `--en`.
 - En todos: **Z** cambia entre luz y sombra y **F1 / F2** hacen infinitos la vida y el Poder
   (también en la pausa). Por defecto solo la vida.
 
