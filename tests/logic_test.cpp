@@ -375,6 +375,56 @@ int main() {
             Game r = fresh();
             r.loadLevel(LevelId::Rio);
             CHECK(r.cables_.size() == 1 && r.cables_[0].toZone == LevelId::Urca, "bahía: el teleférico sube a Urca (%zu líneas)", r.cables_.size());
+            {  // andando desde donde se empieza hasta el andén de abajo (camino por la rejilla), y allí F sube
+                const Terrain& t = *r.world_.terrain;
+                Vec3 start = r.hero_.body.pos, fin = r.cables_[0].stopA;
+                auto cellOf = [&](Vec3 p) {
+                    return std::pair<int, int>{int(std::lround((p.x - t.x0) / t.cell)), int(std::lround((p.z - t.z0) / t.cell))};
+                };
+                auto [sx, sz] = cellOf(start);
+                auto [gx, gz] = cellOf(fin);
+                std::vector<int> from(size_t(t.nx) * size_t(t.nz), -1);
+                std::vector<int> queue{sz * t.nx + sx};
+                from[size_t(queue[0])] = queue[0];
+                for (size_t qi = 0; qi < queue.size() && from[size_t(gz * t.nx + gx)] < 0; ++qi) {
+                    int cx = queue[qi] % t.nx, cz = queue[qi] / t.nx;
+                    for (auto [dx, dz] : {std::pair<int, int>{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+                        int nx = cx + dx, nz = cz + dz;
+                        if (nx < 0 || nz < 0 || nx >= t.nx || nz >= t.nz) continue;
+                        size_t k = size_t(nz) * size_t(t.nx) + size_t(nx);
+                        if (from[k] >= 0 || t.fence[k] > -0.6f) continue;
+                        from[k] = queue[qi];
+                        queue.push_back(int(k));
+                    }
+                }
+                std::vector<Vec3> path;
+                for (int k = gz * t.nx + gx; from[size_t(k)] >= 0 && k != from[size_t(k)]; k = from[size_t(k)])
+                    path.push_back({t.x0 + float(k % t.nx) * t.cell, 0, t.z0 + float(k / t.nx) * t.cell});
+                std::reverse(path.begin(), path.end());
+                path.push_back(fin);
+                for (size_t i = 0; i < path.size(); i += (i + 2 < path.size() ? 2 : 1)) {
+                    for (int step = 0; step < 60 * 2 && length(flat(path[i] - r.hero_.body.pos)) > 0.5f; ++step) {
+                        Controls c;
+                        c.move = normalize(flat(path[i] - r.hero_.body.pos)) * 0.7f;
+                        r.update(dt, c);
+                    }
+                }
+                Vec3 p = r.hero_.body.pos;
+                auto it = r.nearbyInteract();
+                CHECK(path.size() > 1 && length(flat(fin - p)) < 1.0f && it.kind == 8,
+                      "bahía: se llega andando al andén del teleférico (%zu pasos; en %.1f, %.1f, %.1f; andén en %.1f, %.1f; F: %d)", path.size(), p.x,
+                      p.y, p.z, fin.x, fin.z, it.kind);
+                int other = 0;  // alrededor del andén, F es siempre el teleférico (no un interruptor de farolas)
+                for (int k = 0; k < 8; ++k) {
+                    float a = float(k) * 0.785f;
+                    place(r, fin + Vec3{std::cos(a) * 1.2f, 0.3f, std::sin(a) * 1.2f});
+                    run(r, 0.2f);
+                    int kind = r.nearbyInteract().kind;
+                    other += kind >= 0 && kind != 8;  // (donde la estación empuja fuera del alcance, nada)
+                }
+                CHECK(other == 0, "bahía: junto al andén, F sube al teleférico (%d de 8 sitios dan otra cosa)", other);
+                place(r, start + Vec3{0, 0.3f, 0});
+            }
             auto ride = [&](int line, LevelId to) {
                 Vec3 at = r.cables_[size_t(line)].stopA;
                 std::string from = r.levelName();

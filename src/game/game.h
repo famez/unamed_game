@@ -1081,6 +1081,7 @@ private:
     float darkShown_ = 0;  // cuánto se oscurece en pantalla lo que no alumbra ninguna luz
     std::vector<LampSwitch> switches_;
     void placeLampSwitches();
+    bool nearOtherInteract(Vec3 p) const;  // ¿cerca de algo que se usa con F? (andenes, puertas, gente...)
     void toggleSwitch(int i);
     void hitLamp(int i, float damage);
     void updateLamps(float dt);

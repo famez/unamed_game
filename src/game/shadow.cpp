@@ -144,6 +144,28 @@ void Game::toggleSwitch(int i) {
     notify(s.on ? "Farolas encendidas" : "Farolas apagadas: ahí ahora hay sombra", s.on ? rgba(255, 226, 160) : kShadowCol);
 }
 
+// Un interruptor a menos de dos alcances de F de otra cosa que se usa con F se la quitaría (la
+// que esté más cerca gana): el andén del teleférico, una puerta, quien atiende o habla...
+bool Game::nearOtherInteract(Vec3 p) const {
+    constexpr float kClear = 3.8f;
+    auto near = [&](Vec3 q) { return length(flat(q - p)) < kClear && std::fabs(q.y - p.y) < 2.0f; };
+    for (const CableLine& l : cables_)
+        if (near(l.stopA) || near(l.stopB)) return true;
+    for (const ZoneDoor& d : doors_)
+        if (near(d.pos)) return true;
+    for (const Npc& n : npcs_)
+        if (!n.name.empty() && near(n.body.body.pos)) return true;
+    for (const TreasureChest& c : chests_)
+        if (near(c.pos)) return true;
+    for (const ColorNode& n : nodes_)
+        if (near(n.pos)) return true;
+    for (const Lantern& l : lanterns_)
+        if (near(l.pos)) return true;
+    for (const Mirror& m : mirrors_)
+        if (near(m.pos)) return true;
+    return false;
+}
+
 // Interruptores: las farolas se agrupan por cercanía (hasta 3 por grupo) y cada grupo tiene
 // el suyo, apartado: a 7-10 m del grupo, en un sitio libre y lejos de la salida del héroe.
 void Game::placeLampSwitches() {
@@ -167,6 +189,7 @@ void Game::placeLampSwitches() {
             Vec3 p{c.x + std::cos(a) * r, 0, c.z + std::sin(a) * r};
             p.y = groundHeight(p + Vec3{0, 6, 0});
             if (length(flat(p - heroStart_)) < 5.0f) continue;
+            if (nearOtherInteract(p)) continue;  // que F no se lo quite al andén, la puerta o quien hable
             RayHit under;  // sin suelo debajo (barrancos) no se pone
             if (!world_.ground && !segmentVsWorld(p + Vec3{0, 0.3f, 0}, p - Vec3{0, 0.3f, 0}, world_, under)) continue;
             bool blocked = false;
