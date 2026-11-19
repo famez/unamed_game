@@ -360,7 +360,7 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
         if (waterLevel_ > -100) {
             const Terrain& t = *world_.terrain;
             float hx = float(t.nx - 1) * t.cell * 0.5f;
-            solid->box(id, {t.x0 + hx, waterLevel_ - 0.05f, t.z0 + hx}, {hx, 0.05f, hx}, rgba(70, 120, 140), Material::Water);
+            solid->box(id, {t.x0 + hx, waterLevel_ - 0.05f, t.z0 + hx}, {hx + seaReach_, 0.05f, hx + seaReach_}, rgba(70, 120, 140), Material::Water);
         }
     } else if (world_.ground)
         solid->box(id, {0, -0.5f, 0}, {200, 0.5f, 200}, floorColor_, floorMaterial_);

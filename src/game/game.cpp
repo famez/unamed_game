@@ -114,10 +114,11 @@ void Game::update(float dt, const Controls& input) {
 
     bool down = hero_.downTimer >= 0;
     updateRide(dt);
+    if (updateZone(dt)) return;  // recién cargada otra zona: este paso, nada más
     if (down) {
         hero_.downTimer += dt;
         if (hero_.downTimer > kHeroRespawn) respawnHero();
-    } else if (riding()) {  // en el teleférico: se mira el paisaje
+    } else if (riding() || changingZone()) {  // en el teleférico (se mira el paisaje) o cambiando de zona
         lock_ = -1;
         if (c.advance && dialogue_.active()) dialogue_.advance();
     } else if (inLight_ || travel_) {  // hecho luz: solo se elige fuente, se salta o se sale
@@ -199,7 +200,8 @@ void Game::update(float dt, const Controls& input) {
     if (diving_ && onWall_)
         updateWallClimb(dt, c);
     else
-        hero_.update(dt, down || light || riding() ? Vec3{} : c.move, !down && !light && !diving_ && !riding() && c.jump, world_,
+        hero_.update(dt, down || light || riding() || changingZone() ? Vec3{} : c.move,
+                     !down && !light && !diving_ && !riding() && !changingZone() && c.jump, world_,
                      std::atan2(c.camForward.x, c.camForward.z));
     updateWolf(dt);
     if (c.jump && wasGrounded && hero_.body.vel.y > 1.0f) {

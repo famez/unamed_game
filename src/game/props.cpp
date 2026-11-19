@@ -110,14 +110,75 @@ bool PropLibrary::loadFile(const std::string& path, const std::string& name, std
     }
     if (d.verts.empty()) return error = path + ": no tiene ninguna malla visible", false;
     d.bounds = {lo, hi};
+    d.path = path;
+    d.loaded = true;
     int existing = find(name);
     if (existing >= 0) {
         d.mesh = -1;  // hay que volver a subirla
+        d.used = defs_[size_t(existing)].used;
         defs_[size_t(existing)] = std::move(d);
     } else {
         defs_.push_back(std::move(d));
     }
     return true;
+}
+
+int PropLibrary::indexDir(const std::string& dir) {
+    DIR* dp = opendir(dir.c_str());
+    if (!dp) return 0;
+    int n = 0;
+    while (dirent* e = readdir(dp)) {
+        std::string f = e->d_name;
+        if (f.size() <= 4 || f.compare(f.size() - 4, 4, ".glb") != 0) continue;
+        std::string name = f.substr(0, f.size() - 4);
+        if (find(name) < 0) {
+            PropDef d;
+            d.name = name;
+            d.path = dir + "/" + f;
+            defs_.push_back(std::move(d));
+        }
+        ++n;
+    }
+    closedir(dp);
+    return n;
+}
+
+int PropLibrary::acquire(const std::string& name) {
+    int i = find(name);
+    if (i < 0) return -1;
+    PropDef& d = defs_[size_t(i)];
+    if (!d.loaded) {
+        int mesh = d.mesh;  // si aún está subida (se soltó y se vuelve a pedir enseguida), vale la misma
+        std::string error;
+        if (!loadFile(d.path, name, error)) {
+            std::fprintf(stderr, "%s\n", error.c_str());
+            return -1;
+        }
+        defs_[size_t(i)].mesh = mesh;
+    }
+    defs_[size_t(i)].used = true;
+    return i;
+}
+
+void PropLibrary::beginZone() {
+    for (PropDef& d : defs_) d.used = false;
+}
+
+void PropLibrary::endZone() {
+    for (PropDef& d : defs_)
+        if (d.loaded && !d.used && !d.path.empty()) {
+            d.loaded = false;
+            d.verts = {};
+            d.indices = {};
+            d.colliders = {};
+            d.lights = {};
+        }
+}
+
+int PropLibrary::loadedCount() const {
+    int n = 0;
+    for (const PropDef& d : defs_) n += d.loaded;
+    return n;
 }
 
 int PropLibrary::loadDir(const std::string& dir) {

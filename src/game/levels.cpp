@@ -3,6 +3,7 @@
 // y el paso de un escenario al siguiente.
 
 #include "game/game.h"
+#include "game/props.h"
 
 #include <algorithm>
 
@@ -561,6 +562,8 @@ void Game::loadLevel(LevelId id) {
     props_.clear();
     npcs_.clear();
     cables_.clear();
+    doors_.clear();
+    arrivals_.clear();
     ride_ = -1;
     rideFade_ = 0;
     hero_.carried = false;
@@ -571,6 +574,7 @@ void Game::loadLevel(LevelId id) {
     terrainMaterial_.clear();
     daylight_ = false;
     waterLevel_ = -1000;
+    seaReach_ = 0;
     fogScale_ = 1;
     propScenery_ = true;
     darkScale_ = 1;
@@ -590,6 +594,7 @@ void Game::loadLevel(LevelId id) {
     world_.ground = true;
     night_ = 0;
     croma_ = cromaShown_ = 0.05f;  // cada escenario empieza casi sin color
+    propLibrary().beginZone();
     switch (id) {
         case LevelId::Plaza: buildPlaza(); break;
         case LevelId::Mercado: buildMercado(); break;
@@ -604,8 +609,15 @@ void Game::loadLevel(LevelId id) {
         case LevelId::Rio: buildRio(); break;
         case LevelId::Copas: buildCopas(); break;
         case LevelId::Andamios: buildAndamios(); break;
+        case LevelId::Botequim: buildBotequim(); break;
+        case LevelId::TabernaLapa: buildTabernaLapa(); break;
+        case LevelId::Urca: buildUrca(); break;
+        case LevelId::PaoAcucar: buildPaoAcucar(); break;
+        case LevelId::Gruta: buildGruta(); break;
         case LevelId::Count: break;
     }
+    if (!cables_.empty()) propLibrary().acquire("teleferico");  // las cabinas, que se dibujan aparte
+    propLibrary().endZone();  // lo que esta zona no usa se suelta (y el renderer lo borra)
     // Los mapas grandes: la Ciudad Neón a todo color; los demás, en el atardecer detenido con
     // poco color (vuelve al encender sus nodos y al disipar Grises).
     if (id == LevelId::Neon || id == LevelId::Copas) croma_ = cromaShown_ = 1.0f;  // la ciudad de las copas no se paró
@@ -827,8 +839,9 @@ Game::InteractTarget Game::nearbyInteract() const {
     for (size_t i = 0; i < cables_.size(); ++i) {  // los andenes del teleférico (índice: línea·2 + punta)
         const CableLine& l = cables_[i];
         consider(8, int(i) * 2, l.stopA, "Teleférico · a " + l.nameB);
-        consider(8, int(i) * 2 + 1, l.stopB, "Teleférico · a " + l.nameA);
+        if (l.toZone == LevelId::Count) consider(8, int(i) * 2 + 1, l.stopB, "Teleférico · a " + l.nameA);
     }
+    for (size_t i = 0; i < doors_.size(); ++i) consider(9, int(i), doors_[i].pos, doors_[i].label);
     for (size_t i = 0; i < creatures_.size(); ++i) {  // el búho, desde el pie de su farola
         const Creature& c = creatures_[i];
         if (c.kind == CreatureKind::Buho && c.hop < 0) {
@@ -863,6 +876,11 @@ void Game::tryInteract() {
     }
     if (t.kind == 8) {
         startRide(t.index / 2, t.index % 2 == 0);
+        return;
+    }
+    if (t.kind == 9) {
+        const ZoneDoor& d = doors_[size_t(t.index)];
+        goToZone(d.to, d.arrival);
         return;
     }
     if (t.kind == 0) {

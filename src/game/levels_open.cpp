@@ -47,8 +47,8 @@ void Game::paintTerrain(int ix, int iz, uint32_t color, Material m) {
 }
 
 bool Game::addProp(const std::string& name, Vec3 pos, float yaw, float scl, bool onGround) {
-    const PropLibrary& lib = propLibrary();
-    int i = lib.find(name);
+    PropLibrary& lib = propLibrary();
+    int i = lib.acquire(name);  // se lee si la zona es la primera que la usa
     if (i < 0) return false;
     const PropDef& d = lib[size_t(i)];
     Mat4 local = rotateY(yaw) * scale({scl, scl, scl});

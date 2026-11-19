@@ -42,6 +42,9 @@ set(LOGIC_SOURCES
     src/game/levels_andamios.cpp
     src/game/npcs.cpp
     src/game/trade.cpp
+    src/game/zones.cpp
+    src/game/levels_interiores.cpp
+    src/game/levels_gruta.cpp
     src/game/wild.cpp
     src/game/swarm.cpp
     src/game/light.cpp

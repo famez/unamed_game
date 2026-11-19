@@ -293,7 +293,8 @@ int main() {
             Game r = fresh();
             r.loadLevel(LevelId::Rio);
             int shops = 0, inns = 0;
-            for (const Npc& n : r.npcs_) shops += n.role == NpcRole::Shop && !n.stock.empty(), inns += n.role == NpcRole::Inn;
+            for (const Npc& n : r.npcs_) shops += n.role == NpcRole::Shop && !n.stock.empty();
+            for (const ZoneDoor& d : r.doors_) inns += d.to == LevelId::Botequim || d.to == LevelId::TabernaLapa;  // se entra en ellas
             Npc* armazem = nullptr;
             for (Npc& n : r.npcs_)
                 if (n.name.find("armazém") != std::string::npos) armazem = &n;
@@ -315,64 +316,133 @@ int main() {
                       "bahía: F en el mostrador abre el armazém (%d) y se compra con lúmenes (quedan %d; «%s»)", opened, r.inv_.munny,
                       msg.c_str());
             }
-            // En el botequim se entra: de la plaza, por la puerta, hasta la barra; F al tabernero.
-            place(r, {8, 1.8f, 12.2f});
-            run(r, 0.3f);
-            r.hp_ = 10;
-            for (Vec3 to : {Vec3{12, 0, 12.2f}, Vec3{15, 0, 12.2f}, Vec3{18.2f, 0, 12.2f}})
-                for (int i = 0; i < 60 * 4 && length(flat(to - r.hero_.body.pos)) > 0.3f; ++i) {
-                    Controls c;
-                    c.move = normalize(flat(to - r.hero_.body.pos)) * 0.6f;
-                    r.update(dt, c);
-                }
-            Vec3 in = r.hero_.body.pos;
-            Controls f;
-            f.interact = true;
-            r.update(dt, f);
-            CHECK(in.x > 17.5f && std::fabs(in.y - 1.5f) < 0.2f && r.hp_ == r.maxHp_,
-                  "bahía: se entra en el botequim y en la barra se descansa (en %.1f, %.1f, %.1f; vida %.0f)", in.x, in.y, in.z, r.hp_);
         }
-        {  // El teleférico: F en el andén sube a la cabina; llega a la otra estación (a la explanada
-            // del morro, que se pisa y no deja caer) y de allí se sigue al Pão de Açúcar y se vuelve
+        {  // Las tabernas son zonas: F en la puerta funde, carga el interior (con sus piezas, y suelta
+            // las de la bahía) y se aparece dentro; en la barra se descansa; al salir se vuelve a la
+            // acera de la taberna con la bahía como se dejó (la cápsula abierta sigue abierta).
             Game r = fresh();
             r.loadLevel(LevelId::Rio);
-            CHECK(r.cables_.size() == 2, "bahía: dos líneas de teleférico (%zu)", r.cables_.size());
-            auto ride = [&](int line, bool fromA) {
-                const CableLine& l = r.cables_[size_t(line)];
-                Vec3 at = fromA ? l.stopA : l.stopB;
+            int bayPieces = propLibrary().loadedCount();
+            size_t chest = 0;
+            for (size_t i = 0; i < r.chests_.size(); ++i)
+                if (length(flat(r.chests_[i].pos - r.heroStart_)) < length(flat(r.chests_[chest].pos - r.heroStart_))) chest = i;
+            if (!r.chests_.empty()) r.chests_[chest].open = true;
+            auto door = [&](LevelId to) {
+                for (size_t i = 0; i < r.doors_.size(); ++i)
+                    if (r.doors_[i].to == to) return int(i);
+                return -1;
+            };
+            auto through = [&](int d) {  // a la puerta, F y esperar a que se abra el negro
+                if (d < 0) return false;
+                place(r, r.doors_[size_t(d)].pos + Vec3{0, 0.3f, 0});
+                run(r, 0.2f);
+                Controls f;
+                f.interact = true;
+                r.update(dt, f);
+                bool started = r.changingZone();
+                for (int i = 0; i < 60 * 3 && (r.changingZone() || r.rideFade() > 0.01f); ++i) r.update(dt, Controls{});
+                return started;
+            };
+            for (auto [to, home] : {std::pair<LevelId, int>{LevelId::Botequim, arrival::kRioBotequim}, {LevelId::TabernaLapa, arrival::kRioLapa}}) {
+                bool in = through(door(to)) && r.level() == to;
+                int inside = propLibrary().loadedCount();
+                Npc* inn = nullptr;
+                for (Npc& n : r.npcs_)
+                    if (n.role == NpcRole::Inn) inn = &n;
+                bool rested = false;
+                if (inn) {  // delante de la barra, F al tabernero
+                    Vec3 front = inn->body.body.pos + (inn->body.forward()) * 1.45f;
+                    place(r, front + Vec3{0, 0.3f, 0});
+                    run(r, 0.3f);
+                    r.hp_ = 10;
+                    Controls f;
+                    f.interact = true;
+                    r.update(dt, f);
+                    rested = r.hp_ == r.maxHp_;
+                }
+                Vec3 p = r.hero_.body.pos;
+                CHECK(in && inn && rested && inside < bayPieces / 3 && p.y > -0.1f && p.y < 0.6f,
+                      "bahía: se entra en %s (%d piezas cargadas, en la bahía %d) y en la barra se descansa (%d)", r.levelName().c_str(), inside,
+                      bayPieces, rested);
+                bool out = through(door(LevelId::Rio)) && r.level() == LevelId::Rio;
+                Vec3 q = r.hero_.body.pos, want = r.arrivals_[size_t(home)].pos;
+                CHECK(out && length(flat(q - want)) < 0.5f && (r.chests_.empty() || r.chests_[chest].open) && propLibrary().loadedCount() == bayPieces,
+                      "bahía: al salir, en la acera de la taberna (%.1f, %.1f, %.1f) y la bahía como estaba", q.x, q.y, q.z);
+            }
+        }
+        {  // El teleférico: F en el andén sube a la cabina; al llegar arriba se carga la cima (Urca),
+            // con la explanada que se pisa; de allí al Pão de Açúcar, a su aguja, y de vuelta abajo
+            Game r = fresh();
+            r.loadLevel(LevelId::Rio);
+            CHECK(r.cables_.size() == 1 && r.cables_[0].toZone == LevelId::Urca, "bahía: el teleférico sube a Urca (%zu líneas)", r.cables_.size());
+            auto ride = [&](int line, LevelId to) {
+                Vec3 at = r.cables_[size_t(line)].stopA;
+                std::string from = r.levelName();
                 place(r, at + Vec3{0, 0.3f, 0});
                 run(r, 0.3f);
                 Controls f;
                 f.interact = true;
                 r.update(dt, f);
                 bool started = r.riding();
-                float topY = -1e9f, t0 = l.t;
-                for (int i = 0; i < 60 * 60 && r.riding(); ++i) {
-                    r.update(dt, Controls{});
-                    topY = std::max(topY, r.hero_.body.pos.y);
-                }
+                for (int i = 0; i < 60 * 60 && (r.riding() || r.changingZone() || r.rideFade() > 0.01f); ++i) r.update(dt, Controls{});
                 run(r, 0.6f);
-                Vec3 to = fromA ? l.stopB : l.stopA, p = r.hero_.body.pos;
-                CHECK(started && !r.riding() && length(flat(p - to)) < 0.6f && std::fabs(p.y - to.y) < 0.1f && r.hero_.body.grounded &&
-                          std::fabs(l.t - (1 - t0)) < 1e-4f && topY > std::min(l.a.y, l.b.y) - 4.0f,
-                      "bahía: teleférico %s → %s (llega a %.1f, %.1f, %.1f; andén %.1f, %.1f, %.1f)", fromA ? l.nameA.c_str() : l.nameB.c_str(),
-                      fromA ? l.nameB.c_str() : l.nameA.c_str(), p.x, p.y, p.z, to.x, to.y, to.z);
-            };
-            ride(0, true);
-            float urca = r.hero_.body.pos.y;
-            {  // la explanada de Urca: se anda hasta el pretil y no se cae
-                Controls c;
-                c.move = normalize(flat(r.cables_[0].stopB - r.cables_[0].b));
-                run(r, 4.0f, c);
                 Vec3 p = r.hero_.body.pos;
-                CHECK(std::fabs(p.y - urca) < 0.3f && r.world_.terrain->fenceAt(p.x, p.z) < 0.1f,
-                      "bahía: en la explanada de Urca se anda sin caer (y=%.1f, arriba %.1f)", p.y, urca);
+                float g = r.groundHeight(p + Vec3{0, 1, 0});
+                CHECK(started && r.level() == to && std::fabs(p.y - g) < 0.1f && r.hero_.body.grounded && r.world_.terrain->fenceAt(p.x, p.z) < 0,
+                      "bahía: teleférico de %s a %s (llega a %.1f, %.1f, %.1f)", from.c_str(), r.levelName().c_str(), p.x, p.y, p.z);
+            };
+            ride(0, LevelId::Urca);
+            float urca = r.hero_.body.pos.y;
+            CHECK(urca > 20 && r.cables_.size() == 2 && !r.encounters_.empty() && !r.chests_.empty() && r.npcs_.size() >= 2,
+                  "urca: la explanada a %.1f m, dos líneas (%zu), la Fortaleza y su cápsula", urca, r.cables_.size());
+            {  // por los senderos, de la explanada al mirante y a la Fortaleza, andando y sin caer: el
+                // camino se busca por la rejilla del recinto (lo que deja pisar) y se sigue
+                const Terrain& t = *r.world_.terrain;
+                Vec3 fin = r.encounters_[0].trigger.center();
+                auto cellOf = [&](Vec3 p) {
+                    return std::pair<int, int>{int(std::lround((p.x - t.x0) / t.cell)), int(std::lround((p.z - t.z0) / t.cell))};
+                };
+                auto [sx, sz] = cellOf(r.hero_.body.pos);
+                auto [gx, gz] = cellOf(fin);
+                std::vector<int> from(size_t(t.nx) * size_t(t.nz), -1);
+                std::vector<int> queue{sz * t.nx + sx};
+                from[size_t(queue[0])] = queue[0];
+                for (size_t qi = 0; qi < queue.size() && from[size_t(gz * t.nx + gx)] < 0; ++qi) {
+                    int cx = queue[qi] % t.nx, cz = queue[qi] / t.nx;
+                    for (auto [dx, dz] : {std::pair<int, int>{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+                        int nx = cx + dx, nz = cz + dz;
+                        if (nx < 0 || nz < 0 || nx >= t.nx || nz >= t.nz) continue;
+                        size_t k = size_t(nz) * size_t(t.nx) + size_t(nx);
+                        if (from[k] >= 0 || t.fence[k] > -0.6f) continue;
+                        from[k] = queue[qi];
+                        queue.push_back(int(k));
+                    }
+                }
+                std::vector<Vec3> path;
+                for (int k = gz * t.nx + gx; from[size_t(k)] >= 0 && k != from[size_t(k)]; k = from[size_t(k)])
+                    path.push_back({t.x0 + float(k % t.nx) * t.cell, 0, t.z0 + float(k / t.nx) * t.cell});
+                std::reverse(path.begin(), path.end());
+                float lowest = 1e9f;
+                for (size_t i = 0; i < path.size(); i += 2) {
+                    for (int step = 0; step < 60 * 2 && length(flat(path[i] - r.hero_.body.pos)) > 0.5f; ++step) {
+                        Controls c;
+                        c.move = normalize(flat(path[i] - r.hero_.body.pos)) * 0.7f;
+                        r.update(dt, c);
+                        lowest = std::min(lowest, r.hero_.body.pos.y);
+                    }
+                }
+                Vec3 p = r.hero_.body.pos;
+                CHECK(!path.empty() && length(flat(fin - p)) < 2.0f && lowest > 8,
+                      "urca: los senderos llevan a la Fortaleza (%zu pasos; en %.1f, %.1f, %.1f; lo más bajo %.1f)", path.size(), p.x, p.y, p.z,
+                      lowest);
             }
-            ride(1, true);
-            CHECK(r.hero_.body.pos.y > 50, "bahía: en lo alto del Pão de Açúcar (y=%.1f)", r.hero_.body.pos.y);
-            ride(1, false);
-            ride(0, false);
-            ride(0, true);  // la cabina que volvió abajo sigue sirviendo
+            ride(1, LevelId::PaoAcucar);
+            CHECK(r.hero_.body.pos.y > 50 && r.world_.ladders.size() == 1 && !r.chests_.empty(), "pão: en lo alto (y=%.1f), con la aguja y su escalera",
+                  r.hero_.body.pos.y);
+            ride(0, LevelId::Urca);
+            ride(0, LevelId::Rio);
+            Vec3 p = r.hero_.body.pos, want = r.arrivals_[size_t(arrival::kRioCable)].pos;
+            CHECK(length(flat(p - want)) < 0.6f, "bahía: de vuelta en el andén del Largo do Bondinho (%.1f, %.1f)", p.x, p.z);
         }
         {  // Las Copas: por la escalera del tronco y la pasarela larga se llega al mirador; las
             // barandillas paran al que anda, y el que cae al vacío vuelve a un sitio seguro

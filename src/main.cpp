@@ -98,7 +98,8 @@ const char kHelp[] =
     "Niveles (sin opciones, se elige en el selector del principio)\n"
     "  --nivel NOMBRE                entra directamente en ese nivel: plaza, mercado, puente,\n"
     "                                selva, cueva, callejones o los mapas grandes: campo, neon, cafetero, rio, copas;\n"
-    "                                y los puzles de saltos: andamios\n"
+    "                                y los puzles de saltos: andamios; zonas a las que se llega desde\n"
+    "                                otra: botequim, lapa (tabernas), urca, pao (cimas), gruta\n"
     "  --prueba [semilla]            patio de combate: enemigos sin fin; F1 y F2 hacen infinitos\n"
     "                                la vida y el Poder; Z cambia de modo\n"
     "  --historia                    la historia (capítulo 1), aparcada por ahora\n"
@@ -205,7 +206,7 @@ int main(int argc, char** argv) {
     if (std::string error; !loadHeroClips(std::string(assetDir) + "/models/vela_animaciones.glb", error))
         std::fprintf(stderr, "Animaciones de Vela: %s (se usan las procedurales)\n", error.c_str());
     loadCharacterGlbs(renderer, std::string(assetDir) + "/models");  // enemigos, Ilse y el lobo
-    propLibrary().loadDir(std::string(assetDir) + "/props");          // piezas del escenario
+    propLibrary().indexDir(std::string(assetDir) + "/props");         // piezas del escenario (se leen por zonas)
     loadInhabitants(renderer, std::string(assetDir) + "/models/habitantes");
     loadCreatureRigs(std::string(assetDir) + "/models/bestiario");  // las criaturas del bestiario
     loadCreatureModels(renderer, std::string(assetDir) + "/models/bestiario");
@@ -262,6 +263,11 @@ int main(int argc, char** argv) {
                         : std::strcmp(n, "rio") == 0        ? LevelId::Rio
                         : std::strcmp(n, "copas") == 0      ? LevelId::Copas
                         : std::strcmp(n, "andamios") == 0   ? LevelId::Andamios
+                        : std::strcmp(n, "botequim") == 0   ? LevelId::Botequim
+                        : std::strcmp(n, "lapa") == 0       ? LevelId::TabernaLapa
+                        : std::strcmp(n, "urca") == 0       ? LevelId::Urca
+                        : std::strcmp(n, "pao") == 0        ? LevelId::PaoAcucar
+                        : std::strcmp(n, "gruta") == 0      ? LevelId::Gruta
                                                             : LevelId::Plaza;
             levelGiven = true;
         }
@@ -757,6 +763,11 @@ int main(int argc, char** argv) {
                 r = 105.0f + 30.0f * std::sin(tt * 0.09f), hgt = 40.0f + 14.0f * std::sin(tt * 0.13f + 1.0f);
                 look = {15, 6.0f, 30};
             }
+            if (game.level() == LevelId::Urca || game.level() == LevelId::PaoAcucar) {  // las cimas: alrededor del morro
+                bool pao = game.level() == LevelId::PaoAcucar;
+                r = 48.0f + 10.0f * std::sin(tt * 0.09f), hgt = (pao ? 30.0f : 16.0f) + 8.0f * std::sin(tt * 0.13f + 1.0f);
+                look = pao ? Vec3{50, 44, -112} : Vec3{18, 16, -92};
+            }
             if (game.level() == LevelId::Copas) {  // la aldea de las copas: de cerca, entre los troncos
                 r = 38.0f + 10.0f * std::sin(tt * 0.09f), hgt = 10.0f + 8.0f * std::sin(tt * 0.13f + 1.0f);
                 look = {0, 2.0f, 12};
@@ -794,6 +805,7 @@ int main(int argc, char** argv) {
 
         // Render. Primero generamos la geometría en CPU y medimos ese tiempo: la primera
         // llamada GL del frame (glClear) puede bloquear esperando al vsync y falsearía la cifra.
+        uploadPropMeshes(renderer);  // las piezas de la zona recién cargada (y fuera las que ya no usa)
         game.draw(dd, glow, debugView ? nullptr : &renderer, flags, vi, alpha);
         ViewInfo uiView = vi;
         uiView.width = uw;

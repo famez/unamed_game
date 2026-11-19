@@ -90,6 +90,13 @@ void Game::updateRide(float dt) {
     }
     if (t >= end) {  // en el andén de llegada
         l.t = 1.0f - rideT0_;
+        if (rideForward_ && l.toZone != LevelId::Count) {  // la estación de arriba es otra zona: se carga
+            hero_.carried = false;
+            ride_ = -1;
+            rideFade_ = 1;
+            goToZone(l.toZone, l.toArrival, true);
+            return;
+        }
         Vec3 stop = rideForward_ ? l.stopB : l.stopA;
         hero_.carried = false;
         hero_.teleport({stop.x, groundHeight(stop + Vec3{0, 3, 0}), stop.z}, rideForward_ ? l.yawB : l.yawA);

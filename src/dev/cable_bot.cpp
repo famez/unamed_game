@@ -16,9 +16,10 @@ struct Stage {
 
 const Stage kStages[] = {
     {Kind::Walk, {6, 0, -1}},     {Kind::Walk, {11.7f, 0, -1}},  {Kind::Talk, {}},             // el armazém
-    {Kind::Wait, {}},             {Kind::Walk, {8, 0, 12.2f}},   {Kind::Walk, {12, 0, 12.2f}},  // el botequim:
-    {Kind::Walk, {15, 0, 12.2f}}, {Kind::Walk, {18.2f, 0, 12.2f}}, {Kind::Talk, {}},             // se entra hasta
-    {Kind::Wait, {}},             {Kind::Walk, {15, 0, 12.2f}},  {Kind::Walk, {11, 0, 12.2f}},  // la barra y se sale
+    {Kind::Wait, {}},             {Kind::Walk, {8, 0, 12.2f}},   {Kind::Walk, {12.2f, 0, 12.2f}},  // el botequim: se
+    {Kind::Talk, {}},             {Kind::Wait, {}},              {Kind::Walk, {-0.6f, 0, -1.6f}},  // entra, se pide en
+    {Kind::Talk, {}},             {Kind::Wait, {}},              {Kind::Walk, {0, 0, 3.3f}},       // la barra y se sale
+    {Kind::Talk, {}},             {Kind::Wait, {}},
     {Kind::Walk, {8, 0, 4}},      {Kind::Walk, {11, 0, -6.5f}},  {Kind::Walk, {26, 0, -9.5f}},  // la Rua da Praia
     {Kind::Walk, {42, 0, -12}},   {Kind::Ride, {}, 0, true},                                   // a Urca
     {Kind::Ride, {}, 1, true},                                                                 // al Pão de Açúcar

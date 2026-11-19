@@ -229,7 +229,12 @@ struct Companion {
 // suena su escena y empieza la siguiente.
 
 // Campo, Neon, Cafetero y Rio: mapas grandes (terreno con relieve y piezas .glb de assets/props).
-enum class LevelId { Plaza, Mercado, Puente, Prueba, Selva, Cueva, Callejones, Campo, Neon, Cafetero, Rio, Copas, Andamios, Count };
+// Las últimas son zonas a las que se llega desde otra (no salen en el selector): los interiores
+// de las tabernas de la bahía, las cimas del teleférico y la gruta del campo.
+enum class LevelId {
+    Plaza, Mercado, Puente, Prueba, Selva, Cueva, Callejones, Campo, Neon, Cafetero, Rio, Copas, Andamios,
+    Botequim, TabernaLapa, Urca, PaoAcucar, Gruta, Count
+};
 
 // Modos de prueba (sin historia, con vida, Luz y Sombra infinitas): un escenario aleatorio
 // con Grises sin fin, un archipiélago de islas flotantes para practicar el viaje por la luz,
@@ -443,7 +448,30 @@ struct CableLine {
     float yawA = 0, yawB = 0;  // hacia dónde se mira al bajar
     std::string nameA, nameB;
     float t = 0;         // 0: la cabina 1 en A; 1: en B (la 2, al revés)
+    // Si lleva a otra zona: solo se sube en A y, al llegar a B, se carga esa zona (en `toArrival`).
+    LevelId toZone = LevelId::Count;
+    int toArrival = 0;
 };
+
+// Puerta a otra zona (la de una taberna, la boca de una cueva): con F se funde a negro, se
+// guarda cómo queda esta zona, se carga la otra y se aparece en su llegada `arrival`.
+struct ZoneDoor {
+    Vec3 pos;
+    LevelId to;
+    int arrival = 0;
+    std::string label;  // «Entrar · Botequim»
+};
+struct ZoneArrival {  // por dónde se aparece al llegar a una zona (índice: el de la puerta)
+    Vec3 pos;
+    float yaw = 0;
+};
+// Las llegadas de cada zona (su orden en Game::arrivals_). La 0, si no se dice, es el principio.
+namespace arrival {
+constexpr int kRioBotequim = 1, kRioLapa = 2, kRioCable = 3;  // la bahía: de las tabernas y en cabina desde Urca
+constexpr int kInside = 0;                                   // los interiores: por la puerta
+constexpr int kUrcaFromBay = 0, kUrcaFromPao = 1, kPaoFromUrca = 0;
+constexpr int kCampoGruta = 1, kGrutaMouth = 0;              // la boca de la gruta, fuera y dentro
+}  // namespace arrival
 
 // Habitante: pasea por su zona (en torno a `home`), se para de vez en cuando (en su pose de
 // reposo) y mira a la protagonista si se le acerca. `model`: su .glb de assets/models/habitantes.
@@ -648,7 +676,14 @@ public:
     // Teleférico.
     const std::vector<CableLine>& cableLines() const { return cables_; }
     bool riding() const { return ride_ >= 0; }
-    float rideFade() const { return rideFade_; }
+    float rideFade() const { return std::max(rideFade_, zoneFade_); }  // negro del viaje o del cambio de zona
+    // Zonas: ir a otra (con fundido; `black`: ya está a negro, como al llegar en cabina) y,
+    // sin fundido, de golpe (las pruebas). Lo que se haya hecho en cada zona se guarda al salir.
+    void goToZone(LevelId to, int arrival, bool black = false);
+    void enterZone(LevelId to, int arrival);
+    bool changingZone() const { return zoneTo_ != LevelId::Count; }
+    const std::vector<ZoneDoor>& zoneDoors() const { return doors_; }
+    const std::vector<ZoneArrival>& zoneArrivals() const { return arrivals_; }
     // Al subir o bajar de la cabina la protagonista cambia de sitio de golpe: corte de plano.
     bool takeCameraCut() {
         bool r = cameraCut_;
@@ -719,6 +754,12 @@ private:
     void buildRio();
     void buildCopas();
     void buildAndamios();
+    void buildBotequim();
+    void buildTabernaLapa();
+    void buildUrca();
+    void buildSummit(bool pao);  // Urca o el Pão de Açúcar, con la bahía de telón de fondo
+    void buildPaoAcucar();
+    void buildGruta();
     // Escalera de gato (World::ladders) con sus largueros y peldaños; ver Character::Climb.
     void addLadder(Vec3 base, float top, Vec3 normal, float halfWidth = 0.32f);
     // Mapas grandes: terreno de `size` m de lado con puntos cada `cell` m (alturas a cero).
@@ -920,6 +961,21 @@ private:
     float rideFade_ = 0;       // negro al subir y al bajar
     bool rideAboard_ = false;  // ya en la cabina (pasado el primer fundido)
     bool cameraCut_ = false;
+    // Zonas: puertas y llegadas de la cargada, el cambio en curso y lo guardado de cada una.
+    std::vector<ZoneDoor> doors_;
+    std::vector<ZoneArrival> arrivals_;
+    LevelId zoneTo_ = LevelId::Count;
+    int zoneArrival_ = 0;
+    float zoneTime_ = 0, zoneFade_ = 0;
+    struct ZoneState {
+        std::vector<char> chests, nodes, lanterns, interacts, lamps, encounters;
+        size_t part = 0;
+        float croma = 0;
+    };
+    std::map<int, ZoneState> zoneStates_;
+    bool updateZone(float dt);  // cierto en el paso en que se ha cargado la otra zona
+    void saveZoneState();
+    void restoreZoneState();
     void startRide(int line, bool forward);
     void updateRide(float dt);
     float rideDuration(const CableLine& l) const;
@@ -968,6 +1024,7 @@ private:
     float night_ = 0;  // escenario de noche (0..1): cielo oscuro, solo alumbran sus luces
     bool daylight_ = false;     // de día (mapas abiertos): la sombra es la que hace el sol
     float waterLevel_ = -1000;  // agua (ríos) por debajo de esta altura; muy abajo: sin agua
+    float seaReach_ = 0;        // el agua sigue tanto más allá del borde del relieve (el mar hasta el horizonte)
     Material floorMaterial_ = Material::Ground;
     Character hero_;
     Inventory inv_;

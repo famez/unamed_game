@@ -134,8 +134,25 @@ int Renderer::createSkinnedMesh(const std::vector<SkinVertex>& verts, const std:
     glVertexAttribPointer(5, 1, GL_FLOAT, GL_FALSE, st, (void*)offsetof(SkinVertex, material));
     glBindVertexArray(0);
     m.count = GLsizei(indices.size());
+    if (!freeMeshes_.empty()) {
+        int slot = freeMeshes_.back();
+        freeMeshes_.pop_back();
+        skinMeshes_[size_t(slot)] = m;
+        return slot;
+    }
     skinMeshes_.push_back(m);
     return int(skinMeshes_.size()) - 1;
+}
+
+void Renderer::freeSkinnedMesh(int mesh) {
+    if (mesh < 0 || mesh >= int(skinMeshes_.size()) || skinMeshes_[size_t(mesh)].vao == 0) return;
+    SkinMesh& m = skinMeshes_[size_t(mesh)];
+    glDeleteVertexArrays(1, &m.vao);
+    glDeleteBuffers(1, &m.vbo);
+    glDeleteBuffers(1, &m.ebo);
+    m = {};
+    if (size_t(mesh) < props_.size()) props_[size_t(mesh)] = {};
+    freeMeshes_.push_back(mesh);
 }
 
 void Renderer::updateSkinnedMesh(int mesh, const std::vector<SkinVertex>& verts, const std::vector<uint32_t>& indices) {
@@ -163,7 +180,7 @@ void Renderer::skinned(int mesh, const Mat4* bones, int boneCount, float flash, 
 }
 
 void Renderer::prop(int mesh, const Mat4& transform, bool shadow) {
-    if (mesh < 0 || mesh >= int(skinMeshes_.size())) return;
+    if (mesh < 0 || mesh >= int(skinMeshes_.size()) || skinMeshes_[size_t(mesh)].vao == 0) return;
     if (size_t(mesh) >= props_.size()) props_.resize(size_t(mesh) + 1);
     std::vector<float>& q = shadow ? props_[size_t(mesh)].lit : props_[size_t(mesh)].unshadowed;
     q.insert(q.end(), transform.m, transform.m + 16);

@@ -113,7 +113,7 @@ uint32_t speakerColor(const std::string& id) {
 void Game::drawStoryHud(UiLayer& ui, const ViewInfo& view) const {
     DebugDraw& d = ui.shapes;
     const float w = float(view.width), h = float(view.height);
-    if (float f = std::max(fade_, rideFade_); f > 0) fillRect(d, 0, 0, w, h, withAlpha(rgba(0, 0, 0), smoothstep01(f)));
+    if (float f = std::max(fade_, std::max(rideFade_, zoneFade_)); f > 0) fillRect(d, 0, 0, w, h, withAlpha(rgba(0, 0, 0), smoothstep01(f)));
 
     // Carteles de capítulo.
     if (chapterBanner_ > 0) {

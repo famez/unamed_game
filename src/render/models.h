@@ -108,7 +108,8 @@ bool inhabitantIdleJoints(const std::string& name, const Mat4& model, float time
 int loadCreatureModels(Renderer& r, const std::string& dir);
 const BuiltModel* creatureModel(CreatureKind k);  // nullptr si no está
 
-// Sube a la GPU las mallas de las piezas del escenario (game/props.h) que aún no lo estén.
+// Sube a la GPU las mallas de las piezas del escenario (game/props.h) leídas que aún no lo
+// estén y borra las de las que se han soltado al cambiar de zona. Se llama en cada fotograma.
 void uploadPropMeshes(Renderer& r);
 
 // Aspecto del protagonista según su mitad: el de siempre (historia, antes de la sombra), el de

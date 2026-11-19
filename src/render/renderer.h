@@ -118,6 +118,8 @@ public:
     // `outline` != 0: contorno de ese color (casco invertido: la malla inflada por detrás).
     int createSkinnedMesh(const std::vector<SkinVertex>& verts, const std::vector<uint32_t>& indices);
     void skinned(int mesh, const Mat4* bones, int boneCount, float flash, uint32_t outline);
+    // Borra una malla de la GPU (las piezas que la zona nueva no usa); su hueco se reutiliza.
+    void freeSkinnedMesh(int mesh);
     // Cambia el contenido de una malla ya creada (el terreno al cambiar de escenario).
     void updateSkinnedMesh(int mesh, const std::vector<SkinVertex>& verts, const std::vector<uint32_t>& indices);
 
@@ -183,6 +185,7 @@ private:
         uint32_t outline;
     };
     std::vector<SkinMesh> skinMeshes_;
+    std::vector<int> freeMeshes_;  // huecos de mallas borradas
     // Instancias de piezas por malla (matrices seguidas); las que no dan sombra van aparte.
     struct PropQueue {
         std::vector<float> lit, unshadowed;

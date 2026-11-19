@@ -853,8 +853,15 @@ const BuiltModel* creatureModel(CreatureKind k) { return gCreatureLoaded[int(k)]
 
 void uploadPropMeshes(Renderer& r) {
     PropLibrary& lib = propLibrary();
-    for (size_t i = 0; i < lib.size(); ++i)
-        if (lib[i].mesh < 0) lib[i].mesh = r.createSkinnedMesh(lib[i].verts, lib[i].indices);
+    for (size_t i = 0; i < lib.size(); ++i) {
+        PropDef& d = lib[i];
+        if (d.loaded && d.mesh < 0 && !d.verts.empty()) {
+            d.mesh = r.createSkinnedMesh(d.verts, d.indices);
+        } else if (!d.loaded && d.mesh >= 0) {  // la zona ya no la usa
+            r.freeSkinnedMesh(d.mesh);
+            d.mesh = -1;
+        }
+    }
 }
 
 namespace {

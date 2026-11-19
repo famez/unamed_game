@@ -93,15 +93,6 @@ const float kCoretoH = 2.5f, kIgrejaH = 15.0f, kBondinhoH = 3.5f, kQuadraH = 12.
 // El Morro da Urca y el Pão de Açúcar (cúpulas de roca en la bahía) con su explanada arriba.
 const Vec3 kUrca{18, 0, -92}, kPao{50, 0, -112};
 const float kUrcaTop = 22.0f, kPaoTop = 52.0f, kTopR = 10.0f;
-// Las tabernas, en las que se entra: la fachada en `at` (el borde de la plaza), hacia `out`.
-struct Tavern {
-    const char* prop;
-    Vec3 at, out;
-    float h;
-};
-const Tavern kTaverns[] = {{"taberna_arco", {13, 0, 12.2f}, {1, 0, 0}, kPlazaH}, {"taberna_lapa", kCoreto + Vec3{15, 0, 6}, {1, 0, 0}, kCoretoH}};
-constexpr float kTavernDoor = 0.35f + 7.0f - 0.2f;  // de la calle a la pared del fondo, por dentro
-constexpr float kTavernHalf = 3.5f - 0.2f;          // medio ancho por dentro
 
 // Rectángulo orientado (las casas), para no ponerlas unas encima de otras.
 struct Footprint {
@@ -172,24 +163,15 @@ void Game::buildRio() {
         {kBondinho, 10, -1, 0, kBondinhoH, Losas},
         {stationAt, 7, -1, 0, kBondinhoH, Fuera, false},          // bajo la estación
         {{96, 0, -24}, 5.5f, -1, 0, -1.4f, Sand, false, 1.5f, 2.5f, 0.3f},  // la laguna de la Prainha
-        {kUrca, kTopR, -1, 0, kUrcaTop, PiedraClara},  // las explanadas del teleférico
-        {kPao, kTopR, -1, 0, kPaoTop, PiedraClara},
+        {kUrca, kTopR, -1, 0, kUrcaTop, PiedraClara, false},  // las explanadas del teleférico (se pisan en su zona)
+        {kPao, kTopR, -1, 0, kPaoTop, PiedraClara, false},
     };
-    // Dentro de las tabernas también se anda (no cuentan para no poner casas encima).
-    std::vector<Area> rooms;
-    for (const Tavern& tv : kTaverns) {
-        bool alongX = std::fabs(tv.out.x) > 0.5f;
-        float a = (kTavernDoor + 1.0f) * 0.5f;  // desde un metro dentro de la plaza: sin costura en la puerta
-        rooms.push_back({tv.at + tv.out * (a - 1.0f), alongX ? a : kTavernHalf, alongX ? kTavernHalf : a, 0, tv.h, Losas, true, 4, 0.6f, 0.45f});
-    }
     auto dBeach = [](Vec3 p) { return sdBox(p, {0, 0, -23}, 19, 16, 4); };       // la caleta, hasta el agua
     auto dCove = [](Vec3 p) { return sdBox(p, {0, 0, -34}, 19, 27, 5); };        // con su trozo de mar
     auto dPrainha = [](Vec3 p) { return sdBox(p, {90, 0, -38}, 18, 8, 3); };      // la playa virgen
     auto dPrainhaSea = [](Vec3 p) { return sdBox(p, {90, 0, -46}, 20, 16, 5); };
-    auto walk = [&](Vec3 p, bool inside = true) {
+    auto walk = [&](Vec3 p) {
         float d = std::min(dBeach(p), dPrainha(p));
-        if (inside)
-            for (const Area& a : rooms) d = std::min(d, a.dist(p));
         for (const Lane& l : lanes) d = std::min(d, laneDist(l, p, nullptr));
         for (const Area& a : areas)
             if (a.walk) d = std::min(d, a.dist(p));
@@ -224,7 +206,6 @@ void Game::buildRio() {
                 cand(d, lh, l.wall, l.run, l.slope, l.look, true);
             }
             for (const Area& a : areas) cand(a.dist(p), a.h, a.wall, a.run, a.slope, a.look, a.walk);
-            for (const Area& a : rooms) cand(a.dist(p), a.h, a.wall, a.run, a.slope, a.look, true);
             if (inside < 1e8f) h = inside, look = insideLook;
             int dome = -1;
             // El fondo: morros que crecen lejos de las zonas, con la estatua en el más alto.
@@ -290,6 +271,7 @@ void Game::buildRio() {
             paintTerrain(ix, iz, col, m);
         }
     waterLevel_ = -0.25f;
+    seaReach_ = 500;  // al sur, la bahía se abre al mar: que llegue al horizonte (se ve desde los morros)
     auto ground = [&](float x, float z) { return t.heightAt(x, z); };
 
     // Casas que no pisen las calles ni a otras casas.
@@ -297,7 +279,7 @@ void Game::buildRio() {
     auto fits = [&](const Footprint& f) {
         for (float sx : {-1.0f, 0.0f, 1.0f})
             for (float sz : {-1.0f, 0.0f, 1.0f})
-                if (walk(f.corner(sx, sz), false) < 0.25f) return false;
+                if (walk(f.corner(sx, sz)) < 0.25f) return false;
         for (const Footprint& o : houses)
             for (float sx : {-1.0f, 0.0f, 1.0f})
                 for (float sz : {-1.0f, 0.0f, 1.0f})
@@ -439,7 +421,7 @@ void Game::buildRio() {
     // Al este, el armazém y el botequim (ver abajo, con quien atiende) y una casa entre ellos.
     shopfront("tienda_armazem", {13, 0, -1}, {1, 0, 0}, 3.0f);
     house("casa_favela_4", 15.6f, 5.2f);
-    shopfront(kTaverns[0].prop, kTaverns[0].at, kTaverns[0].out, 3.5f);
+    shopfront("taberna_arco", {13, 0, 12.2f}, {1, 0, 0}, 3.5f);
     // El punto focal: los arcos, con el tranvía parado encima; por el arco central se pasa a
     // la Rua dos Arcos.
     const float kArc = 0.65f;
@@ -485,7 +467,7 @@ void Game::buildRio() {
     // La botica al norte, el amolador al oeste y la taberna da Lapa al este; luego los sobrados.
     shopfront("tienda_botica", kCoreto + Vec3{6, 0, 12}, {0, 0, 1}, 3.0f);
     shopfront("tienda_amolador", kCoreto + Vec3{-15, 0, 6}, {-1, 0, 0}, 3.0f);
-    shopfront(kTaverns[1].prop, kTaverns[1].at, kTaverns[1].out, 3.5f);
+    shopfront("taberna_lapa", kCoreto + Vec3{15, 0, 6}, {1, 0, 0}, 3.5f);
     // Sobrados: primero los de las plazas (las fachadas que mandan), luego las calles.
     lineArea(areas[2], 0);
     lineArea(areas[3], 0);
@@ -568,33 +550,11 @@ void Game::buildRio() {
     // (Fuera de la caja de choque de la estación, que al ir girada es más grande que ella.)
     Vec3 sideU{-dirUrca.z, 0, dirUrca.x};
     cableLine(station, topU, station - dirUrca * 8.0f, topU + dirUrca * 9.0f + sideU * 2.2f, "Largo do Bondinho", "Morro da Urca");
-    cableLine(topU, topP, topU + dirUrca * 9.0f - sideU * 2.2f, topP + dirPao * 9.0f, "Morro da Urca", "Pan de Azúcar");
-    // Las explanadas: un pretil de hierro al borde (abierto por donde está la estación), bancos
-    // mirando a la bahía, faroles, matas y, en el Pão de Açúcar, una cápsula para quien sube.
-    for (auto [c, toStation] : {std::pair<Vec3, Vec3>{kUrca, -dirUrca}, std::pair<Vec3, Vec3>{kPao, -dirPao}}) {
-        for (int i = 0; i < 20; ++i) {
-            float a = float(i) / 20.0f * 2 * kPi;
-            Vec3 n{std::cos(a), 0, std::sin(a)};
-            if (dot(n, toStation) > 0.55f) continue;
-            addProp("valla", c + n * (kTopR - 0.5f), -a - kPi * 0.5f, 1.0f);
-        }
-        Vec3 out = -toStation, across{-out.z, 0, out.x};
-        for (float s : {-1.0f, 1.0f}) {
-            addProp("banca_parque", c + out * 7.0f + across * (s * 3.5f), std::atan2(out.x, out.z));
-            addProp("farol_colonial", c + across * (s * 7.5f));
-            addProp(s > 0 ? "arbusto_flores" : "arbusto", c + out * 3.5f + across * (s * 7.6f), rng.range(0, 6.28f));
-        }
-        addProp("almendro_playa", c + across * 6.0f - out * 2.5f, rng.range(0, 6.28f), 0.9f);
-    }
-    {
-        TreasureChest top;
-        top.pos = kPao + dirPao * 7.5f;
-        top.pos.y = ground(top.pos.x, top.pos.z);
-        top.yaw = std::atan2(-dirPao.x, -dirPao.z);
-        top.contents = {{ItemId::Elixir, 1}, {ItemId::GoldSpore, 2}};
-        top.munny = 60;
-        chests_.push_back(top);
-    }
+    cables_.back().toZone = LevelId::Urca;  // arriba es otra zona (levels_cimas.cpp): se carga al llegar
+    cables_.back().toArrival = arrival::kUrcaFromBay;
+    (void)topP;
+    // Las cimas (Urca y el Pão de Açúcar) son otras zonas: desde aquí solo se ven sus morros con
+    // las estaciones arriba (buildSummit, al final).
 
     // --- La Prainha: la playa virgen, con su laguna --------------------------------------
     for (Vec3 p : {Vec3{76, 0, -36}, Vec3{80, 0, -33}, Vec3{86, 0, -35.5f}, Vec3{93, 0, -32}, Vec3{99, 0, -35}, Vec3{104, 0, -33},
@@ -662,36 +622,36 @@ void Game::buildRio() {
     addNpc("deshollinadora", {-56, 0, 26}, 3);
     addNpc("guardia_apagado", kBondinho + Vec3{-3, 0, -3}, 2);
     addNpc("surfista", {92, 0, -40}, 6);
-    // Quien atiende las tiendas (entre el mostrador y la puerta) y las tabernas (dentro, detrás
-    // de la barra: a 2,6 m del centro de la sala hacia el fondo).
+    // Quien atiende las tiendas (entre el mostrador y la puerta). En las tabernas se entra: son
+    // otras zonas (levels_interiores.cpp), con su tabernero dentro.
     auto keeper = [&](const char* model, Vec3 at, Vec3 out, float inFront, const char* name, NpcRole role,
                       std::vector<std::string> lines, std::vector<ShopItem> stock = {}) {
         addNpc(model, at - out * inFront, 0.4f, name, role, std::move(lines));
-        Npc& n = npcs_.back();
-        n.stock = std::move(stock);
-        // Bajo techo: a la altura de la calle de fuera (no en el tejado).
-        Vec3 p = n.home;
-        p.y = groundHeight(at - out * 0.5f + Vec3{0, 30, 0});
-        n.home = n.target = p;
-        n.body.teleport(p, std::atan2(-out.x, -out.z));
+        npcs_.back().stock = std::move(stock);
+        npcs_.back().body.yaw = std::atan2(-out.x, -out.z);
     };
     keeper("aceitero", {13, 0, -1}, {1, 0, 0}, 0.1f, "Seu Candido, armazém", NpcRole::Shop,
            {"Velas, cerillas, células. Lo que alumbra se vende aquí.", "Desde que se paró la hora no he cerrado. Tampoco ha venido nadie."},
            {{ItemId::Potion, 25}, {ItemId::HiPotion, 70}, {ItemId::Ether, 45}});
-    keeper("cocinero", kTaverns[0].at, kTaverns[0].out, -(3.85f + 2.6f), "Seu Ademar, botequim", NpcRole::Inn,
-           {"Siéntate. La cerveza está tibia, pero es cerveza.", "Aquí el atardecer dura lo que dura la conversación. O sea, siempre.",
-            "Duerme en el banco del fondo. Nadie te va a despertar."});
     keeper("recolectora", kCoreto + Vec3{6, 0, 12}, {0, 0, 1}, 0.1f, "Dona Íris, botica", NpcRole::Shop,
            {"Hierbas del morro y luz embotellada. No mezcles las dos.", "Cada frasco lo llené antes de que se parara el sol. No quedan muchos."},
            {{ItemId::HiPotion, 65}, {ItemId::Ether, 40}, {ItemId::Elixir, 220}});
     keeper("oficinista", kCoreto + Vec3{-15, 0, 6}, {-1, 0, 0}, 0.1f, "Amolador", NpcRole::Shop,
            {"Una hoja de luz también se mella. Se nota en el sonido.", "Piezas de Grises, las compro y las vendo. No pregunto de dónde salen."},
            {{ItemId::Sharpener, 160}, {ItemId::ShinyShard, 30}, {ItemId::WingDust, 35}, {ItemId::GoldSpore, 40}});
-    keeper("cafetero", kTaverns[1].at, kTaverns[1].out, -(3.85f + 2.6f), "Joca, taberna da Lapa", NpcRole::Inn,
-           {"Aquí se toca samba hasta que se haga de noche. Llevamos mucho tocando.",
-            "Quédate. El que se va de la Lapa siempre vuelve, aunque sea a por el sombrero."});
     heroStart_ = {0, kPlazaH, -4};
     heroStartYaw_ = 0;  // de cara a la plaza y a los arcos; la caleta, a la espalda
+    // Las llegadas (arrival::kRio…): el principio, la salida de cada taberna y el andén del
+    // teleférico (al volver de Urca). Las puertas de las tabernas, en la acera de su fachada.
+    arrivals_.push_back({heroStart_, heroStartYaw_});
+    for (auto [at, out, to, label] : {std::tuple<Vec3, Vec3, LevelId, const char*>{{13, 0, 12.2f}, {1, 0, 0}, LevelId::Botequim, "Entrar · Botequim"},
+                                      {kCoreto + Vec3{15, 0, 6}, {1, 0, 0}, LevelId::TabernaLapa, "Entrar · Taberna da Lapa"}}) {
+        Vec3 door = at - out * 0.6f, outside = at - out * 1.6f;
+        door.y = ground(door.x, door.z);
+        doors_.push_back({door, to, arrival::kInside, label});
+        arrivals_.push_back({{outside.x, ground(outside.x, outside.z), outside.z}, std::atan2(-out.x, -out.z)});
+    }
+    arrivals_.push_back({cables_[0].stopA, cables_[0].yawA});
     addPortal({7.5f, kPlazaH, 2});
     addPortal(kMirador + Vec3{0.5f, kMiradorH, 3});
     addPortal(kCoreto + Vec3{-9, kCoretoH, 4});
@@ -708,5 +668,293 @@ void Game::buildRio() {
     }
     LevelPart explore{"Ciudad de la Bahía", "Enciende los seis nodos de la bahía", PartKind::Nodes, "", 6, {}, nodeSpots[0], {}, "", ""};
     parts_ = {explore};
+    nextLevel_ = LevelId::Rio;
+}
+
+// --- Las cimas: el Morro da Urca y el Pão de Açúcar ----------------------------------------
+// Cada una es su propia zona, a la que se llega en el teleférico. Se construye la bahía entera
+// como telón de fondo (el relieve, el mar y lo grande: casas, estaciones, los arcos, la estatua)
+// y se quita todo lo que se juega o se ve de cerca (habitantes, farolas, nodos, lo pequeño: sus
+// piezas se sueltan). El morro se rehace más grande, con lo que se pisa: la explanada de la
+// estación, senderos que bajan por la ladera y lo que hay al final de cada uno.
+//   - Urca: la explanada (el puesto de Dona Cida), el mirante sobre la ciudad y, abajo, las
+//     ruinas de la Fortaleza tomadas por los Grises (y su cápsula).
+//   - Pão de Açúcar: la explanada (el guarda del cume), el Mirante do Céu y la Agulha, una
+//     aguja de roca a la que se sube por una escalera de gato: arriba, la cápsula de la cima.
+
+void Game::buildUrca() { buildSummit(false); }
+void Game::buildPaoAcucar() { buildSummit(true); }
+
+void Game::buildSummit(bool pao) {
+    buildRio();
+    levelName_ = pao ? "Pan de Azúcar" : "Morro da Urca";
+    npcs_.clear();
+    nodes_.clear();
+    parts_.clear();
+    chests_.clear();
+    portals_.clear();
+    doors_.clear();
+    arrivals_.clear();
+    cables_.clear();
+    lamps_.clear();
+    interacts_.clear();
+    encounters_.clear();
+    lanterns_.clear();
+    wildSpawns_ = false;
+    const Vec3 c = pao ? kPao : kUrca;
+    const float top = pao ? kPaoTop : kUrcaTop;
+    {  // De la bahía, solo lo grande y lejos del morro; lo demás se suelta al acabar (endZone).
+        PropLibrary& lib = propLibrary();
+        std::vector<PropInstance> keep;
+        for (const PropInstance& p : props_)
+            if (p.radius >= 3.0f && length(flat(p.center - c)) > 14.0f) keep.push_back(p);
+        props_ = std::move(keep);
+        lib.beginZone();
+        for (const PropInstance& p : props_) lib[size_t(p.def)].used = true;
+    }
+    Terrain& t = const_cast<Terrain&>(*world_.terrain);
+    auto ground = [&](float x, float z) { return t.heightAt(x, z); };
+    const Vec3 dirUrca = normalize(flat(kUrca - kBondinho)), dirPao = normalize(flat(kPao - kUrca));
+    const Vec3 u = pao ? dirPao : dirUrca, v{-u.z, 0, u.x};
+    // Un punto alrededor del centro: `deg` grados desde `u` (180: hacia la estación) a `q` m.
+    auto polar = [&](float deg, float q) {
+        float a = deg * kPi / 180.0f;
+        return c + u * (std::cos(a) * q) + v * (std::sin(a) * q);
+    };
+    auto lp = [&](float deg, float q, float h, float r) {
+        Vec3 p = polar(deg, q);
+        return LanePoint{p.x, p.z, h, r};
+    };
+    // Lo que se pisa: la explanada, los miradores y el final de cada sendero; los senderos.
+    std::vector<Area> areas;
+    std::vector<Lane> trails;
+    Vec3 mirante, fin;
+    if (!pao) {
+        mirante = polar(-95, 16);
+        fin = polar(15, 18);
+        areas = {{c, kTopR, -1, 0, top, PiedraClara}, {mirante, 4.5f, -1, 0, 16, PiedraClara}, {fin, 5.5f, -1, 0, 9.5f, Fuera}};
+        trails = {{{lp(-60, 9.0f, top, 1.4f), lp(-80, 13, 19, 1.3f), lp(-95, 15, 16.2f, 1.3f)}, Tierra},
+                  {{lp(-95, 17, 16, 1.3f), lp(-50, 18.5f, 13, 1.3f), lp(-15, 19.5f, 10.5f, 1.3f), lp(15, 17, 9.5f, 1.4f)}, Tierra}};
+    } else {
+        mirante = polar(120, 16);
+        fin = polar(40, 19);
+        areas = {{c, kTopR, -1, 0, top, PiedraClara}, {mirante, 4.5f, -1, 0, 46, PiedraClara}, {fin, 5.0f, -1, 0, 41, PiedraClara}};
+        trails = {{{lp(70, 9.0f, top, 1.4f), lp(95, 13, 49.5f, 1.3f), lp(118, 14.5f, 46.3f, 1.3f)}, Tierra},
+                  {{lp(118, 17.5f, 46, 1.3f), lp(85, 19.5f, 43.5f, 1.3f), lp(55, 19.5f, 41.3f, 1.3f), lp(40, 18, 41, 1.4f)}, Tierra}};
+    }
+    auto walk = [&](Vec3 p) {
+        float d = 1e9f;
+        for (const Area& a : areas) d = std::min(d, a.dist(p));
+        for (const Lane& l : trails) d = std::min(d, laneDist(l, p, nullptr));
+        return d;
+    };
+    // El morro, más ancho que el que se ve desde la bahía, con lo que se pisa tallado en él.
+    const float amp = pao ? 56.0f : 26.0f, radius = pao ? 30.0f : 27.0f;
+    for (int iz = 0; iz < t.nz; ++iz)
+        for (int ix = 0; ix < t.nx; ++ix) {
+            float x = t.x0 + float(ix) * t.cell, z = t.z0 + float(iz) * t.cell;
+            Vec3 p{x, 0, z};
+            size_t idx = size_t(iz) * size_t(t.nx) + size_t(ix);
+            t.fence[idx] = walk(p);
+            float q = length(flat(p - c));
+            if (q > radius) continue;
+            float dome = amp * std::pow(1.0f - (q / radius) * (q / radius), 0.55f) + 1.2f * fbm(x / 6.0f, z / 6.0f, 31);
+            float h = dome, inside = 1e9f;
+            Look look = Fuera;
+            auto cand = [&](float d, float base, Look lk) {
+                if (d <= 0 && base < inside) inside = base, look = lk;
+                h = std::min(h, base + rise(d, 5, 2.5f, 0.6f));
+            };
+            for (const Area& a : areas) cand(a.dist(p), a.h, a.look);
+            for (const Lane& l : trails) {
+                float lh = 0, d = laneDist(l, p, &lh);
+                cand(d, lh, l.look);
+            }
+            bool walkable = inside < 1e8f;
+            if (walkable) h = inside;
+            h = std::max(h, std::min(t.at(ix, iz), 0.0f));  // el fondo del mar, al pie
+            t.at(ix, iz) = h;
+            float n = noise(x / 5.0f, z / 5.0f, 21) * 0.5f + 0.5f, cob = noise(x * 1.4f, z * 1.4f, 4) * 0.5f + 0.5f;
+            uint32_t col;
+            Material m = Material::Stone;
+            if (walkable && look == PiedraClara) col = mixRgb(rgba(200, 186, 160), rgba(176, 162, 140), cob);
+            else if (walkable && look == Tierra) col = mixRgb(rgba(140, 104, 76), rgba(120, 90, 66), cob), m = Material::Cloth;
+            else if (walkable) col = mixRgb(rgba(70, 120, 58), rgba(96, 140, 70), n), m = Material::Grass;  // el claro
+            else {
+                col = mixRgb(rgba(48, 104, 52), rgba(78, 138, 62), n), m = Material::Grass;
+                if (h > 1 && q > radius * 0.55f && n > 0.35f) col = mixRgb(rgba(118, 108, 98), rgba(150, 140, 126), n), m = Material::Stone;  // la roca pelada
+            }
+            paintTerrain(ix, iz, col, m);
+        }
+    ++terrainVersion_;
+    auto at = [&](Vec3 p) { return Vec3{p.x, ground(p.x, p.z), p.z}; };
+    auto yawTo = [](Vec3 from, Vec3 to) {
+        Vec3 d = flat(to - from);
+        return std::atan2(d.x, d.z);
+    };
+
+    // La estación de esta cima (la de la otra y la de abajo ya están: son de la bahía).
+    const Vec3 station{kBondinho.x + dirUrca.x * 15.5f, kBondinhoH, kBondinho.z + dirUrca.z * 15.5f};
+    const Vec3 topU = kUrca - dirUrca * 4.0f + Vec3{0, kUrcaTop, 0}, topP = kPao - dirPao * 4.0f + Vec3{0, kPaoTop, 0};
+    const Vec3 sideU{-dirUrca.z, 0, dirUrca.x};
+    addProp("estacion_teleferico_morro", pao ? topP : topU, pao ? std::atan2(-dirPao.x, -dirPao.z) : std::atan2(-dirUrca.x, -dirUrca.z), 1.0f,
+            false);
+    auto line = [&](Vec3 a, Vec3 b, Vec3 stop, const char* nameA, const char* nameB, LevelId to, int arrival) {
+        CableLine l;
+        l.a = a + Vec3{0, 9, 0};
+        l.b = b + Vec3{0, 9, 0};
+        l.side = normalize(Vec3{b.z - a.z, 0, a.x - b.x}) * 1.6f;
+        l.stopA = at(stop);
+        l.stopB = at(b);
+        l.yawA = yawTo(a, stop);
+        l.nameA = nameA;
+        l.nameB = nameB;
+        l.toZone = to;
+        l.toArrival = arrival;
+        cables_.push_back(l);
+        arrivals_.push_back({l.stopA, l.yawA});  // y quien llega por esta línea, aparece en su andén
+    };
+    if (!pao) {
+        line(topU, station, topU + dirUrca * 9.0f + sideU * 2.2f, "Morro da Urca", "Largo do Bondinho", LevelId::Rio, arrival::kRioCable);
+        line(topU, topP, topU + dirUrca * 9.0f - sideU * 2.2f, "Morro da Urca", "Pan de Azúcar", LevelId::PaoAcucar, arrival::kPaoFromUrca);
+    } else {
+        line(topP, topU, topP + dirPao * 9.0f, "Pan de Azúcar", "Morro da Urca", LevelId::Urca, arrival::kUrcaFromPao);
+    }
+    heroStart_ = arrivals_[0].pos;
+    heroStartYaw_ = arrivals_[0].yaw;
+
+    Rng rng{pao ? 5203u : 5101u};
+    // Pretil de hierro al borde de una explanada, abierto hacia `gaps` (direcciones desde su centro).
+    auto railing = [&](Vec3 ctr, float r, std::vector<Vec3> gaps, float gap = 0.55f) {
+        int n = int(2 * kPi * r / 2.6f);
+        for (int i = 0; i < n; ++i) {
+            float a = float(i) / float(n) * 2 * kPi;
+            Vec3 dn{std::cos(a), 0, std::sin(a)};
+            bool open = false;
+            for (Vec3 g : gaps) open = open || dot(dn, normalize(flat(g))) > gap;
+            if (!open) addProp("valla", ctr + dn * (r - 0.5f), -a - kPi * 0.5f, 1.0f);
+        }
+    };
+    auto faroles = [&](const Lane& l, float every) {
+        float acc = every * 0.5f;
+        for (size_t i = 0; i + 1 < l.pts.size(); ++i) {
+            Vec3 a{l.pts[i].x, 0, l.pts[i].z}, b{l.pts[i + 1].x, 0, l.pts[i + 1].z};
+            float len = length(b - a);
+            Vec3 d = (b - a) * (1.0f / len), side{-d.z, 0, d.x};
+            for (; acc < len; acc += every) addProp("farol_camino", a + d * acc + side * (l.pts[i].r + 0.4f), 0);
+            acc -= len;
+        }
+    };
+    // La ladera: selva de almendros, cocoteros y matas donde no se pisa (ni hay roca pelada).
+    for (int i = 0; i < (pao ? 70 : 60); ++i) {
+        float a = rng.range(0, 2 * kPi), q = rng.range(6, radius * 0.92f);
+        Vec3 p = c + Vec3{std::cos(a) * q, 0, std::sin(a) * q};
+        float g = ground(p.x, p.z);
+        if (walk(p) < 1.6f || g < 1.0f || 1.0f - t.normalAt(p.x, p.z).y > 0.45f) continue;
+        int k = rng.next() < 0.4f ? 0 : rng.next() < 0.5f ? 1 : 2;
+        addProp(k == 0 ? "almendro_playa" : k == 1 ? (rng.next() < 0.5f ? "arbusto_flores" : "arbusto") : "cocotero", p, rng.range(0, 6.28f),
+                rng.range(0.8f, 1.15f));
+    }
+    // Lo que hay en la explanada y en el mirante.
+    Vec3 toStation = -u, toTrail = trails[0].pts.size() ? Vec3{trails[0].pts[0].x, 0, trails[0].pts[0].z} - c : u;
+    railing(c, kTopR, {toStation, toTrail});
+    Vec3 out = u, across = v;
+    for (float s : {-1.0f, 1.0f}) {
+        addProp("banca_parque", c + out * 6.5f + across * (s * 3.5f), std::atan2(out.x, out.z));
+        addProp("farol_colonial", c + across * (s * 7.5f) + out * 1.0f);
+    }
+    addProp("almendro_playa", c - across * 6.0f + out * 3.0f, rng.range(0, 6.28f), 0.9f);
+    Vec3 toMirante = flat(mirante - c);
+    railing(mirante, 4.5f, {-toMirante + (Vec3{trails[0].pts.back().x, 0, trails[0].pts.back().z} - mirante) * 0.2f}, 0.35f);
+    addProp("banca_parque", mirante + normalize(toMirante) * 1.8f + normalize(Vec3{-toMirante.z, 0, toMirante.x}) * 1.4f,
+            std::atan2(toMirante.x, toMirante.z));
+    addProp("farol_colonial", mirante - normalize(Vec3{-toMirante.z, 0, toMirante.x}) * 2.6f);
+    {  // un catalejo de monedas, de cara a la ciudad
+        Vec3 g = at(mirante + normalize(toMirante) * 2.6f - normalize(Vec3{-toMirante.z, 0, toMirante.x}) * 1.2f);
+        Mat4 id = Mat4::identity();
+        addDecor(id, g + Vec3{0, 0.55f, 0}, {0.06f, 0.55f, 0.06f}, rgba(60, 64, 70), Material::Metal, false);
+        Mat4 m = translate(g + Vec3{0, 1.2f, 0}) * rotateY(std::atan2(toMirante.x, toMirante.z));
+        addDecor(m, {0, 0, 0.1f}, {0.09f, 0.09f, 0.3f}, rgba(196, 160, 72), Material::Metal, false);
+        propSolids_.push_back({g - Vec3{0.2f, 0, 0.2f}, g + Vec3{0.2f, 1.3f, 0.2f}});
+    }
+    for (const Lane& l : trails) faroles(l, 7.0f);
+
+    if (!pao) {
+        // Dona Cida y su puesto de agua de coco, en la explanada.
+        Vec3 kiosk = c + across * 4.0f - out * 1.5f;
+        addProp("quiosco_playa", kiosk, std::atan2(-across.x, -across.z));
+        addNpc("vendedora", kiosk - across * 2.0f, 0.4f, "Dona Cida, agua de coco", NpcRole::Shop,
+               {"Coco frío del morro. Bueno, frío no: del tiempo que hacía.", "Abajo, en la Fortaleza, se han metido los Grises. Ya nadie baja."});
+        npcs_.back().stock = {{ItemId::Potion, 22}, {ItemId::Ether, 40}, {ItemId::HiPotion, 65}};
+        npcs_.back().body.teleport(npcs_.back().body.body.pos, std::atan2(-across.x, -across.z) + kPi);
+        addNpc("surfista", mirante + Vec3{0.5f, 0, 0.5f}, 1.5f, "Bruno", NpcRole::Townsfolk,
+               {"Desde aquí se ve la ola parada en la Prainha. Lleva así desde que se paró la hora.",
+                "La bajada a la Fortaleza es por ese sendero. Yo de ti no iría sola."});
+        // La Fortaleza: muros rotos de piedra, dos cañones y su cápsula, tomada por los Grises.
+        Vec3 fu = normalize(flat(fin - c)), fv{-fu.z, 0, fu.x};
+        float fy = 9.5f;
+        uint32_t stone = rgba(150, 140, 126);
+        for (auto [o, len, hgt] : {std::tuple<float, float, float>{-1, 3.5f, 1.8f}, {1, 2.5f, 1.2f}}) {
+            Vec3 wc = fin + fu * 4.6f + fv * (o * 2.6f);
+            addBlock({wc.x, fy + hgt * 0.5f, wc.z}, {std::fabs(fv.x) * len * 0.5f + 0.35f, hgt * 0.5f, std::fabs(fv.z) * len * 0.5f + 0.35f}, stone);
+        }
+        for (float s : {-1.0f, 1.0f}) {
+            Vec3 wc = fin + fv * (s * 4.4f) + fu * 1.0f;
+            addBlock({wc.x, fy + 0.8f, wc.z}, {std::fabs(fu.x) * 1.4f + 0.35f, 0.8f, std::fabs(fu.z) * 1.4f + 0.35f}, stone);
+            Vec3 cn = fin + fu * 3.4f + fv * (s * 1.6f);
+            Mat4 m = translate({cn.x, fy + 0.55f, cn.z}) * rotateY(std::atan2(fu.x, fu.z));
+            addDecor(m, {0, 0, 0.2f}, {0.16f, 0.16f, 0.75f}, rgba(46, 46, 50), Material::Metal, false);
+            addDecor(m, {0, -0.3f, 0}, {0.3f, 0.2f, 0.4f}, rgba(96, 66, 44), Material::Cloth, false);
+        }
+        TreasureChest chest;
+        chest.pos = at(fin + fu * 2.2f);
+        chest.yaw = std::atan2(-fu.x, -fu.z);
+        chest.contents = {{ItemId::HiPotion, 2}, {ItemId::ShinyShard, 3}};
+        chest.munny = 80;
+        chests_.push_back(chest);
+        Vec3 e1 = at(fin + fv * 2.5f), e2 = at(fin - fv * 2.5f), e3 = at(fin + fu * 1.5f), e4 = at(fin - fu * 2.0f);
+        encounters_ = {{"urca_fortaleza", AABB{fin - Vec3{6, 2, 6} + Vec3{0, fy, 0}, fin + Vec3{6, 5, 6} + Vec3{0, fy, 0}},
+                        {{{EnemyKind::Hound, e1}, {EnemyKind::Hound, e2}, {EnemyKind::Dazzled, e3}},
+                         {{EnemyKind::Brute, e3}, {EnemyKind::Watcher, e4}, {EnemyKind::Hound, e1}}},
+                        {}, "", ""}};
+        LevelPart part;
+        part.title = "Morro da Urca";
+        part.objective = "Echa a los Grises de la Fortaleza";
+        part.kind = PartKind::Encounter;
+        part.target = "urca_fortaleza";
+        part.marker = at(fin) + Vec3{0, 1.5f, 0};
+        parts_ = {part};
+    } else {
+        addNpc("relojero", c + across * 3.0f + out * 2.0f, 1.0f, "El guarda del cume", NpcRole::Townsfolk,
+               {"Subí a dar cuerda al faro de la cima. Desde entonces es la misma hora aquí arriba que abajo.",
+                "La Agulha, la aguja de piedra de la ladera: arriba quedó la caja del guarda. Se sube por la escalera."});
+        // La Agulha: una aguja de roca en el saliente, con la escalera de gato por la cara que da
+        // al sendero y la cápsula de la cima arriba. Los Grises guardan el saliente.
+        Vec3 fu = normalize(flat(fin - c)), fv{-fu.z, 0, fu.x};
+        const float base = 41, spire = 47.5f;
+        Vec3 sp = fin + fu * 1.6f;
+        addBlock({sp.x, (base + spire) * 0.5f, sp.z}, {1.3f, (spire - base) * 0.5f, 1.3f}, rgba(140, 130, 118));
+        addBlock({sp.x, spire + 0.15f, sp.z}, {1.5f, 0.15f, 1.5f}, rgba(170, 160, 144));
+        Vec3 face = std::fabs(fu.x) > std::fabs(fu.z) ? Vec3{fu.x > 0 ? -1.0f : 1.0f, 0, 0} : Vec3{0, 0, fu.z > 0 ? -1.0f : 1.0f};
+        addLadder(Vec3{sp.x, base, sp.z} + face * 1.3f, spire + 0.3f, face);
+        TreasureChest chest;
+        chest.pos = {sp.x, spire + 0.3f, sp.z};
+        chest.yaw = std::atan2(face.x, face.z);
+        chest.contents = {{ItemId::Elixir, 1}, {ItemId::GoldSpore, 2}};
+        chest.munny = 120;
+        chests_.push_back(chest);
+        Vec3 e1 = at(fin + fv * 2.8f), e2 = at(fin - fv * 2.8f), e3 = at(fin - fu * 2.5f);
+        encounters_ = {{"pao_agulha", AABB{fin - Vec3{6, 2, 6} + Vec3{0, base, 0}, fin + Vec3{6, 6, 6} + Vec3{0, base, 0}},
+                        {{{EnemyKind::Watcher, e1}, {EnemyKind::Watcher, e2}, {EnemyKind::Dazzled, e3}},
+                         {{EnemyKind::Hound, e1}, {EnemyKind::Hound, e2}, {EnemyKind::Brute, e3}}},
+                        {}, "", ""}};
+        LevelPart part;
+        part.title = "Pan de Azúcar";
+        part.objective = "Sube a la Agulha";
+        part.kind = PartKind::Encounter;
+        part.target = "pao_agulha";
+        part.marker = Vec3{sp.x, spire + 1.5f, sp.z};
+        parts_ = {part};
+    }
     nextLevel_ = LevelId::Rio;
 }
