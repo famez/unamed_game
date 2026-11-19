@@ -21,6 +21,7 @@ find_package(Threads REQUIRED)  # el audio mezcla en su propio hilo
 set(LOGIC_SOURCES
     src/actors/skeleton.cpp
     src/actors/character.cpp
+    src/actors/hero_clips.cpp
     src/actors/physics.cpp
     src/game/items.cpp
     src/actors/enemy.cpp

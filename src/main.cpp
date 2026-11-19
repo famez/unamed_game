@@ -9,6 +9,7 @@
 #include "dev/viewer.h"
 #include "ui/level_select.h"
 #include "ui/menu.h"
+#include "actors/hero_clips.h"
 #include "render/hero_model.h"
 #include "render/models.h"
 #include "core/platform.h"
@@ -197,6 +198,8 @@ int main(int argc, char** argv) {
     double modelStart = platform::timeSeconds();
     buildModels(renderer);
     loadHeroModels(renderer, assetDir);  // Vela y Hollín (.glb); sin ellos, el modelo de siempre
+    if (std::string error; !loadHeroClips(std::string(assetDir) + "/models/vela_animaciones.glb", error))
+        std::fprintf(stderr, "Animaciones de Vela: %s (se usan las procedurales)\n", error.c_str());
     loadCharacterGlbs(renderer, std::string(assetDir) + "/models");  // enemigos, Ilse y el lobo
     propLibrary().loadDir(std::string(assetDir) + "/props");          // piezas del escenario
     loadInhabitants(renderer, std::string(assetDir) + "/models/habitantes");

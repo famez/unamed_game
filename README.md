@@ -23,6 +23,15 @@ palabras (`assets/story/capitulo1.txt`, formato en `src/game/story.h` y `src/gam
 
 Para escribir escenas: `./build/game --escena eco_alba` salta la intro y la reproduce.
 
+## Animaciones de Vela
+
+Correr, caminar, saltar, el combo de la espada (tajo, revés y golpe al suelo con salto) y la
+voltereta están hechos a mano en `assets/models/vela_animaciones.glb` (fuentes en
+`tools/vela_animaciones/`). Al arrancar se pasan al esqueleto del juego
+(`src/actors/hero_clips.cpp`) y se mezclan con la animación procedural: los ciclos van a la
+fase de las pisadas, los golpes conservan sus tiempos de impacto y la voltereta su duración.
+Sin el fichero, todo vuelve a ser procedural. Hollín, con el mismo esqueleto, las comparte.
+
 ## Música y sonido
 
 Todo está sintetizado por código (`src/audio/synth.cpp`), sin ficheros de audio en el

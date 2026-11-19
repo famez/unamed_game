@@ -4,6 +4,7 @@
 #define private public  // solo para el test: acceso al estado interno
 #include "game/game.h"
 #undef private
+#include "actors/hero_clips.h"
 #include "audio/barks.h"
 #include "audio/synth.h"
 #include "game/props.h"
@@ -74,7 +75,84 @@ Enemy& addEnemy(Game& g, EnemyKind k, Vec3 pos, AiState state = AiState::Idle) {
     return g.enemies_.back();
 }
 
+// Matriz mundo de un nodo del .glb en el instante `t` de una animación (independiente de
+// hero_clips.cpp: lo que el juego tiene que reproducir).
+Mat4 glbWorldAt(const GlbFile& f, const GlbAnimation& a, int node, float t) {
+    if (node < 0) return Mat4::identity();
+    Mat4 local = f.nodes[size_t(node)].local;
+    Vec3 tr = translationOf(local);
+    Mat4 rot = local;
+    rot.m[12] = rot.m[13] = rot.m[14] = 0;
+    for (const GlbChannel& ch : a.channels) {
+        if (ch.node != node) continue;
+        size_t i = 0;
+        while (i + 1 < ch.times.size() && ch.times[i + 1] <= t) ++i;
+        size_t j = std::min(i + 1, ch.times.size() - 1);
+        float u = j > i ? clampf((t - ch.times[i]) / (ch.times[j] - ch.times[i]), 0, 1) : 0.0f;
+        int n = ch.path == GlbChannel::Rotation ? 4 : 3;
+        float v[4], d = 0;
+        for (int k = 0; k < n; ++k) d += ch.values[i * n + k] * ch.values[j * n + k];
+        for (int k = 0; k < n; ++k) v[k] = ch.values[i * n + k] + ((n == 4 && d < 0 ? -1 : 1) * ch.values[j * n + k] - ch.values[i * n + k]) * u;
+        if (ch.path == GlbChannel::Translation) tr = {v[0], v[1], v[2]};
+        if (ch.path == GlbChannel::Rotation) {
+            float l = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2] + v[3] * v[3]);
+            float x = v[0] / l, y = v[1] / l, z = v[2] / l, w = v[3] / l;
+            rot = Mat4::identity();
+            rot.m[0] = 1 - 2 * (y * y + z * z), rot.m[1] = 2 * (x * y + z * w), rot.m[2] = 2 * (x * z - y * w);
+            rot.m[4] = 2 * (x * y - z * w), rot.m[5] = 1 - 2 * (x * x + z * z), rot.m[6] = 2 * (y * z + x * w);
+            rot.m[8] = 2 * (x * z + y * w), rot.m[9] = 2 * (y * z - x * w), rot.m[10] = 1 - 2 * (x * x + y * y);
+        }
+    }
+    return glbWorldAt(f, a, f.nodes[size_t(node)].parent, t) * translate(tr) * rot;
+}
+
 int main() {
+    {  // Animaciones de Vela (vela_animaciones.glb): pasadas al esqueleto del juego, las manos,
+        // los pies y la cabeza quedan donde los pone el .glb en cada instante de cada clip
+        const std::string path = std::string(GAME_ASSET_DIR) + "/models/vela_animaciones.glb";
+        std::string err;
+        bool ok = loadHeroClips(path, err);
+        CHECK(ok, "vela_animaciones.glb: cinco clips leídos %s", err.c_str());
+        GlbFile f;
+        f.load(path, err);
+        const char* names[] = {"correr", "caminar", "saltar", "combo"};
+        const std::pair<int, const char*> ends[] = {{WristR, "Hand_R"}, {WristL, "Hand_L"}, {AnkleL, "Foot_L"},
+                                                    {AnkleR, "Foot_R"}, {Head, "Head"}, {ElbowR, "LowerArm_R"}};
+        float worst = 0;
+        for (int c = 0; ok && c < 4; ++c) {
+            const GlbAnimation* a = nullptr;
+            for (const GlbAnimation& x : f.animations)
+                if (x.name == names[c]) a = &x;
+            for (float t = 0; a && t < a->duration; t += 0.037f) {
+                Mat4 w[JointCount];
+                computeWorldMatrices(sampleHeroClip(HeroClip(c), t).pose, Mat4::identity(), w);
+                for (auto [joint, node] : ends)
+                    worst = std::max(worst, length(translationOf(w[joint]) - translationOf(glbWorldAt(f, *a, f.find(node), t))));
+            }
+        }
+        CHECK(ok && worst < 0.01f, "animaciones de Vela: manos, pies y cabeza donde los pone el .glb (error máximo %.1f mm)", worst * 1000);
+        float spin = sampleHeroClip(HeroClip::Roll, 0.9f).spin;
+        CHECK(std::fabs(spin - 2 * kPi) < 0.05f, "voltereta: la cadera da una vuelta entera (%.2f rad)", spin);
+        // Con los clips, la voltereta del juego acaba de pie y el combo de la hoja sigue
+        // golpeando a su ritmo (los clips no cambian los tiempos).
+        Character h;
+        World flat;
+        flat.solids.push_back(boxFromCenter({0, -0.5f, 0}, {50, 0.5f, 50}));
+        for (int i = 0; i < 30; ++i) h.update(dt, {}, false, flat);
+        h.dodge({0, 0, 1});
+        for (int i = 0; i < 40; ++i) h.update(dt, {}, false, flat);
+        Mat4 w[JointCount];
+        computeWorldMatrices(h.pose, h.modelMatrix(), w);
+        float headY = translationOf(w[Head]).y - h.body.pos.y;
+        CHECK(!h.rolling() && headY > 1.4f, "con los clips, tras la voltereta queda de pie (cabeza a %.2f m)", headY);
+        int impacts = 0;
+        for (int i = 0; i < 240; ++i) {
+            if (i % 12 == 0) h.attack(0, 0);
+            h.update(dt, {}, false, flat);
+            impacts += h.takeImpact() != Move::None;
+        }
+        CHECK(impacts >= 4, "con los clips, el combo de la hoja encadena sus golpes (%d impactos en 4 s)", impacts);
+    }
     {  // Terreno con relieve: se baja una cuesta andando sin despegarse, y la rejilla de cajas
         // encuentra lo mismo que mirar todas
         auto t = std::make_shared<Terrain>();
