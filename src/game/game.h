@@ -232,7 +232,7 @@ struct Companion {
 // Las últimas son zonas a las que se llega desde otra (no salen en el selector): los interiores
 // de las tabernas de la bahía, las cimas del teleférico y la gruta del campo.
 enum class LevelId {
-    Plaza, Mercado, Puente, Prueba, Selva, Cueva, Callejones, Campo, Neon, Cafetero, Rio, Copas, Andamios,
+    Plaza, Mercado, Puente, Prueba, Selva, Cueva, Callejones, Campo, Neon, Cafetero, Rio, Copas, Andamios, Cumbres,
     Botequim, TabernaLapa, Urca, PaoAcucar, Gruta, Count
 };
 
@@ -758,6 +758,7 @@ private:
     void buildRio();
     void buildCopas();
     void buildAndamios();
+    void buildCumbres();
     void buildBotequim();
     void buildTabernaLapa();
     void buildUrca();
@@ -1031,6 +1032,8 @@ private:
     float seaReach_ = 0;        // el agua sigue tanto más allá del borde del relieve (el mar hasta el horizonte)
     float seaWaves_ = 0.04f;    // altura de las olas (el mar de la bahía; los ríos y lagos, casi quietos)
     float splashTimer_ = 0;     // salpicaduras al andar por el agua
+    bool snowfall_ = false;     // nieva (copos alrededor de la cámara)
+    std::vector<Vec3> chimneys_;  // de dónde sale humo
     // La altura del agua en (x, z) ahora mismo: la misma suma de olas que shaders/water.vert
     // (solo lo vertical), calmada donde el fondo está cerca.
     float seaSurface(float x, float z) const;

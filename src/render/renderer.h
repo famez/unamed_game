@@ -34,6 +34,7 @@ enum class Material : int {
     Water = 6,  // agua: ondas animadas y reflejo del cielo
     // (7: el pelo, solo en los personajes)
     Sand = 8,   // arena: ondas del viento, grano que destella y la franja mojada junto al mar
+    Snow = 9,   // nieve: blanda, con destellos y la sombra azulada
 };
 
 // Vértice de una malla deformada por huesos (skinning en la GPU): hasta 2 huesos.

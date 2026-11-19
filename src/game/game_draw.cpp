@@ -483,6 +483,34 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
             solid->box(d.transform, d.center, d.half, d.color, d.material);
     }
     drawProps(*solid, view, alpha);
+    // Nieve que cae alrededor de la cámara: copos que bajan meciéndose, en una caja que la sigue
+    // (cada copo da la vuelta por arriba al salir por abajo).
+    if (snowfall_) {
+        const Mat4 id = Mat4::identity();
+        Vec3 e = view.eye;
+        for (int i = 0; i < 420; ++i) {
+            auto h01 = [](uint32_t v) {  // hash a [0, 1)
+                v = (v ^ 61u) ^ (v >> 16), v *= 9u, v ^= v >> 4, v *= 0x27d4eb2du, v ^= v >> 15;
+                return float(v & 0xFFFFFFu) / float(0x1000000);
+            };
+            float hx = h01(uint32_t(i) * 3u + 1u), hy = h01(uint32_t(i) * 3u + 2u), hz = h01(uint32_t(i) * 3u + 3u);
+            float fall = 0.9f + 0.6f * hx;
+            float y = std::fmod(hy * 22.0f - time_ * fall + 1000.0f, 22.0f) - 9.0f;
+            float sway = std::sin(time_ * (0.8f + hz) + float(i)) * 0.4f;
+            Vec3 p{e.x + std::fmod(hx * 36.0f - e.x + 3600.0f, 36.0f) - 18.0f + sway, e.y + y,
+                   e.z + std::fmod(hz * 36.0f - e.z + 3600.0f, 36.0f) - 18.0f};
+            if (world_.terrain && p.y < world_.terrain->heightAt(p.x, p.z)) continue;
+            float r = 0.025f + 0.02f * hz;
+            solid->ellipsoid(id, p, {r, r, r}, rgba(248, 250, 255), Material::Glow);
+        }
+    }
+    // Humo de las chimeneas: bocanadas que suben, crecen y se deshacen.
+    for (Vec3 c : chimneys_)
+        for (int k = 0; k < 6; ++k) {
+            float u = std::fmod(time_ * 0.18f + float(k) / 6.0f, 1.0f);
+            Vec3 at = c + Vec3{std::sin(time_ * 0.3f + float(k)) * 0.4f + u * 1.5f, u * 6.0f, u * 0.8f};
+            solid->smoke(at, 0.6f + u * 1.8f, float(k) * 1.7f, 0.55f * (1.0f - u) * std::min(1.0f, u * 6.0f));
+        }
     // Bombillas de las farolas (apagadas, grises) y la luz de las cercanas: cada luz cuesta
     // en todos los píxeles de la escena.
     for (size_t i = 0; i < lamps_.size(); ++i) {

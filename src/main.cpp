@@ -97,7 +97,7 @@ const char kHelp[] =
     "\n"
     "Niveles (sin opciones, se elige en el selector del principio)\n"
     "  --nivel NOMBRE                entra directamente en ese nivel: plaza, mercado, puente,\n"
-    "                                selva, cueva, callejones o los mapas grandes: campo, neon, cafetero, rio, copas;\n"
+    "                                selva, cueva, callejones o los mapas grandes: campo, neon, cafetero, rio, copas, cumbres;\n"
     "                                y los puzles de saltos: andamios; zonas a las que se llega desde\n"
     "                                otra: botequim, lapa (tabernas), urca, pao (cimas), gruta\n"
     "  --prueba [semilla]            patio de combate: enemigos sin fin; F1 y F2 hacen infinitos\n"
@@ -265,6 +265,7 @@ int main(int argc, char** argv) {
                         : std::strcmp(n, "rio") == 0        ? LevelId::Rio
                         : std::strcmp(n, "copas") == 0      ? LevelId::Copas
                         : std::strcmp(n, "andamios") == 0   ? LevelId::Andamios
+                        : std::strcmp(n, "cumbres") == 0    ? LevelId::Cumbres
                         : std::strcmp(n, "botequim") == 0   ? LevelId::Botequim
                         : std::strcmp(n, "lapa") == 0       ? LevelId::TabernaLapa
                         : std::strcmp(n, "urca") == 0       ? LevelId::Urca
@@ -947,7 +948,8 @@ int main(int argc, char** argv) {
             for (const Npc& n : game.npcs())
                 if (n.role == NpcRole::Inn) innDist = std::min(innDist, length(n.body.body.pos - game.hero().body.pos));
             atInn = innDist < (atInn ? 10.0f : 7.0f);
-            bool farolas = lv == LevelId::Plaza || lv == LevelId::Campo || lv == LevelId::Cafetero || lv == LevelId::Rio || lv == LevelId::Copas;
+            bool farolas = lv == LevelId::Plaza || lv == LevelId::Campo || lv == LevelId::Cafetero || lv == LevelId::Rio || lv == LevelId::Copas ||
+                           lv == LevelId::Cumbres;
             TrackId track = selector.open ? TrackId::PianoNocturno
                             : game.chapterEnded() ? TrackId::PianoUltimoFarol
                             : memoryHold > 0 ? TrackId::PianoVelaHollin

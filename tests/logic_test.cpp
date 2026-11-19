@@ -536,6 +536,47 @@ int main() {
             CHECK(crack >= 0 && g.level() == LevelId::Campo && length(flat(q - g.arrivals_[size_t(arrival::kCampoGrieta)].pos)) < 0.6f,
                   "gruta: por la grieta se sale al campo (en %.1f, %.1f, %.1f)", q.x, q.y, q.z);
         }
+        {  // Las Cumbres Nevadas: del sur del valle al refugio y de allí, andando por los caminos, a
+            // la cruz de la cima, al lago helado y, por la pasarela, al otro lado del barranco
+            Game m = fresh();
+            m.loadLevel(LevelId::Cumbres);
+            m.wildSpawns_ = false;  // sin Grises salvajes que tumben a la protagonista por el camino
+            run(m, 0.5f);
+            int inns = 0;
+            for (const Npc& n : m.npcs_) inns += n.role == NpcRole::Inn;
+            CHECK(m.hero_.body.grounded && inns == 1 && m.chests_.size() == 4 && m.nodes_.size() == 3 && m.props_.size() > 600,
+                  "cumbres: el valle, el refugio con su guarda, 4 cápsulas, 3 nodos y %zu piezas", m.props_.size());
+            auto walk = [&](std::vector<Vec3> pts) {
+                for (Vec3 to : pts)
+                    for (int i = 0; i < 60 * 30 && length(flat(to - m.hero_.body.pos)) > 1.2f; ++i) {
+                        Controls c;
+                        c.move = normalize(flat(to - m.hero_.body.pos));
+                        m.update(dt, c);
+                    }
+                return m.hero_.body.pos;
+            };
+            Vec3 refuge = walk({{6, 0, -140}, {-10, 0, -95}, {2, 0, -55}, {12, 0, -22}, {10, 0, -10}});
+            CHECK(length(flat(refuge - Vec3{10, 0, -10})) < 1.5f, "cumbres: por el camino al refugio (%.1f, %.1f, %.1f)", refuge.x, refuge.y, refuge.z);
+            Vec3 top = walk({{14, 0, 10}, {40, 0, 34}, {22, 0, 58}, {52, 0, 84}, {34, 0, 108}, {62, 0, 132}, {70, 0, 156}, {86, 0, 174}});
+            CHECK(length(flat(top - Vec3{86, 0, 174})) < 1.5f && top.y > 60, "cumbres: por las revueltas a la cima (%.1f, %.1f, %.1f)", top.x,
+                  top.y, top.z);
+            place(m, Vec3{10, m.groundHeight({10, 200, -10}) + 0.3f, -10});
+            Vec3 lake = walk({{2, 0, -9}, {-34, 0, 12}, {-66, 0, 34}, {-86, 0, 46}, {-100, 0, 54}});
+            CHECK(length(flat(lake - Vec3{-100, 0, 54})) < 1.5f, "cumbres: al lago helado (%.1f, %.1f, %.1f)", lake.x, lake.y, lake.z);
+            place(m, Vec3{10, m.groundHeight({10, 200, -10}) + 0.3f, -10});
+            float lowest = 1e9f;
+            for (Vec3 to : {Vec3{22, 0, -4}, Vec3{56, 0, -18}, Vec3{86, 0, -26}, Vec3{114, 0, -26}, Vec3{138, 0, -35}})
+                for (int i = 0; i < 60 * 30 && length(flat(to - m.hero_.body.pos)) > 1.2f; ++i) {
+                    Controls c;
+                    c.move = normalize(flat(to - m.hero_.body.pos));
+                    m.update(dt, c);
+                    if (std::fabs(m.hero_.body.pos.x - 100) < 6) lowest = std::min(lowest, m.hero_.body.pos.y);
+                }
+            Vec3 far = m.hero_.body.pos;
+            float gorge = m.world_.terrain->heightAt(100 - 4.0f * std::sin(-26.0f / 23.0f), -26);
+            CHECK(length(flat(far - Vec3{138, 0, -35})) < 1.5f && lowest > gorge + 8,
+                  "cumbres: por la pasarela, sobre el barranco (lo más bajo %.1f; el fondo %.1f), a la cabaña", lowest, gorge);
+        }
         {  // Las Copas: por la escalera del tronco y la pasarela larga se llega al mirador; las
             // barandillas paran al que anda, y el que cae al vacío vuelve a un sitio seguro
             Game c = fresh();

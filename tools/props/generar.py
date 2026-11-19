@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import campo  # noqa: E402
 
 GRUPOS = [campo]
-for opt in ('ciudad', 'cafetero', 'rio', 'copas', 'interiores', 'gruta'):
+for opt in ('ciudad', 'cafetero', 'rio', 'copas', 'interiores', 'gruta', 'montana'):
     try:
         GRUPOS.append(__import__(opt))
     except ImportError:

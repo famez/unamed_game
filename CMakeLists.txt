@@ -45,6 +45,7 @@ set(LOGIC_SOURCES
     src/game/zones.cpp
     src/game/levels_interiores.cpp
     src/game/levels_gruta.cpp
+    src/game/levels_cumbres.cpp
     src/game/wild.cpp
     src/game/swarm.cpp
     src/game/light.cpp

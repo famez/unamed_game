@@ -89,6 +89,9 @@ void main() {
             sandWet = 1.0 - smoothstep(line - 0.1, line + 0.45, vWorldPos.y);
             base = mix(base, base * vec3(0.6, 0.58, 0.56), sandWet * 0.85);
         }
+    } else if (material == 9) {  // nieve: blanda, con ventisqueros (manchas de ruido) y huellas de viento
+        vec2 p = vWorldPos.xz;
+        base *= mix(0.93, 1.04, noise(p * 0.25)) * mix(0.97, 1.02, noise(p * 2.3));
     } else if (material == 5) {  // césped: manchas de ruido en dos tonos
         // Dos lecturas de ruido (no fbm): el césped ocupa media pantalla y es barato así.
         float n = 0.65 * noise(vWorldPos.xz * 0.35) + 0.35 * noise(vWorldPos.xz * 1.3);
@@ -212,14 +215,22 @@ void main() {
     float specAmount = material == 2 ? 1.2 : (material == 6 ? 2.0 : (material == 3 || material == 5 ? 0.04 : (vParams.z > 0.5 ? 0.05 : 0.15)));
     if (material == 6) specPower = 120.0;
     if (material == 8) specAmount = mix(0.03, 0.5, sandWet);
+    if (material == 9) specAmount = 0.08, specPower = 10.0;
     vec3 H = normalize(uSunDir + V);
     float spec = pow(max(dot(n, H), 0.0), specPower) * specAmount * step(0.0, dot(n, uSunDir));
+    if (material == 9) {  // cristales de nieve que destellan (cambian al moverse la cámara)
+        vec2 gp = floor(vWorldPos.xz * 30.0);
+        float g = step(0.996, hash(gp + floor(V.xz * 6.0)));
+        spec += g * 2.0 * (1.0 - smoothstep(6.0, 20.0, length(uCameraPos - vWorldPos))) * smoothstep(0.85, 0.95, n.y) * step(0.0, dot(n, uSunDir));
+    }
     if (material == 8) {  // granos sueltos que destellan al sol (cerca)
         vec2 gp = floor(vWorldPos.xz * 55.0);
         float g = step(0.985, hash(gp + floor(uTime * 0.0)));
         spec += g * pow(max(dot(n, H), 0.0), 6.0) * 1.2 * (1.0 - smoothstep(6.0, 18.0, length(uCameraPos - vWorldPos)));
     }
 
+    // La nieve rebota la luz del cielo: lo que no da al sol queda azulado, no gris.
+    if (material == 9) ambient = mix(ambient, skyAmbient * vec3(0.75, 0.88, 1.2), 0.6) * 1.25;
     vec3 color = base * (ambient + kSunColor * ndl * shadow) + kSunColor * spec * shadow;
     // Luces puntuales (fuego): atenuación cuadrática hasta el radio y algo de "wrap" para
     // que la luz rodee un poco las caras.

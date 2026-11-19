@@ -27,6 +27,7 @@ float materialOf(const GlbMaterial& m) {
     if (startsWith(m.name, "Stone")) return float(int(Material::Stone));
     if (startsWith(m.name, "Grass")) return float(int(Material::Grass));
     if (startsWith(m.name, "Water")) return float(int(Material::Water));
+    if (startsWith(m.name, "Snow")) return float(int(Material::Snow));
     return float(int(Material::Cloth));
 }
 

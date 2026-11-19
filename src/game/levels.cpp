@@ -576,6 +576,8 @@ void Game::loadLevel(LevelId id) {
     waterLevel_ = -1000;
     seaReach_ = 0;
     seaWaves_ = 0.04f;
+    snowfall_ = false;
+    chimneys_.clear();
     fogScale_ = 1;
     propScenery_ = true;
     darkScale_ = 1;
@@ -610,6 +612,7 @@ void Game::loadLevel(LevelId id) {
         case LevelId::Rio: buildRio(); break;
         case LevelId::Copas: buildCopas(); break;
         case LevelId::Andamios: buildAndamios(); break;
+        case LevelId::Cumbres: buildCumbres(); break;
         case LevelId::Botequim: buildBotequim(); break;
         case LevelId::TabernaLapa: buildTabernaLapa(); break;
         case LevelId::Urca: buildUrca(); break;
