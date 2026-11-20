@@ -254,6 +254,23 @@ int main() {
                       t.fenceAt(p.x, p.z));
             }
         }
+        {  // Del paseo se baja a la playa por todo lo ancho: el largo y la caleta no dejan entre
+            // los dos un borde del recinto que pare a quien cruza
+            Game r = fresh();
+            r.loadLevel(LevelId::Rio);
+            int reached = 0, tries = 0;
+            for (float x = -14; x <= 14; x += 4, ++tries) {
+                place(r, r.heroStart_ + Vec3{0, 0.5f, 0});
+                Vec3 to{x, 0, -10.5f};  // lo alto de la arena, pasado el paseo
+                for (int i = 0; i < 60 * 8 && length(flat(to - r.hero_.body.pos)) > 1.0f; ++i) {
+                    Controls c;
+                    c.move = normalize(flat(to - r.hero_.body.pos));
+                    r.update(dt, c);
+                }
+                reached += length(flat(to - r.hero_.body.pos)) <= 1.0f;
+            }
+            CHECK(reached == tries, "bahía: del paseo a la arena andando en línea recta (%d de %d)", reached, tries);
+        }
         {  // La bahía se recorre andando: del centro a la iglesia, la vuelta por Guimarães, los
             // becos del morro hasta el mirador y la Rua da Praia hasta la Prainha
             Game r = fresh();

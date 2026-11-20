@@ -174,7 +174,10 @@ void Game::buildRio() {
     auto dPrainha = [](Vec3 p) { return sdBox(p, {90, 0, -38}, 18, 8, 3); };      // la playa virgen
     auto dPrainhaSea = [](Vec3 p) { return sdBox(p, {90, 0, -46}, 20, 16, 5); };
     auto walk = [&](Vec3 p) {
-        float d = std::min(dBeach(p), dPrainha(p));
+        // La caleta y el largo solo se tocaban en el borde del paseo (z = -7): ahí el recinto
+        // valía 0 a los dos lados y paraba a quien bajaba a la playa. Lo que se anda de la
+        // caleta se mete dos metros bajo el paseo.
+        float d = std::min(sdBox(p, {0, 0, -22}, 19, 17, 4), dPrainha(p));
         for (const Lane& l : lanes) d = std::min(d, laneDist(l, p, nullptr));
         for (const Area& a : areas)
             if (a.walk) d = std::min(d, a.dist(p));
