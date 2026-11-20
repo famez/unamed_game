@@ -232,10 +232,16 @@ ArmKey sampleOverlap(const MoveDef& d, float u, float duration) {
 float softPositive(float x, float k = 0.12f) { return 0.5f * (x + std::sqrt(x * x + k * k)) - 0.5f * k; }
 
 // Metros que avanza el cuerpo en un ciclo de pasos (dos pisadas): andando, zancadas cortas;
-// corriendo, largas; a tope, aún más (sin que los pies se aceleren tanto).
+// corriendo, largas; a tope, aún más (sin que los pies se aceleren tanto). Con las animaciones
+// hechas a mano, la carrera va al ritmo con que se hizo el clip (un ciclo en 0,62 s a la
+// velocidad de correr, 0,55 s a tope): con la zancada procedural iba 1,6 veces más deprisa y
+// las piernas daban tirones.
 float strideLength(float speed) {
     float run = clampf(speed / Character::kRunSpeed, 0, 1);
     float sprint = clampf((speed - Character::kRunSpeed) / (Character::kSprintSpeed - Character::kRunSpeed), 0, 1);
+    if (heroClipsLoaded())
+        return lerpf(1.5f, Character::kRunSpeed * 0.62f, smoothstep01(run)) +
+               (Character::kSprintSpeed * 0.55f - Character::kRunSpeed * 0.62f) * sprint;
     return lerpf(1.5f, 2.5f, smoothstep01(run)) + 0.8f * sprint;
 }
 
