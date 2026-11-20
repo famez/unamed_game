@@ -233,15 +233,15 @@ float softPositive(float x, float k = 0.12f) { return 0.5f * (x + std::sqrt(x * 
 
 // Metros que avanza el cuerpo en un ciclo de pasos (dos pisadas): andando, zancadas cortas;
 // corriendo, largas; a tope, aún más (sin que los pies se aceleren tanto). Con las animaciones
-// hechas a mano, la carrera va al ritmo con que se hizo el clip (un ciclo en 0,62 s a la
-// velocidad de correr, 0,55 s a tope): con la zancada procedural iba 1,6 veces más deprisa y
-// las piernas daban tirones.
-float strideLength(float speed) {
+// hechas a mano, la carrera va al ritmo con que se hizo el clip (`runCycle`: un ciclo en 0,62 s
+// a la velocidad de correr en el de Vela, 0,58 s en el de Hollín; a tope, un 11 % menos): con
+// la zancada procedural iba 1,6 veces más deprisa y las piernas daban tirones.
+float strideLength(float speed, float runCycle) {
     float run = clampf(speed / Character::kRunSpeed, 0, 1);
     float sprint = clampf((speed - Character::kRunSpeed) / (Character::kSprintSpeed - Character::kRunSpeed), 0, 1);
-    if (heroClipsLoaded())
-        return lerpf(1.5f, Character::kRunSpeed * 0.62f, smoothstep01(run)) +
-               (Character::kSprintSpeed * 0.55f - Character::kRunSpeed * 0.62f) * sprint;
+    if (runCycle > 0)
+        return lerpf(1.5f, Character::kRunSpeed * runCycle, smoothstep01(run)) +
+               (Character::kSprintSpeed * runCycle * (0.55f / 0.62f) - Character::kRunSpeed * runCycle) * sprint;
     return lerpf(1.5f, 2.5f, smoothstep01(run)) + 0.8f * sprint;
 }
 
@@ -300,15 +300,39 @@ float stepSpeed(const MoveDef& d, float u, float duration) {
 // Animaciones hechas a mano (hero_clips.h). Los ciclos traen dos pasos completos: un paso
 // (izquierda y derecha) dura la mitad del clip, y su fase es la del ciclo procedural.
 constexpr float kRunCycle = 0.62f, kWalkCycle = 1.05f;
+constexpr float kHollinRunCycle = 0.58f, kHollinWalkCycle = 1.2f;  // Hollín, más pesada y chulesca
+// Duración del ciclo de carrera hecho a mano con que anda (0: sin clips, el procedural).
+float locoRunCycle(bool hollin) {
+    return hollin && hollinClipsLoaded() ? kHollinRunCycle : heroClipsLoaded() ? kRunCycle : 0.0f;
+}
 constexpr float kRollClipEnd = 0.9f;  // la voltereta acaba de pie en la guardia; luego solo espera
 
-// Tramos del combo (combo ×3 del clip) que hace cada golpe de la hoja: empieza, instante en
-// que la hoja pasa por delante (el impacto del juego) y acaba.
+// Tramo de un clip que hace un golpe: empieza, instante en que el arma llega (el impacto del
+// juego) y acaba.
 struct ClipSegment {
+    HeroClip clip;
     float from, impact, to;
 };
+// Los de la hoja salen del combo ×3 de Vela; los del martillo, de los de Hollín (el combo:
+// barrido, golpe ascendente y martillazo al suelo; el salto con martillazo y el torbellino).
 const ClipSegment* comboSegment(Move m, MoveSet set) {
-    static const ClipSegment kTajo{0.0f, 0.24f, 0.46f}, kReves{0.46f, 0.53f, 0.74f}, kAlSuelo{0.74f, 1.06f, 1.6f};
+    static const ClipSegment kTajo{HeroClip::Combo, 0.0f, 0.24f, 0.46f}, kReves{HeroClip::Combo, 0.46f, 0.53f, 0.74f},
+        kAlSuelo{HeroClip::Combo, 0.74f, 1.06f, 1.6f};
+    static const ClipSegment kBarrido{HeroClip::HammerCombo, 0.0f, 0.42f, 0.66f},
+        kAscendente{HeroClip::HammerCombo, 0.66f, 0.98f, 1.12f}, kMartillazo{HeroClip::HammerCombo, 1.06f, 1.42f, 2.0f},
+        kSaltoMartillazo{HeroClip::HammerLeap, 0.22f, 0.86f, 1.6f}, kPicado{HeroClip::HammerLeap, 0.46f, 0.86f, 1.6f},
+        kTorbellino{HeroClip::HammerWhirl, 0.0f, 0.75f, 1.3f};
+    if (set == MoveSet::Hammer && hollinClipsLoaded()) {
+        switch (m) {
+            case Move::Sweep: return &kBarrido;
+            case Move::Smash: return &kMartillazo;
+            case Move::Launcher: return &kAscendente;  // lanza hacia arriba
+            case Move::Quake: return &kSaltoMartillazo;
+            case Move::Plunge: return &kPicado;  // desde el aire: solo la caída
+            case Move::Charged: return &kTorbellino;
+            default: return nullptr;
+        }
+    }
     if (set != MoveSet::Blade || !heroClipsLoaded()) return nullptr;
     switch (m) {
         case Move::Slash1: return &kTajo;
@@ -372,8 +396,9 @@ Mat4 Character::modelMatrix() const {
         const MoveDef& d = kMoves[int(move_)];
         // El giro arranca fuerte y frena al final (la hoja "corta" en la primera vuelta).
         float t = ease(Strike, (moveU() - d.turnFrom) / (d.turnTo - d.turnFrom));
-        if (d.spin != 0) m = m * rotateY(d.spin * t);
-        if (d.flip != 0 && !comboSegment(move_, moveSet)) {  // voltereta alrededor del centro del cuerpo
+        bool clip = comboSegment(move_, moveSet) != nullptr;  // el clip ya trae sus giros
+        if (d.spin != 0 && !clip) m = m * rotateY(d.spin * t);
+        if (d.flip != 0 && !clip) {  // voltereta alrededor del centro del cuerpo
             const Vec3 pivot{0, 0.9f, 0};
             m = m * translate(pivot) * rotateX(d.flip * smoothstep01((moveU() - d.turnFrom) / (d.turnTo - d.turnFrom))) *
                 translate(-pivot);
@@ -703,7 +728,7 @@ void Character::update(float dt, Vec3 moveDir, bool jump, const World& world, fl
     // La fase avanza con la distancia recorrida (solo pisando suelo): los pies no patinan.
     // Al girar casi parado da pasitos: la fase también avanza con el giro.
     float spin = speed < kRunSpeed ? std::fabs(wrapAngle(yaw - prevYaw_)) * 0.35f : 0.0f;
-    if (body.grounded) phase_ = std::fmod(phase_ + (speed * dt + spin) * 2.0f * kPi / strideLength(speed), 2.0f * kPi);
+    if (body.grounded) phase_ = std::fmod(phase_ + (speed * dt + spin) * 2.0f * kPi / strideLength(speed, locoRunCycle(hollin)), 2.0f * kPi);
     airBlend_ = moveTowards(airBlend_, body.grounded ? 0.0f : 1.0f, 7.0f * dt);
 
     // Inclinación por aceleración y por giro, filtradas para que no tiemblen.
@@ -1056,11 +1081,15 @@ void Character::animate(Pose& out) const {
     // es la de las pisadas, así los pies no patinan; andando hacia atrás, el ciclo al revés. El
     // brazo del arma: con ella en la mano, el procedural (la lleva atrás al correr); andando,
     // siempre (el clip la apoya en el hombro).
+    // Hollín, con los suyos si están.
     bool clips = heroClipsLoaded();
-    if (float w = clips ? smoothstep01(speed / 1.2f) * (1.0f - airBlend_) : 0.0f; w > 0) {
+    if (float w = locoRunCycle(hollin) > 0 ? smoothstep01(speed / 1.2f) * (1.0f - airBlend_) : 0.0f; w > 0) {
         float cycle = back * phase_ / (2.0f * kPi);
-        Pose loco = lerpPose(sampleHeroClip(HeroClip::Walk, cycle * kWalkCycle).pose,
-                             sampleHeroClip(HeroClip::Run, cycle * kRunCycle).pose, gait, JointCount);
+        bool own = hollin && hollinClipsLoaded();
+        Pose loco = own ? lerpPose(sampleHeroClip(HeroClip::HollinWalk, cycle * kHollinWalkCycle).pose,
+                                   sampleHeroClip(HeroClip::HollinRun, cycle * kHollinRunCycle).pose, gait, JointCount)
+                        : lerpPose(sampleHeroClip(HeroClip::Walk, cycle * kWalkCycle).pose,
+                                   sampleHeroClip(HeroClip::Run, cycle * kRunCycle).pose, gait, JointCount);
         mixClip(out, loco, w, w * gait * (1.0f - armedBlend_), w);
         r[Spine].x += (lean_ + 0.15f * sprint) * w;  // se inclina al acelerar y al girar
         r[Spine].z += bank_ * w;
@@ -1137,8 +1166,11 @@ void Character::animate(Pose& out) const {
         float wIn = d.blendIn > 0 ? u / d.blendIn : 1.0f;
         float wOut = d.blendOut > 0 ? (1.0f - u) / d.blendOut : 1.0f;
         float w = clampf(std::min(wIn, wOut), 0, 1);
-        if (const ClipSegment* seg = comboSegment(move_, moveSet)) {  // combo hecho a mano: todo el cuerpo
-            mixClip(out, sampleHeroClip(HeroClip::Combo, segmentTime(*seg, u, d.impactU)).pose, w, w, w);
+        if (const ClipSegment* seg = comboSegment(move_, moveSet)) {  // golpe hecho a mano: todo el cuerpo
+            // La altura de la cadera, solo en el suelo: en el aire (el salto del martillazo) la
+            // pone la física.
+            float rootW = seg->clip == HeroClip::Combo || body.grounded ? w : 0.0f;
+            mixClip(out, sampleHeroClip(seg->clip, segmentTime(*seg, u, d.impactU)).pose, w, w, rootW);
         } else {
             ArmKey k = sampleOverlap(d, u, moveDuration(move_, attackSpeed));
             applyArm(r, k, w, d.leftArm);

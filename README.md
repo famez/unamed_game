@@ -23,14 +23,22 @@ palabras (`assets/story/capitulo1.txt`, formato en `src/game/story.h` y `src/gam
 
 Para escribir escenas: `./build/game --escena eco_alba` salta la intro y la reproduce.
 
-## Animaciones de Vela
+## Animaciones de Vela y Hollín
 
 Correr, caminar, saltar, el combo de la espada (tajo, revés y golpe al suelo con salto) y la
 voltereta están hechos a mano en `assets/models/vela_animaciones.glb` (fuentes en
 `tools/vela_animaciones/`). Al arrancar se pasan al esqueleto del juego
 (`src/actors/hero_clips.cpp`) y se mezclan con la animación procedural: los ciclos van a la
 fase de las pisadas, los golpes conservan sus tiempos de impacto y la voltereta su duración.
-Sin el fichero, todo vuelve a ser procedural. Hollín, con el mismo esqueleto, las comparte.
+Sin el fichero, todo vuelve a ser procedural.
+
+Hollín tiene las suyas en `assets/models/hollin_animaciones.glb` (mismas fuentes, `node
+export_anims.mjs hollin`): correr y caminar, el combo del martillo (barrido, golpe ascendente y
+martillazo al suelo), el salto con martillazo y el torbellino. En el juego: el barrido es el
+golpe lateral del combo, el martillazo al suelo el vertical, el ascendente el lanzador (guardia
+y golpe), el salto el remate y el picado desde el aire, y el torbellino el golpe cargado. En el
+.glb el martillo va en la mano izquierda; el juego lleva el arma en la derecha, así que se leen
+en espejo. El salto y la voltereta los comparte con Vela, y sin el fichero usa todos los de ella.
 
 ## Música y sonido
 

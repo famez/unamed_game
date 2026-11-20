@@ -59,6 +59,7 @@ public:
     float lying = 0;       // 1 = tumbado boca arriba (al despertar), 0 = de pie
     int comboHits = 3;     // golpes en el suelo antes del remate (lo fija el arma)
     MoveSet moveSet = MoveSet::Blade;
+    bool hollin = false;   // anda y corre con las animaciones de Hollín (lo pone el juego en la sombra)
     // Modificadores de las formas prismáticas.
     float speedScale = 1;     // velocidad de carrera
     float gravityScale = 1;   // gravedad en el aire (Eco: casi nada)

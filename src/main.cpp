@@ -213,6 +213,8 @@ int main(int argc, char** argv) {
     loadHeroModels(renderer, assetDir);  // Vela y Hollín (.glb); sin ellos, el modelo de siempre
     if (std::string error; !loadHeroClips(std::string(assetDir) + "/models/vela_animaciones.glb", error))
         std::fprintf(stderr, "Animaciones de Vela: %s (se usan las procedurales)\n", error.c_str());
+    if (std::string error; !loadHollinClips(std::string(assetDir) + "/models/hollin_animaciones.glb", error))
+        std::fprintf(stderr, "Animaciones de Hollín: %s (usa las de Vela)\n", error.c_str());
     loadCharacterGlbs(renderer, std::string(assetDir) + "/models");  // enemigos, Ilse y el lobo
     propLibrary().indexDir(std::string(assetDir) + "/props");         // piezas del escenario (se leen por zonas)
     loadInhabitants(renderer, std::string(assetDir) + "/models/habitantes");

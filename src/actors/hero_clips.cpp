@@ -15,9 +15,10 @@ struct Clip {
     std::vector<ClipSample> frames;
 };
 Clip gClips[int(HeroClip::Count)];
-bool gLoaded = false;
+bool gLoaded = false, gHollinLoaded = false;
 
-const char* const kClipNames[int(HeroClip::Count)] = {"correr", "caminar", "saltar", "combo", "voltereta"};
+const char* const kClipNames[int(HeroClip::Count)] = {"correr", "caminar", "saltar", "combo", "voltereta",
+                                                      "correr", "caminar", "combo", "martillazo", "torbellino"};
 
 // Grupos del .glb que forman cada hueso del juego (se encadenan en este orden). El pecho no
 // existe en el .glb (la espalda llega hasta el cuello) y las puntas de los pies no se animan.
@@ -89,10 +90,18 @@ Vec3 eulerYXZ(const Mat4& m, Vec3 near) {
 // voltereta: primero la vuelta, luego el resto).
 float spinX(const Mat4& m) { return std::atan2(-at(m, 1, 2), at(m, 2, 2)); }
 
-}  // namespace
+// La pose reflejada en el plano del cuerpo: cada lado toma los giros del otro con Y y Z
+// cambiados de signo (Ry·Rx·Rz reflejado en X es R(-y)·Rx·R(-z)).
+void mirrorPose(Pose& p) {
+    const std::pair<int, int> sides[] = {{ShoulderL, ShoulderR}, {ElbowL, ElbowR}, {WristL, WristR},
+                                         {HipL, HipR},           {KneeL, KneeR},   {AnkleL, AnkleR}};
+    for (auto [l, r] : sides) std::swap(p.rotation[l], p.rotation[r]);
+    for (int j = 0; j < JointCount; ++j) p.rotation[j].y = -p.rotation[j].y, p.rotation[j].z = -p.rotation[j].z;
+    p.rootOffset.x = -p.rootOffset.x;
+}
 
-bool loadHeroClips(const std::string& path, std::string& error) {
-    gLoaded = false;
+// Lee los clips [first, end) del fichero; `mirror`: reflejados.
+bool loadClips(const std::string& path, int first, int end, bool mirror, std::string& error) {
     GlbFile g;
     if (!g.load(path, error)) return false;
     int hips = g.find("Hips");
@@ -115,7 +124,7 @@ bool loadHeroClips(const std::string& path, std::string& error) {
         }
         bones.push_back(b);
     }
-    for (int c = 0; c < int(HeroClip::Count); ++c) {
+    for (int c = first; c < end; ++c) {
         const GlbAnimation* anim = nullptr;
         for (const GlbAnimation& a : g.animations)
             if (a.name == kClipNames[c]) anim = &a;
@@ -163,17 +172,31 @@ bool loadHeroClips(const std::string& path, std::string& error) {
             }
             clip.frames.push_back(s);
         }
+        if (mirror)
+            for (ClipSample& s : clip.frames) mirrorPose(s.pose);
     }
-    gLoaded = true;
     return true;
 }
 
+}  // namespace
+
+bool loadHeroClips(const std::string& path, std::string& error) {
+    gLoaded = loadClips(path, 0, int(HeroClip::HollinRun), false, error);
+    return gLoaded;
+}
+
+bool loadHollinClips(const std::string& path, std::string& error) {
+    gHollinLoaded = loadClips(path, int(HeroClip::HollinRun), int(HeroClip::Count), true, error);
+    return gHollinLoaded;
+}
+
 bool heroClipsLoaded() { return gLoaded; }
+bool hollinClipsLoaded() { return gHollinLoaded; }
 float heroClipDuration(HeroClip c) { return gClips[int(c)].duration; }
 
 ClipSample sampleHeroClip(HeroClip c, float t) {
     const Clip& clip = gClips[int(c)];
-    if (!gLoaded || clip.frames.empty()) return {};
+    if (!(c < HeroClip::HollinRun ? gLoaded : gHollinLoaded) || clip.frames.empty()) return {};
     if (clip.duration > 0) t = std::fmod(std::fmod(t, clip.duration) + clip.duration, clip.duration);
     float f = t * kFps;
     size_t a = std::min(size_t(f), clip.frames.size() - 1), b = std::min(a + 1, clip.frames.size() - 1);

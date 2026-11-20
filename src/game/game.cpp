@@ -64,6 +64,7 @@ void Game::applyWeapon() {
     hero_.speedScale = formSpeed();
     hero_.gravityScale = 1.0f;
     hero_.infiniteJumps = false;
+    hero_.hollin = shadowUnlocked_ && shadowMode_;  // en la sombra anda y corre como Hollín
     hero_.moveSet = w.style == WeaponStyle::Lance                                 ? MoveSet::Lance
                     : w.style == WeaponStyle::Fists || w.style == WeaponStyle::Claws ? MoveSet::Fists
                     : w.style == WeaponStyle::Hammer                                ? MoveSet::Hammer

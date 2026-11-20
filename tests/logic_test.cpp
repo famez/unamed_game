@@ -154,6 +154,63 @@ int main() {
         }
         CHECK(impacts >= 4, "con los clips, el combo de la hoja encadena sus golpes (%d impactos en 4 s)", impacts);
     }
+    {  // Animaciones de Hollín (hollin_animaciones.glb): en espejo (el martillo, en la mano del
+        // arma del juego), cada mano, pie y la cabeza donde pone el .glb los del otro lado
+        const std::string path = std::string(GAME_ASSET_DIR) + "/models/hollin_animaciones.glb";
+        std::string err;
+        bool ok = loadHollinClips(path, err);
+        CHECK(ok, "hollin_animaciones.glb: cinco clips leídos %s", err.c_str());
+        GlbFile f;
+        f.load(path, err);
+        const char* names[] = {"correr", "caminar", "combo", "martillazo", "torbellino"};
+        const std::pair<int, const char*> ends[] = {{WristR, "Hand_L"}, {WristL, "Hand_R"}, {AnkleL, "Foot_R"},
+                                                    {AnkleR, "Foot_L"}, {Head, "Head"}, {ElbowR, "LowerArm_L"}};
+        float worst = 0;
+        for (int c = 0; ok && c < 5; ++c) {
+            const GlbAnimation* a = nullptr;
+            for (const GlbAnimation& x : f.animations)
+                if (x.name == names[c]) a = &x;
+            for (float t = 0; a && t < a->duration; t += 0.037f) {
+                Mat4 w[JointCount];
+                computeWorldMatrices(sampleHeroClip(HeroClip(int(HeroClip::HollinRun) + c), t).pose, Mat4::identity(), w);
+                for (auto [joint, node] : ends) {
+                    Vec3 g = translationOf(glbWorldAt(f, *a, f.find(node), t));
+                    worst = std::max(worst, length(translationOf(w[joint]) - Vec3{-g.x, g.y, g.z}));
+                }
+            }
+        }
+        // (15 mm: en el golpe ascendente el brazo sube casi 3 rad en 0,12 s y el remuestreo a
+        // 60 fotogramas se separa un poco del .glb, que va a 30)
+        CHECK(ok && worst < 0.015f, "animaciones de Hollín, en espejo: manos, pies y cabeza donde los pone el .glb (error máximo %.1f mm)",
+              worst * 1000);
+        // Con el martillo, Hollín encadena el combo hecho a mano y remata con el salto.
+        Character h;
+        h.hollin = true;
+        h.moveSet = MoveSet::Hammer;
+        World flat;
+        flat.solids.push_back(boxFromCenter({0, -0.5f, 0}, {50, 0.5f, 50}));
+        for (int i = 0; i < 30; ++i) h.update(dt, {}, false, flat);
+        int impacts = 0;
+        bool quake = false;
+        for (int i = 0; i < 360; ++i) {
+            if (i % 12 == 0) h.attack(0, 0);
+            h.update(dt, {}, false, flat);
+            Move m = h.takeImpact();
+            impacts += m != Move::None;
+            quake |= m == Move::Quake;
+        }
+        CHECK(impacts >= 4 && quake, "con los clips de Hollín, el martillo encadena sus golpes y el remate (%d impactos en 6 s)", impacts);
+        // Corriendo, las piernas siguen el clip de Hollín.
+        Character r;
+        r.hollin = true;
+        for (int i = 0; i < 120; ++i) r.update(dt, Vec3{0, 0, 1}, false, flat);
+        float knee = 0;
+        for (int i = 0; i < 60; ++i) {
+            r.update(dt, Vec3{0, 0, 1}, false, flat);
+            knee = std::max(knee, r.pose.rotation[KneeL].x);
+        }
+        CHECK(knee > 1.2f, "Hollín corriendo: dobla la rodilla como en su clip (%.2f rad)", knee);
+    }
     {  // Terreno con relieve: se baja una cuesta andando sin despegarse, y la rejilla de cajas
         // encuentra lo mismo que mirar todas
         auto t = std::make_shared<Terrain>();
