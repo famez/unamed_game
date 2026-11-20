@@ -511,6 +511,29 @@ void Game::drawLevel(DebugDraw& dd, Renderer* solid, const DrawFlags& f, const V
             Vec3 at = c + Vec3{std::sin(time_ * 0.3f + float(k)) * 0.4f + u * 1.5f, u * 6.0f, u * 0.8f};
             solid->smoke(at, 0.6f + u * 1.8f, float(k) * 1.7f, 0.55f * (1.0f - u) * std::min(1.0f, u * 6.0f));
         }
+    // Fuego de chimenea: lenguas que bailan cada una a su ritmo, chispas que suben y se apagan,
+    // y la luz que tiembla con ellas (la más fuerte de la sala).
+    for (size_t i = 0; i < hearths_.size(); ++i) {
+        Vec3 f = hearths_[i];
+        float ph = float(i) * 2.3f;
+        float flicker = 0.85f + 0.1f * std::sin(time_ * 9.0f + ph) + 0.07f * std::sin(time_ * 23.0f + ph * 1.7f);
+        for (int k = 0; k < 7; ++k) {
+            float fk = float(k);
+            float x = (fk - 3.0f) * 0.09f + 0.03f * std::sin(time_ * (5.0f + fk) + ph);
+            float z = 0.06f * std::sin(fk * 2.1f);
+            float tall = (0.16f + 0.1f * std::sin(time_ * (11.0f + 2.0f * fk) + fk * 1.3f + ph)) * (1.0f - std::fabs(fk - 3.0f) * 0.15f);
+            Vec3 at = f + Vec3{x, tall * 0.8f, z};
+            solid->ellipsoid(translate(at), {}, {0.07f, tall, 0.07f}, rgba(255, 120, 40), Material::Glow);
+            solid->ellipsoid(translate(at + Vec3{0, -tall * 0.25f, 0.02f}), {}, {0.04f, tall * 0.6f, 0.04f}, rgba(255, 210, 120), Material::Glow);
+        }
+        for (int k = 0; k < 6; ++k) {  // chispas
+            float u = std::fmod(time_ * 0.7f + float(k) * 0.37f + ph, 1.0f);
+            Vec3 at = f + Vec3{0.25f * std::sin(float(k) * 2.7f + u * 3.0f), 0.2f + u * 1.0f, 0.08f * std::sin(float(k) * 1.9f)};
+            float r = 0.012f * (1.0f - u);
+            if (r > 0.002f) solid->ellipsoid(translate(at), {}, {r, r, r}, rgba(255, 190, 90), Material::Glow);
+        }
+        solid->light(f + Vec3{0, 0.5f, 0}, Vec3{1.0f, 0.55f, 0.25f} * (2.6f * flicker), 9.0f * (0.92f + 0.08f * flicker));
+    }
     // Bombillas de las farolas (apagadas, grises) y la luz de las cercanas: cada luz cuesta
     // en todos los píxeles de la escena.
     for (size_t i = 0; i < lamps_.size(); ++i) {

@@ -388,6 +388,65 @@ int main() {
                       "bahía: al salir, en la acera de la taberna (%.1f, %.1f, %.1f) y la bahía como estaba", q.x, q.y, q.z);
             }
         }
+        {  // Las tabernas tienen piso de arriba: de la puerta, entre las mesas, por la escalera a la
+            // galería y por la puerta abierta al cuarto, andando
+            struct Climb {
+                LevelId level;
+                std::vector<Vec3> pts;
+                float floor;
+            };
+            const Climb climbs[] = {
+                {LevelId::Botequim,
+                 {{-1.0f, 0, -1.9f}, {-3.9f, 0, -1.5f}, {-3.9f, 0, 2.7f}, {-4.9f, 0, 3.0f}, {-4.9f, 0, -2.7f}, {-4.4f, 0, -3.9f},
+                  {3.6f, 0, -3.9f}, {3.6f, 0, -6.2f}},
+                 3.2f},
+                {LevelId::TabernaLapa,
+                 {{1.2f, 0, 3.0f}, {1.2f, 0, -3.6f}, {1.3f, 0, -4.9f}, {0.6f, 0, -4.9f}, {-3.6f, 0, -4.9f}, {-4.8f, 0, -4.6f},
+                  {-5.0f, 0, -1.8f}, {-5.8f, 0, -1.8f}, {-7.8f, 0, -1.8f}},
+                 3.4f},
+            };
+            for (const Climb& cl : climbs) {
+                Game r = fresh();
+                r.loadLevel(cl.level);
+                size_t next = 0;
+                for (int i = 0; i < 60 * 60 && next < cl.pts.size(); ++i) {
+                    Vec3 to = cl.pts[next], p = r.hero_.body.pos;
+                    if (length(flat(to - p)) < 0.5f) {
+                        ++next;
+                        continue;
+                    }
+                    Controls c;
+                    c.move = normalize(flat(to - p)) * 0.6f;
+                    r.update(dt, c);
+                }
+                Vec3 p = r.hero_.body.pos;
+                CHECK(next == cl.pts.size() && std::fabs(p.y - cl.floor) < 0.15f && !r.hearths_.empty(),
+                      "%s: por la escalera y la galería al cuarto de arriba (%zu/%zu, en %.1f, %.1f, %.1f)", r.levelName().c_str(), next,
+                      cl.pts.size(), p.x, p.y, p.z);
+            }
+        }
+        {  // Al cambiar de zona sale la pantalla de carga con el nombre de adonde se va (antes de
+            // cargarla), se carga con ella delante y se queda un momento; mientras, no se mueve
+            Game r = fresh();
+            r.loadLevel(LevelId::Rio);
+            r.goToZone(LevelId::Botequim, arrival::kInside);
+            bool namedFirst = false, coveredWhenLoaded = false, stillWhileShown = true;
+            float shown = 0;
+            Vec3 at{};
+            for (int i = 0; i < 60 * 4 && (r.changingZone() || r.loadingScreen() > 0); ++i) {
+                LevelId before = r.level();
+                if (r.loadingScreen() > 0.5f && before == LevelId::Rio) namedFirst = true;
+                Controls c;
+                c.move = {1, 0, 0};
+                r.update(dt, c);
+                if (before != r.level()) coveredWhenLoaded = r.loadingScreen() >= 1.0f, at = r.hero_.body.pos;
+                if (r.level() == LevelId::Botequim && r.changingZone()) stillWhileShown &= length(flat(r.hero_.body.pos - at)) < 0.05f;
+                if (r.loadingScreen() >= 1.0f) shown += dt;
+            }
+            CHECK(namedFirst && coveredWhenLoaded && stillWhileShown && shown > 1.0f && r.level() == LevelId::Botequim && r.loadingScreen() <= 0,
+                  "pantalla de carga: delante antes de cargar (%d), tapándolo al cargar (%d), quieta mientras (%d), %.1f s entera",
+                  namedFirst, coveredWhenLoaded, stillWhileShown, shown);
+        }
         {  // El teleférico: F en el andén sube a la cabina; al llegar arriba se carga la cima (Urca),
             // con la explanada que se pisa; de allí al Pão de Açúcar, a su aguja, y de vuelta abajo
             Game r = fresh();

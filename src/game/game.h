@@ -685,7 +685,9 @@ public:
     // sin fundido, de golpe (las pruebas). Lo que se haya hecho en cada zona se guarda al salir.
     void goToZone(LevelId to, int arrival, bool black = false);
     void enterZone(LevelId to, int arrival);
-    bool changingZone() const { return zoneTo_ != LevelId::Count; }
+    // Cambiando de zona: fundiendo a negro, cargando o con la pantalla de carga aún delante.
+    bool changingZone() const { return zoneTo_ != LevelId::Count || zoneHold_ > 0; }
+    float loadingScreen() const { return zoneShown_ != LevelId::Count ? zoneFade_ : 0.0f; }  // opacidad
     void devPlaceHero(float x, float z, float yaw);  // --en: ahí, en el suelo
     void devSetCroma(float c) { croma_ = cromaShown_ = clampf(c, 0, 1); }
     const std::vector<ZoneDoor>& zoneDoors() const { return doors_; }
@@ -770,6 +772,15 @@ private:
     void buildCopas();
     void buildAndamios();
     void buildCumbres();
+    struct InteriorPerson {
+        const char* model;
+        Vec3 pos;  // y: la altura del piso en que está (0 abajo; la galería, arriba)
+        float yaw, wander;
+        std::string name = "";
+        NpcRole role = NpcRole::Townsfolk;
+        std::vector<std::string> lines = {};
+    };
+    void buildInterior(const char* piece, Vec3 hearth, const std::vector<InteriorPerson>& people);
     void buildBotequim();
     void buildTabernaLapa();
     void buildUrca();
@@ -983,6 +994,14 @@ private:
     LevelId zoneTo_ = LevelId::Count;
     int zoneArrival_ = 0;
     float zoneTime_ = 0, zoneFade_ = 0;
+    // Pantalla de carga: la zona a la que se va (su nombre ya se ve mientras se carga), el
+    // consejo que sale, si ya se ha pintado tapándolo todo (se carga detrás) y lo que le
+    // queda delante una vez cargada.
+    LevelId zoneShown_ = LevelId::Count;
+    int zoneTip_ = 0;
+    bool zoneCovered_ = false;
+    float zoneHold_ = 0, zoneLoaded_ = 0;
+    void drawLoadingScreen(UiLayer& ui, const ViewInfo& view) const;
     struct ZoneState {
         std::vector<char> chests, nodes, lanterns, interacts, lamps, encounters;
         size_t part = 0;
@@ -1047,6 +1066,7 @@ private:
     float splashTimer_ = 0;     // salpicaduras al andar por el agua
     bool snowfall_ = false;     // nieva (copos alrededor de la cámara)
     std::vector<Vec3> chimneys_;  // de dónde sale humo
+    std::vector<Vec3> hearths_;   // fuegos de chimenea (las tabernas): llamas que bailan, chispas y su luz
     // La altura del agua en (x, z) ahora mismo: la misma suma de olas que shaders/water.vert
     // (solo lo vertical), calmada donde el fondo está cerca.
     float seaSurface(float x, float z) const;

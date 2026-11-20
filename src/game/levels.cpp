@@ -578,6 +578,7 @@ void Game::loadLevel(LevelId id) {
     seaWaves_ = 0.04f;
     snowfall_ = false;
     chimneys_.clear();
+    hearths_.clear();
     fogScale_ = 1;
     propScenery_ = true;
     darkScale_ = 1;

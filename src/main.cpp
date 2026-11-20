@@ -7,6 +7,7 @@
 #include "ui/inventory_menu.h"
 #include "dev/cable_bot.h"
 #include "dev/climb_bot.h"
+#include "dev/posada_bot.h"
 #include "dev/showcase.h"
 #include "dev/viewer.h"
 #include "ui/level_select.h"
@@ -110,6 +111,8 @@ const char kHelp[] =
     "  --debug                       solo esqueletos y cajas en alambre (también F12)\n"
     "  --autoplay                    un bot juega solo\n"
     "  --escalada                    un bot hace la subida de Los Andamios (con --nivel andamios)\n"
+    "  --posada                      un bot entra en el Botequim (con --nivel rio --en 11 12.2 1.57),\n"
+    "                                cruza la sala y sube a los cuartos (para grabarlo)\n"
     "  --giros                       el bot solo corre haciendo curvas (para ver el giro)\n"
     "  --cambios                     el bot cambia de luz a sombra y vuelta (para ver el cambio)\n"
     "  --demo                        el bot enseña técnicas, formas y armas de luz y de sombra\n"
@@ -356,6 +359,8 @@ int main(int argc, char** argv) {
     Showcase vitrina;
     ClimbBot climbBot;  // --escalada: la subida de Los Andamios
     CableBot cableBot;  // --teleferico: la bahía, de la tienda al Pão de Açúcar
+    bool posadaTour = false;  // --posada: el bot entra en el Botequim y sube a los cuartos
+    PosadaBot posadaBot;
     for (int i = 1; i + 1 < argc; ++i)  // --vitrina 5,16: solo esos actos (contados desde 1)
         if (std::strcmp(argv[i], "--vitrina") == 0 && argv[i + 1][0] != '-') {
             std::vector<int> acts;
@@ -383,6 +388,7 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--demo") == 0) autoplay = demoBot = true;
         if (std::strcmp(argv[i], "--escalada") == 0) autoplay = climbing = true;
         if (std::strcmp(argv[i], "--teleferico") == 0) autoplay = cableTour = true;
+        if (std::strcmp(argv[i], "--posada") == 0) autoplay = posadaTour = true;
         if (std::strcmp(argv[i], "--vitrina") == 0) autoplay = true;
         if (std::strcmp(argv[i], "--mapa") == 0) openMapAtStart = true;  // empezar con el mapa abierto (capturas)
         if (std::strcmp(argv[i], "--video") == 0 && i + 1 < argc) {
@@ -701,12 +707,16 @@ int main(int argc, char** argv) {
                         c = cableBot.step(game, cam.yaw, c);
                         if (cableBot.done()) quit = true;
                     }
+                    if (posadaTour) {
+                        c = posadaBot.step(game, cam.yaw, c);
+                        if (posadaBot.done()) quit = true;
+                    }
                     if (showcase) {
                         c = vitrina.step(game, cam.yaw, c);
                         if (vitrina.done()) quit = true;
                     }
                     // En los modos de prueba también cambia a sombra y lanza agujeros negros.
-                    if (turnsBot || swapBot || demoBot || showcase || climbing || cableTour) {
+                    if (turnsBot || swapBot || demoBot || showcase || climbing || cableTour || posadaTour) {
                     } else if (game.testMode() != TestMode::None) {
                         c.swapMode = botStep == 30;
                         if (botStep % 240 == 120) c.command = 4;  // la técnica grande de cada mitad
@@ -736,8 +746,12 @@ int main(int argc, char** argv) {
         // se adelanta un poco hacia donde corre. Con un objetivo fijado gira sola para
         // encuadrar a los dos.
         Vec3 heroPos = game.heroRenderPos(alpha);
-        if (vitrina.takeCut() || game.takeCameraCut()) {  // ha cambiado de sitio de golpe: corte de plano
+        bool vitrinaCut = vitrina.takeCut(), gameCut = game.takeCameraCut();
+        if (vitrinaCut || gameCut) {  // ha cambiado de sitio de golpe: corte de plano
             cam.target = heroPos + Vec3{0, 1.1f, 0};
+            // Al entrar por una puerta (o al volver al punto de control), la cámara detrás de
+            // ella, mirando adonde mira: si no, se quedaba con el giro de fuera, mirando a la pared.
+            if (gameCut) cam.yaw = camYaw0 + game.hero().yaw;
             camVel = {};
             camDist = cam.distance;
         }
@@ -943,7 +957,8 @@ int main(int argc, char** argv) {
         Mat4 pixels = ortho(0, float(uw), float(uh), 0, -1, 1);
         hud.flush(pixels);
         if (mapScreen.open) mapScreen.drawImage(pixels, float(w) / float(uw), h, uw, uh);  // entre su fondo y sus marcas
-        if (!debugView && !portrait && !flyover && !oh.on && !selector.open && !mapScreen.open) {  // la cara de la protagonista en el hexágono del HUD
+        if (!debugView && !portrait && !flyover && !oh.on && !selector.open && !mapScreen.open &&
+            game.loadingScreen() <= 0) {  // la cara de la protagonista en el hexágono del HUD
             float k = float(w) / float(uw);
             float cxp = (float(uw) - Game::kPortraitInset) * k, cyp = Game::kPortraitInset * k;  // desde abajo
             int hw = int(31.0f * k), hh = int(29.0f * k);

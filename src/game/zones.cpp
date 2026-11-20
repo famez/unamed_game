@@ -12,6 +12,7 @@
 namespace {
 
 constexpr float kZoneFade = 0.4f;
+constexpr float kLoadingHold = 1.1f;  // la pantalla de carga, una vez cargada la zona
 
 template <class T, class F>
 std::vector<char> flags(const std::vector<T>& v, F f) {
@@ -29,22 +30,39 @@ void Game::goToZone(LevelId to, int arrival, bool black) {
     zoneArrival_ = arrival;
     zoneTime_ = black ? kZoneFade : 0.0f;
     if (black) zoneFade_ = 1;
+    zoneShown_ = to;
+    zoneTip_ = int(time_ * 7.0f) % 1000;
+    zoneCovered_ = false;
+    zoneHold_ = zoneLoaded_ = 0;
     lock_ = -1;
     if (!black) uiSound(Sfx::Chest, 0.4f, 0.7f);
 }
 
 bool Game::updateZone(float dt) {
+    if (zoneHold_ > 0) {  // cargada: la pantalla se queda lo justo para leerla
+        zoneHold_ = std::max(0.0f, zoneHold_ - dt);
+        zoneLoaded_ += dt;
+        zoneFade_ = 1;
+        return false;
+    }
     if (!changingZone()) {
         zoneFade_ = std::max(0.0f, zoneFade_ - dt / kZoneFade);
+        if (zoneFade_ <= 0) zoneShown_ = LevelId::Count;
         return false;
     }
     zoneTime_ += dt;
     zoneFade_ = std::max(zoneFade_, std::min(1.0f, zoneTime_ / kZoneFade));
     if (zoneTime_ < kZoneFade) return false;
+    if (!zoneCovered_) {  // un fotograma con la pantalla entera delante: el tirón de cargar no se ve
+        zoneCovered_ = true;
+        return false;
+    }
     LevelId to = zoneTo_;
     zoneTo_ = LevelId::Count;
     enterZone(to, zoneArrival_);
-    zoneFade_ = 1;  // y se abre desde negro
+    zoneFade_ = 1;  // y se abre desde la pantalla de carga
+    zoneHold_ = kLoadingHold;
+    zoneLoaded_ = 0;
     return true;
 }
 
@@ -101,7 +119,8 @@ void Game::restoreZoneState() {
 }
 
 void Game::devPlaceHero(float x, float z, float yaw) {
-    float y = world_.terrain ? world_.terrain->heightAt(x, z) : groundHeight({x, 200, z});  // bajo techo: el relieve
+    // Con relieve, el relieve; sin él (los interiores, con techo), el suelo de abajo.
+    float y = world_.terrain ? world_.terrain->heightAt(x, z) : groundHeight({x, 1.5f, z});
     hero_.teleport({x, y + 0.05f, z}, yaw);
     checkpoint_ = hero_.body.pos;
     checkpointYaw_ = yaw;

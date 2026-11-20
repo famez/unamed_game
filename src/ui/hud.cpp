@@ -110,10 +110,119 @@ uint32_t speakerColor(const std::string& id) {
 
 }  // namespace
 
+// --- Pantalla de carga --------------------------------------------------------------------
+
+namespace {
+
+struct ZoneCard {
+    const char* title;
+    const char* region;
+};
+
+ZoneCard zoneCard(LevelId id) {
+    switch (id) {
+        case LevelId::Plaza: return {"Plaza del Reloj", "La ciudad parada"};
+        case LevelId::Mercado: return {"Mercado Quemado", "La ciudad parada"};
+        case LevelId::Puente: return {"Puente de los Faroles", "La ciudad parada"};
+        case LevelId::Selva: return {"Selva de los Puentes", ""};
+        case LevelId::Cueva: return {"Cueva de Cristal", ""};
+        case LevelId::Callejones: return {"Callejones del Farol", "La ciudad parada"};
+        case LevelId::Campo: return {"Campo abierto", ""};
+        case LevelId::Neon: return {"Ciudad Neón", ""};
+        case LevelId::Cafetero: return {"Pueblo cafetero", ""};
+        case LevelId::Rio: return {"Ciudad de la Bahía", "El atardecer detenido"};
+        case LevelId::Copas: return {"Las Copas", ""};
+        case LevelId::Andamios: return {"Los Andamios", ""};
+        case LevelId::Cumbres: return {"Cumbres Nevadas", ""};
+        case LevelId::Botequim: return {"Botequim do Ademar", "Largo de los Arcos · Ciudad de la Bahía"};
+        case LevelId::TabernaLapa: return {"Taberna da Lapa", "Praça do Coreto · Ciudad de la Bahía"};
+        case LevelId::Urca: return {"Morro da Urca", "Teleférico · Ciudad de la Bahía"};
+        case LevelId::PaoAcucar: return {"Pan de Azúcar", "Teleférico · Ciudad de la Bahía"};
+        case LevelId::Gruta: return {"Gruta de las Peñas", "Bajo el Campo abierto"};
+        default: return {"", ""};
+    }
+}
+
+const char* const kLoadingTips[] = {
+    "En las tabernas, habla con quien atiende la barra para descansar: la vida se llena y el camino queda guardado.",
+    "M abre el mapa de la zona: lo que queda por hacer, los pasos a otras zonas y dónde estás.",
+    "Las tiendas venden por lúmenes. Lo que no se compra hoy sigue en el mostrador mañana; aquí mañana no llega.",
+    "Z cambia entre la luz y la sombra. Cada una tiene sus golpes y sus enemigos más duros.",
+    "Contra una pared alta, salta y vuelve a saltar: el salto de pared devuelve el doble salto.",
+    "Las farolas apagadas no se encienden solas. Alguien tiene que hacerlo.",
+    "En el andén del teleférico, F sube a la cabina.",
+    "Las cápsulas abiertas siguen abiertas al volver: cada zona recuerda lo que hiciste en ella.",
+};
+
+// Llama de vela: una gota que tiembla, con su núcleo claro y el halo alrededor.
+void candleFlame(DebugDraw& d, float cx, float cy, float size, float t, float a) {
+    float flick = 1.0f + 0.08f * std::sin(t * 11.0f) + 0.05f * std::sin(t * 23.0f + 1.3f);
+    float sway = 0.12f * std::sin(t * 3.1f) + 0.05f * std::sin(t * 7.7f);
+    for (int k = 4; k >= 1; --k)  // el halo
+        fillCircle(d, cx, cy - size * 0.5f, size * (0.9f + 0.75f * float(k)) * flick, withAlpha(rgba(255, 170, 70), 0.035f * a), 32);
+    auto drop = [&](float s, uint32_t c) {
+        const int n = 20;
+        float h = size * 2.1f * s * flick, r = size * 0.55f * s;
+        Vec3 tip{cx + sway * size * 1.2f, cy - h, 0};
+        for (int i = 0; i < n; ++i) {
+            float a0 = kPi * float(i) / float(n), a1 = kPi * float(i + 1) / float(n);
+            Vec3 p0{cx - std::cos(a0) * r, cy + std::sin(a0) * r * 0.9f - r * 0.6f, 0};
+            Vec3 p1{cx - std::cos(a1) * r, cy + std::sin(a1) * r * 0.9f - r * 0.6f, 0};
+            d.triangle({cx, cy - r * 0.6f, 0}, p0, p1, c);  // la base redonda
+        }
+        d.triangle({cx - r, cy - r * 0.6f, 0}, {cx + r, cy - r * 0.6f, 0}, tip, c);  // y la punta
+    };
+    drop(1.0f, withAlpha(rgba(255, 140, 50), 0.9f * a));
+    drop(0.68f, withAlpha(rgba(255, 205, 110), 0.95f * a));
+    drop(0.36f, withAlpha(rgba(255, 246, 220), a));
+}
+
+}  // namespace
+
+void Game::drawLoadingScreen(UiLayer& ui, const ViewInfo& view) const {
+    DebugDraw& d = ui.shapes;
+    const float w = float(view.width), h = float(view.height);
+    const float a = smoothstep01(loadingScreen());
+    fillRect(d, 0, 0, w, h, withAlpha(rgba(9, 7, 6), a));
+    // Un poco de calor abajo, como si la luz viniera de la vela.
+    for (int k = 1; k <= 6; ++k) fillRect(d, 0, h * (1.0f - 0.07f * float(k)), w, h, withAlpha(rgba(60, 34, 16), 0.035f * a));
+
+    const ZoneCard card = zoneCard(zoneShown_);
+    const float x = std::max(48.0f, w * 0.08f), base = h * 0.6f;
+    if (card.region[0]) uiText(ui, x, base - 30, 15, card.region, withAlpha(kUiAmber, 0.8f * a), FontFace::Title);
+    uiText(ui, x, base, 54, card.title, withAlpha(kUiText, a), FontFace::Title, Align::Left, 0.25f * a);
+    fillRect(d, x, base + 74, x + 260, base + 76, withAlpha(kUiAmber, 0.6f * a));
+    const char* tip = kLoadingTips[size_t(zoneTip_) % std::size(kLoadingTips)];
+    float ty = base + 98;
+    for (const std::string& line : wrapText(tip, 20, std::min(w * 0.5f, 640.0f))) {
+        uiText(ui, x, ty, 20, line.c_str(), withAlpha(kUiDim, a));
+        ty += 28;
+    }
+
+    // Abajo a la derecha, la vela y lo que falta.
+    const float cx = w - std::max(80.0f, w * 0.08f), cy = h - 120;
+    fillRect(d, cx - 9, cy + 6, cx + 9, cy + 62, withAlpha(rgba(236, 226, 200), a));  // el cirio
+    fillRect(d, cx - 9, cy + 6, cx - 4, cy + 62, withAlpha(rgba(196, 184, 160), a));
+    fillRect(d, cx - 1, cy - 2, cx + 1, cy + 7, withAlpha(rgba(40, 30, 24), a));  // la mecha
+    candleFlame(d, cx, cy, 13, time_, a);
+    float done = changingZone() && zoneTo_ != LevelId::Count ? 0.15f + 0.45f * clampf(zoneTime_ / 0.4f, 0, 1)
+                                                             : 0.6f + 0.4f * clampf(zoneLoaded_ / std::max(1e-3f, zoneLoaded_ + zoneHold_), 0, 1);
+    const float bx1 = cx - 34, bx0 = bx1 - 220, by = h - 66;
+    fillRect(d, bx0, by, bx1, by + 2, withAlpha(rgba(70, 60, 52), a));
+    fillRect(d, bx0, by, bx0 + (bx1 - bx0) * done, by + 2, withAlpha(kUiAmber, a));
+    int dots = int(time_ * 2.5f) % 4;
+    const char* label[] = {"Cargando", "Cargando.", "Cargando..", "Cargando..."};
+    uiText(ui, bx0, by - 28, 16, label[dots], withAlpha(kUiDim, a));
+}
+
 void Game::drawStoryHud(UiLayer& ui, const ViewInfo& view) const {
     DebugDraw& d = ui.shapes;
     const float w = float(view.width), h = float(view.height);
     if (float f = std::max(fade_, std::max(rideFade_, zoneFade_)); f > 0) fillRect(d, 0, 0, w, h, withAlpha(rgba(0, 0, 0), smoothstep01(f)));
+    if (loadingScreen() > 0) {
+        drawLoadingScreen(ui, view);
+        if (loadingScreen() >= 1) return;
+    }
 
     // Carteles de capítulo.
     if (chapterBanner_ > 0) {
@@ -188,8 +297,10 @@ void Game::drawHud(UiLayer& ui, const ViewInfo& view, bool debug) const {
     DebugDraw& d = ui.shapes;
     const float w = float(view.width), h = float(view.height);
     char buf[128];
-    // En las escenas que detienen el juego (y al despertar) solo se ve la historia.
-    if (dialogueBlocking() || hero_.lying > 0.01f) {
+    // En las escenas que detienen el juego (y al despertar) solo se ve la historia; con la
+    // pantalla de carga, solo ella (los textos se pintan encima de los rectángulos: el HUD se
+    // vería a través).
+    if (dialogueBlocking() || hero_.lying > 0.01f || loadingScreen() > 0) {
         drawStoryHud(ui, view);
         drawCinemaHud(ui, view);
         return;

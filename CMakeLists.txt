@@ -89,6 +89,7 @@ add_executable(game
     src/dev/showcase.cpp
     src/dev/climb_bot.cpp
     src/dev/cable_bot.cpp
+    src/dev/posada_bot.cpp
     src/dev/viewer.cpp
     src/render/glb_write.cpp
     src/render/hero_model.cpp

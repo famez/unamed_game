@@ -3,7 +3,7 @@
 #include "game/game.h"
 
 // Bot de grabación de la Ciudad de la Bahía (--teleferico): compra en el armazém, descansa en
-// el botequim, va por la Rua da Praia a la estación y sube en el teleférico al Morro da Urca y
+// el botequim, baja a la estación de la caleta y sube en el teleférico al Morro da Urca y
 // de allí al Pão de Açúcar. La cámara va detrás, girando despacio.
 class CableBot {
 public:

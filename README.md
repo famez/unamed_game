@@ -71,7 +71,7 @@ Dependencias del sistema: `libOpenGL`/`libGLX` (glvnd + Mesa), `libX11` y `libXi
 (`sudo apt install libxi-dev`). Incluidas en el repositorio: `stb_truetype.h` y las
 fuentes Orbitron y Exo 2.
 
-Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena id` (reproduce una escena del guion), `--autoplay` (un bot combate solo, sin capturar el ratón), `--escalada` (con `--nivel andamios`: un bot hace la subida de Los Andamios), `--sombra` (empezar en modo sombra), `--exportar-modelos [carpeta]` (escribe a .glb los personajes que falten; `--forzar` los sustituye), `--visor fichero.glb` (visor de modelos), `--vitrina` (guion que enseña ataques, técnicas, formas y mecánicas), `--video fichero.mp4 [seg]` (graba a velocidad real con ffmpeg),
+Opciones: `--silencio` (sin audio), `--volumen 0..1`. De desarrollo: `--escena id` (reproduce una escena del guion), `--autoplay` (un bot combate solo, sin capturar el ratón), `--escalada` (con `--nivel andamios`: un bot hace la subida de Los Andamios), `--posada` (con `--nivel rio --en 11 12.2 1.57`: un bot entra en el Botequim, cruza la sala y sube a los cuartos), `--sombra` (empezar en modo sombra), `--exportar-modelos [carpeta]` (escribe a .glb los personajes que falten; `--forzar` los sustituye), `--visor fichero.glb` (visor de modelos), `--vitrina` (guion que enseña ataques, técnicas, formas y mecánicas), `--video fichero.mp4 [seg]` (graba a velocidad real con ffmpeg),
 `--screenshot fichero.ppm segundos [frames]` (guarda frames y sale), `--mapa` (con `--nivel`: empezar con el mapa abierto), `--camyaw radianes` y `--efectos-golpe lista` (qué efectos de golpe se ven: `tajo`, `destello`, `materia` —esquirlas de cristal en los de luz, tinta que mancha el suelo en los de sombra—, `sacudida`, `camara`, `remate`; o `todos` / `ninguno`).
 
 ## Controles
@@ -223,6 +223,12 @@ vuelve al selector.
     baja a la **Prainha**, otra playa virgen con su laguna. La estación del teleférico está en
     la caleta, al pie del paseo (estuco, azulejo y teja, como las de Urca y el Pan de Azúcar;
     cabinas pintadas como el tranvía). Seis nodos de color.
+    Dos tabernas en las que se entra (F en la puerta): el **Botequim do Ademar** (Largo de los
+    Arcos) y la **Taberna da Lapa** (Praça do Coreto, con su escenario de samba). Por dentro,
+    oscuras y cálidas, de dos alturas: la chimenea con su fuego (llamas, chispas y una luz que
+    tiembla: `Game::hearths_`), butacas, alfombra y estantería de libros; la barra bajo la
+    galería, a la que sube una escalera, con tres cuartos (uno abierto, con su cama); una rueda
+    de velas en medio y más clientela. Piezas en `tools/props/interiores.py`.
     Lo lejano (el mar, los morros con la favela y la estatua del cerro) es telón de fondo. El
     borde de las zonas es un recinto en el terreno (`Terrain::fence`) que nadie cruza.
   - **Las Copas** (`--nivel copas`, al anochecer): una aldea en lo alto de árboles gigantes
@@ -244,6 +250,16 @@ vuelve al selector.
   - `--cenital [X Z [ALTO]]` abre el visor desde arriba (también con V en el juego): la zona sin el personaje, que se queda quieto. WASD mueve, Q/E gira, la rueda o R/F cambia la altura, las flechas inclinan; abajo sale el punto del centro, para usarlo con `--en`.
 - En todos: **Z** cambia entre luz y sombra y **F1 / F2** hacen infinitos la vida y el Poder
   (también en la pausa). Por defecto solo la vida.
+
+## Cambio de zona y pantalla de carga
+
+Las puertas (tabernas, la gruta) y el teleférico llevan a otra zona (`Game::goToZone`, en
+`src/game/zones.cpp`). Se funde a la **pantalla de carga** (`Game::drawLoadingScreen`): el nombre
+del sitio y su región, un consejo y una vela que tiembla con la barra de lo que falta. Con ella
+tapándolo todo se carga la zona: se guarda lo hecho en la que se deja, se construye la nueva
+(sus piezas se leen del disco y las que ya no se usan se sueltan, de la memoria y de la GPU) y,
+si ya se había estado, se deja como estaba. La pantalla se queda un momento y se abre a la
+zona, con la cámara detrás de la protagonista.
 
 ## Piezas del escenario (`assets/props`)
 
